@@ -2,40 +2,39 @@
 
 const { spawnSync } = require("node:child_process");
 const os = require("node:os");
-const path = require("node:path");
-const fs = require("node:fs");
+
+const PLATFORM_MAP = {
+  win32: "win32",
+  linux: "linux",
+  darwin: "darwin",
+};
+
+const ARCH_MAP = {
+  x64: "x64",
+  arm64: "arm64",
+};
 
 function resolveBinary() {
-  const platform = os.platform();
-  const arch = os.arch();
+  const platform = PLATFORM_MAP[os.platform()];
+  const arch = ARCH_MAP[os.arch()];
 
-  let relativePath;
-
-  if (platform === "win32" && arch === "x64") {
-    relativePath = "../dist/win-x64/clawsharp.exe";
-  } else if (platform === "win32" && arch === "arm64") {
-    relativePath = "../dist/win-arm64/clawsharp.exe";
-  } else if (platform === "linux" && arch === "x64") {
-    relativePath = "../dist/linux-x64/clawsharp";
-  } else if (platform === "linux" && arch === "arm64") {
-    relativePath = "../dist/linux-arm64/clawsharp";
-  } else if (platform === "darwin" && arch === "x64") {
-    relativePath = "../dist/osx-x64/clawsharp";
-  } else if (platform === "darwin" && arch === "arm64") {
-    relativePath = "../dist/osx-arm64/clawsharp";
-  } else {
-    console.error(`Unsupported platform: ${platform} ${arch}`);
+  if (!platform || !arch) {
+    console.error(`Unsupported platform: ${os.platform()} ${os.arch()}`);
     process.exit(1);
   }
 
-  const fullPath = path.join(__dirname, relativePath);
+  const pkgName = `@clawsharp/cli-${platform}-${arch}`;
+  const binaryName = os.platform() === "win32" ? "clawsharp.exe" : "clawsharp";
 
-  if (!fs.existsSync(fullPath)) {
-    console.error(`ClawSharp binary not found: ${fullPath}`);
+  try {
+    return require.resolve(`${pkgName}/bin/${binaryName}`);
+  } catch {
+    console.error(
+      `ClawSharp binary not found. Package "${pkgName}" may not be installed.\n` +
+      `Try running: npm install`
+    );
     process.exit(1);
   }
-
-  return fullPath;
 }
 
 const binary = resolveBinary();
