@@ -552,7 +552,10 @@ public static class ChatMessageFactory
 
         AddMetadataWhenPresent(metadata, "cause", cause?.ToJsonString());
 
-        return CreateMetadataBackedSystemMessage(metadata);
+        var errorMessage = error?["message"]?.GetValue<string>() ?? "API error.";
+        return CreateMetadataBackedSystemMessage(
+            metadata,
+            $"Model API Error: {errorMessage} Retrying in {retryInMs / 1000}s (Attempt {retryAttempt} of {maxRetries})...");
     }
 
     public static ChatMessage CreateSystemMessage(
