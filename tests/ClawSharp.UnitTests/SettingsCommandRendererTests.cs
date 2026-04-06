@@ -90,7 +90,7 @@ public class SettingsCommandRendererTests
 
         Assert.Contains("Settings", rendered, StringComparison.Ordinal);
         Assert.Contains("Status", rendered, StringComparison.Ordinal);
-        Assert.Contains("Version: ClawSharp 0.0.3", rendered, StringComparison.Ordinal);
+        Assert.Contains("Version: ClawSharp 0.0.4", rendered, StringComparison.Ordinal);
         Assert.Contains("Session name: Incident Review", rendered, StringComparison.Ordinal);
         Assert.Contains("Session ID: session-1", rendered, StringComparison.Ordinal);
         Assert.Contains($"cwd: {repoRoot}", rendered, StringComparison.Ordinal);
