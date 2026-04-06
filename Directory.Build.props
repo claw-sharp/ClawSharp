@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <VersionPrefix>0.0.4</VersionPrefix>
+    <VersionPrefix>0.0.5</VersionPrefix>
     <Version Condition="'$(Version)' == ''">$(VersionPrefix)</Version>
     <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

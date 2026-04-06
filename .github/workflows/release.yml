@@ -111,6 +111,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      packages: write
 
     steps:
       - name: Checkout
@@ -179,3 +180,57 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish ./artifacts/npm/clawsharp --access public --provenance
+
+      - name: Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@claw-sharp'
+
+      - name: Publish platform packages to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # GitHub Packages strictly requires the npm scope to match the GitHub organization.
+          # Since the organization is 'claw-sharp' and the npm scope is '@clawsharp', we must adapt it.
+          for package_dir in \
+            artifacts/npm/@clawsharp/cli-win32-x64 \
+            artifacts/npm/@clawsharp/cli-win32-arm64 \
+            artifacts/npm/@clawsharp/cli-linux-x64 \
+            artifacts/npm/@clawsharp/cli-linux-arm64 \
+            artifacts/npm/@clawsharp/cli-darwin-x64 \
+            artifacts/npm/@clawsharp/cli-darwin-arm64
+          do
+            PKG_NAME=$(jq -r '.name' "$package_dir/package.json" | cut -d/ -f2)
+            npm pkg set name="@claw-sharp/$PKG_NAME" --prefix "$package_dir"
+            
+            npm publish "$package_dir"
+          done
+
+      - name: Publish root package to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The root package must also match the org scope for its own name.
+          npm pkg set name="@claw-sharp/clawsharp" --prefix ./artifacts/npm/clawsharp
+          
+          # We must rewrite the root's optionalDependencies to point to the newly renamed platform packages
+          node -e "
+            const fs = require('fs');
+            const path = './artifacts/npm/clawsharp/package.json';
+            const pkg = JSON.parse(fs.readFileSync(path));
+            if (pkg.optionalDependencies) {
+              const newDeps = {};
+              for (const [k, v] of Object.entries(pkg.optionalDependencies)) {
+                newDeps[k.replace('@clawsharp/', '@claw-sharp/')] = v;
+              }
+              pkg.optionalDependencies = newDeps;
+            }
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2));
+          "
+          
+          npm publish ./artifacts/npm/clawsharp
