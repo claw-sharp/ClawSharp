@@ -79,7 +79,7 @@ dotnet run --project .\src\ClawSharp.Cli -- repl
 ```powershell
 $env:CLAUDE_CODE_USE_GEMINI = "1"
 $env:GEMINI_API_KEY = "AIza..."
-$env:GEMINI_MODEL = "gemini-2.0-flash"
+$env:GEMINI_MODEL = "gemini-flash-latest"
 dotnet run --project .\src\ClawSharp.Cli -- repl
 ```
 
@@ -115,7 +115,7 @@ You can choose the provider directly when launching the CLI:
 
 ```powershell
 clawsharp --provider openai --model gpt-4o
-clawsharp --provider gemini --model gemini-2.0-flash
+clawsharp --provider gemini --model gemini-flash-latest
 clawsharp --provider codex --model codexplan
 clawsharp --provider ollama --model llama3.2
 ```
@@ -155,7 +155,7 @@ You can also provide arguments directly:
 ```text
 /provider openai gpt-4o https://api.openai.com/v1 sk-openai
 /provider codex codexplan https://chatgpt.com/backend-api/codex your-token account-id
-/provider gemini gemini-2.0-flash https://generativelanguage.googleapis.com/v1beta/openai AIza...
+/provider gemini gemini-flash-latest https://generativelanguage.googleapis.com/v1beta/openai AIza...
 ```
 
 What `/provider` does:
