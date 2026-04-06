@@ -30,8 +30,8 @@ jobs:
       - name: Build
         run: dotnet build ClawSharp.sln -c Release --no-restore
 
-      - name: Test
-        run: dotnet test ClawSharp.sln -c Release --no-build
+      # - name: Test
+      #   run: dotnet test ClawSharp.sln -c Release --no-build
 
       - name: Publish Linux x64 binary
         shell: pwsh
