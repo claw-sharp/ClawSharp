@@ -1,0 +1,13 @@
+Background tasks
+1 shell · 1 remote agent · 1 agent
+
+shells
+- task-1 [running] dotnet build
+
+remote agents
+- task-2 [pending] Remote Review
+
+agents
+- task-3 [running] Review diff
+
+Use /tasks <task-id> to inspect a task.

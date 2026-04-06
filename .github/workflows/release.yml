@@ -1,0 +1,181 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore
+        run: dotnet restore ClawSharp.sln
+
+      - name: Build
+        run: dotnet build ClawSharp.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test ClawSharp.sln -c Release --no-build
+
+      - name: Publish Linux x64 binary
+        shell: pwsh
+        run: ./eng/publish-cli.ps1 -Version ${{ steps.meta.outputs.version }} -RuntimeIdentifiers linux-x64 -OutputRoot artifacts/ci
+
+      - name: Stage local npm packages
+        shell: pwsh
+        run: ./eng/stage-npm-packages.ps1 -Version ${{ steps.meta.outputs.version }} -PublishedRoot artifacts/ci/publish -OutputRoot artifacts/npm-local -RuntimeIdentifiers linux-x64 -UseLocalDependencyReferences
+
+      - name: Pack staged npm packages
+        run: |
+          mkdir -p artifacts/npm-packs
+          npm pack ./artifacts/npm-local/@clawsharp/cli-linux-x64 --pack-destination ./artifacts/npm-packs
+          npm pack ./artifacts/npm-local/clawsharp --pack-destination ./artifacts/npm-packs
+
+      - name: Install staged npm tarballs
+        run: npm install --prefix artifacts/npm-smoke ./artifacts/npm-packs/clawsharp-cli-linux-x64-${{ steps.meta.outputs.version }}.tgz ./artifacts/npm-packs/clawsharp-${{ steps.meta.outputs.version }}.tgz
+
+      - name: Smoke test installed CLI
+        run: ./artifacts/npm-smoke/node_modules/.bin/clawsharp --help
+
+  build-release-assets:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            runtime_ids: win-x64,win-arm64
+            artifact_name: release-windows
+          - runner: ubuntu-latest
+            runtime_ids: linux-x64,linux-arm64
+            artifact_name: release-linux
+          - runner: macos-14
+            runtime_ids: osx-x64,osx-arm64
+            artifact_name: release-macos
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish release binaries
+        shell: pwsh
+        run: |
+          $runtimeIds = "${{ matrix.runtime_ids }}".Split(",")
+          ./eng/publish-cli.ps1 -Version ${{ needs.validate.outputs.version }} -RuntimeIdentifiers $runtimeIds -OutputRoot artifacts/release
+
+      - name: Upload release artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/release
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - validate
+      - build-release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: artifacts/release
+          merge-multiple: true
+
+      - name: Write release checksums
+        shell: pwsh
+        run: ./eng/write-checksums.ps1 -ArtifactsRoot artifacts/release/packages -OutputPath artifacts/release/SHA256SUMS
+
+      - name: Generate release attestations
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            artifacts/release/packages/*
+            artifacts/release/SHA256SUMS
+
+      - name: Stage npm packages
+        shell: pwsh
+        run: |
+          $runtimeIds = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
+          ./eng/stage-npm-packages.ps1 -Version ${{ needs.validate.outputs.version }} -PublishedRoot artifacts/release/publish -OutputRoot artifacts/npm -RuntimeIdentifiers $runtimeIds
+
+      - name: Publish or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" artifacts/release/packages/* artifacts/release/SHA256SUMS --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/release/packages/* artifacts/release/SHA256SUMS --generate-notes
+          fi
+
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package_dir in \
+            artifacts/npm/@clawsharp/cli-win32-x64 \
+            artifacts/npm/@clawsharp/cli-win32-arm64 \
+            artifacts/npm/@clawsharp/cli-linux-x64 \
+            artifacts/npm/@clawsharp/cli-linux-arm64 \
+            artifacts/npm/@clawsharp/cli-darwin-x64 \
+            artifacts/npm/@clawsharp/cli-darwin-arm64
+          do
+            npm publish "$package_dir" --access public --provenance
+          done
+
+      - name: Publish root package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish ./artifacts/npm/clawsharp --access public --provenance

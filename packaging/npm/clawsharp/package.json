@@ -1,0 +1,26 @@
+{
+  "name": "clawsharp",
+  "version": "0.0.0-development",
+  "description": "ClawSharp CLI distributed as prebuilt self-contained binaries.",
+  "license": "MIT",
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "clawsharp": "bin/clawsharp.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "optionalDependencies": {
+    "@clawsharp/cli-win32-x64": "0.0.0-development",
+    "@clawsharp/cli-win32-arm64": "0.0.0-development",
+    "@clawsharp/cli-linux-x64": "0.0.0-development",
+    "@clawsharp/cli-linux-arm64": "0.0.0-development",
+    "@clawsharp/cli-darwin-x64": "0.0.0-development",
+    "@clawsharp/cli-darwin-arm64": "0.0.0-development"
+  }
+}

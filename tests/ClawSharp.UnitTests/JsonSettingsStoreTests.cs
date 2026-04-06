@@ -1,0 +1,40 @@
+// TS origin: no direct 1:1 TS source; ClawSharp-specific C# unit coverage for settings behavior derived from ./utils/config.ts.
+using ClawSharp.Core;
+using ClawSharp.Infrastructure;
+
+namespace ClawSharp.UnitTests;
+
+public class JsonSettingsStoreTests
+{
+    [Fact]
+    public async Task Save_Then_Load_RoundTrips_Settings()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var settingsPath = Path.Combine(tempDir, "settings.json");
+        var store = new JsonSettingsStore(settingsPath);
+        var settings = new ClawSharpSettings
+        {
+            Runtime = new RuntimeSettings
+            {
+                Model = "test-model",
+                PermissionMode = PermissionMode.Plan,
+                EnableTelemetry = true
+            },
+            Terminal = new TerminalSettings
+            {
+                ShowTimestamps = true,
+                UseColor = false
+            }
+        };
+
+        await store.SaveAsync(settings);
+        var loaded = await store.LoadAsync();
+
+        Assert.Equal("test-model", loaded.Runtime.Model);
+        Assert.Equal(PermissionMode.Plan, loaded.Runtime.PermissionMode);
+        Assert.True(loaded.Runtime.EnableTelemetry);
+        Assert.True(loaded.Terminal.ShowTimestamps);
+        Assert.False(loaded.Terminal.UseColor);
+    }
+}

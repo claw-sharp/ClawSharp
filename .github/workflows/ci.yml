@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore
+        run: dotnet restore ClawSharp.sln
+
+      - name: Build
+        run: dotnet build ClawSharp.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test ClawSharp.sln -c Release --no-build
+
+      - name: Publish Linux x64 binary
+        shell: pwsh
+        run: ./eng/publish-cli.ps1 -Version 0.0.0-ci -RuntimeIdentifiers linux-x64 -OutputRoot artifacts/ci
+
+      - name: Stage local npm packages
+        shell: pwsh
+        run: ./eng/stage-npm-packages.ps1 -Version 0.0.0-ci -PublishedRoot artifacts/ci/publish -OutputRoot artifacts/npm-local -RuntimeIdentifiers linux-x64 -UseLocalDependencyReferences
+
+      - name: Pack staged npm packages
+        run: |
+          mkdir -p artifacts/npm-packs
+          npm pack ./artifacts/npm-local/@clawsharp/cli-linux-x64 --pack-destination ./artifacts/npm-packs
+          npm pack ./artifacts/npm-local/clawsharp --pack-destination ./artifacts/npm-packs
+
+      - name: Install staged npm tarballs
+        run: npm install --prefix artifacts/npm-smoke ./artifacts/npm-packs/clawsharp-cli-linux-x64-0.0.0-ci.tgz ./artifacts/npm-packs/clawsharp-0.0.0-ci.tgz
+
+      - name: Smoke test installed CLI
+        run: ./artifacts/npm-smoke/node_modules/.bin/clawsharp --help
