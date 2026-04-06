@@ -318,15 +318,16 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                         var name = function?["name"]?.GetValue<string>();
                         var arguments = function?["arguments"]?.GetValue<string>() ?? string.Empty;
 
-                        if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+                        if (!string.IsNullOrWhiteSpace(name))
                         {
+                            var toolUseId = string.IsNullOrWhiteSpace(id) ? $"call_{Guid.NewGuid():N}" : id;
                             foreach (var update in CloseActiveTextBlock())
                             {
                                 yield return update;
                             }
 
                             var toolBlockIndex = _contentBlockIndex++;
-                            _activeToolCalls[index] = new ActiveToolCall(toolBlockIndex, id!, name!, arguments);
+                            _activeToolCalls[index] = new ActiveToolCall(toolBlockIndex, toolUseId, name!, arguments);
                             yield return new JsonObject
                             {
                                 ["type"] = "content_block_start",
@@ -334,7 +335,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                                 ["content_block"] = new JsonObject
                                 {
                                     ["type"] = "tool_use",
-                                    ["id"] = id,
+                                    ["id"] = toolUseId,
                                     ["name"] = name,
                                     ["input"] = new JsonObject()
                                 }
