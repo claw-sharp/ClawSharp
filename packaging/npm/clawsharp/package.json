@@ -22,5 +22,9 @@
     "@clawsharp/cli-linux-arm64": "0.0.0-development",
     "@clawsharp/cli-darwin-x64": "0.0.0-development",
     "@clawsharp/cli-darwin-arm64": "0.0.0-development"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/claw-sharp/ClawSharp.git"
   }
 }
