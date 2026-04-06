@@ -1,10 +1,10 @@
 # ClawSharp
 
-**ClawSharp** is a full-parity C# port of [Claude Code](https://github.com/anthropics/claude-code) — Anthropic's terminal-native agentic coding assistant.
+**ClawSharp** is a full-parity C# port of Claude Code — Anthropic's terminal-native agentic coding assistant.
 
 It targets behavioral parity with the original TypeScript implementation: same conversation loop, same tool surface, same session persistence, same provider support, and the same terminal UI — rebuilt from scratch in **.NET 9** as a self-contained cross-platform binary.
 
-> This is not a prototype or a thin wrapper. ClawSharp is a production-grade rewrite that aims for 1:1 runtime parity with Claude Code.
+
 
 ## Why ClawSharp?
 
