@@ -77,11 +77,15 @@ Recommended packaging smoke test:
 
 ```powershell
 pwsh .\eng\publish-cli.ps1 -Version 0.1.0 -RuntimeIdentifiers win-x64 -OutputRoot artifacts\local-release
+
 pwsh .\eng\stage-npm-packages.ps1 -Version 0.1.0 -PublishedRoot artifacts\local-release\publish -OutputRoot artifacts\npm-local -RuntimeIdentifiers win-x64 -UseLocalDependencyReferences
+
 npm pack .\artifacts\npm-local\@clawsharp\cli-win32-x64 --pack-destination .\artifacts\npm-packs
+
 npm pack .\artifacts\npm-local\clawsharp --pack-destination .\artifacts\npm-packs
-npm install --prefix artifacts\npm-smoke .\artifacts\npm-packs\clawsharp-cli-win32-x64-0.1.0.tgz .\artifacts\npm-packs\clawsharp-0.1.0.tgz
-.\artifacts\npm-smoke\node_modules\.bin\clawsharp.cmd --help
+
+npm install --prefix artifacts\npm-smoke .\artifacts\npm-packs\clawsharp-cli-win32-x64-0.1.0.tgz .\artifacts\npm-packs\clawsharp-0.1.0.tgz .\artifacts\npm-smoke\node_modules\.bin\clawsharp.cmd --help
+
 ```
 
 ## Cutting A Release
