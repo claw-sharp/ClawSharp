@@ -221,6 +221,7 @@ public static class QueryModelHttpRequestFactory
         }
 
         if (config.ProviderKind != ApiProviderKind.GitHub &&
+            config.ProviderKind != ApiProviderKind.Gemini &&
             !ProviderRuntimeResolver.IsLocalProviderUrl(config.BaseUrl))
         {
             body["stream_options"] = new JsonObject

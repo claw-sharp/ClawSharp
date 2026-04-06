@@ -244,10 +244,42 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 };
             }
 
+            if (payload["error"] is not null)
+            {
+                var errorObj = payload["error"]?.AsObject();
+                var message = errorObj?["message"]?.GetValue<string>() ?? payload["error"]?.ToString() ?? "Unknown streaming API error.";
+                yield return new JsonObject
+                {
+                    ["type"] = "error",
+                    ["error"] = new JsonObject
+                    {
+                        ["type"] = "api_error",
+                        ["message"] = message
+                    }
+                };
+                yield break;
+            }
+
             var chunkUsage = ConvertUsage(payload["usage"]);
             var choices = payload["choices"]?.AsArray();
             if (choices is null)
             {
+                if (!_hasEmittedFinalUsage &&
+                    chunkUsage is not null &&
+                    !string.IsNullOrWhiteSpace(_lastStopReason))
+                {
+                    _hasEmittedFinalUsage = true;
+                    yield return new JsonObject
+                    {
+                        ["type"] = "message_delta",
+                        ["delta"] = new JsonObject
+                        {
+                            ["stop_reason"] = _lastStopReason,
+                            ["stop_sequence"] = null
+                        },
+                        ["usage"] = chunkUsage
+                    };
+                }
                 yield break;
             }
 
