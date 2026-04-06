@@ -338,7 +338,7 @@ public class TranscriptStoreTests
             Assert.Equal(MessageRole.System, message.Role);
             var block = Assert.Single(message.ContentBlocks);
             Assert.Equal(MessageContentKind.Text, block.Kind);
-            Assert.Equal(string.Empty, block.Value);
+            Assert.Equal("Model API Error: connection reset Retrying in 2s (Attempt 2 of 5)...", block.Value);
             Assert.NotNull(block.Metadata);
             Assert.Equal("api_error", block.Metadata!["subtype"]);
             Assert.Equal("error", block.Metadata["level"]);
