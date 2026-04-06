@@ -36,7 +36,7 @@ public sealed class BridgeChildSessionArgumentUtilitiesTests
                 "--replay-user-messages",
                 "--verbose",
                 "--debug-file",
-                ".\\bridge.log",
+                "./bridge.log",
                 "--permission-mode=acceptEdits"
             ]);
 
@@ -48,7 +48,7 @@ public sealed class BridgeChildSessionArgumentUtilitiesTests
             Assert.Equal("stream-json", parsed.Options.OutputFormat);
             Assert.True(parsed.Options.ReplayUserMessages);
             Assert.True(parsed.Options.Verbose);
-            Assert.Equal(Path.GetFullPath(Path.Combine(tempDirectory, "bridge.log")), parsed.Options.DebugFile);
+            Assert.Equal(Path.Combine(Environment.CurrentDirectory, "bridge.log"), parsed.Options.DebugFile);
             Assert.Equal("acceptEdits", parsed.Options.PermissionMode);
             Assert.Null(parsed.Error);
         }

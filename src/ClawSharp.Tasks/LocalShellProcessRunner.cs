@@ -72,6 +72,9 @@ public sealed class LocalShellProcessRunner
                 command.Kill();
                 await waitForExitTask;
             }
+            
+            // Allow PumpStreamAsync enough time to drain the output buffers which close when the process exits.
+            await Task.WhenAll(stdoutTask, stderrTask);
         }
         catch (OperationCanceledException)
         {

@@ -38,7 +38,7 @@ public sealed class BridgeMainArgumentUtilitiesTests
                 "--verbose",
                 "--sandbox",
                 "--debug-file",
-                ".\\debug.log",
+                "./debug.log",
                 "--session-timeout=12xyz",
                 "--permission-mode=acceptEdits",
                 "--name",
@@ -51,7 +51,7 @@ public sealed class BridgeMainArgumentUtilitiesTests
 
             Assert.True(parsed.Verbose);
             Assert.True(parsed.Sandbox);
-            Assert.Equal(Path.GetFullPath(Path.Combine(tempDirectory, "debug.log")), parsed.DebugFile);
+            Assert.Equal(Path.Combine(Environment.CurrentDirectory, "debug.log"), parsed.DebugFile);
             Assert.Equal(12_000d, parsed.SessionTimeoutMs);
             Assert.Equal("acceptEdits", parsed.PermissionMode);
             Assert.Equal("demo", parsed.Name);

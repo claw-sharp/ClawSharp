@@ -26,7 +26,7 @@ public sealed class ProcessSessionSpawnerTests
                 },
                 Verbose: true,
                 Sandbox: true,
-                DebugFile: @"D:\logs\bridge.log",
+                DebugFile: Path.Combine("D:", "logs", "bridge.log"),
                 PermissionMode: "acceptEdits",
                 OnDebug: debug.Add,
                 OnActivity: (_, activity) => activities.Add(activity),
@@ -60,7 +60,7 @@ public sealed class ProcessSessionSpawnerTests
             "--replay-user-messages",
             "--verbose",
             "--debug-file",
-            @"D:\logs\bridge-session_123.log",
+            Path.Combine("D:", "logs", "bridge-session_123.log"),
             "--permission-mode",
             "acceptEdits"
         ], factory.LastStartInfo.ArgumentList.ToArray());

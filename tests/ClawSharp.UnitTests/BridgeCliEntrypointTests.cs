@@ -51,6 +51,8 @@ public sealed class BridgeCliEntrypointTests
         using var stderr = new StringWriter();
         BridgeRuntimeRequest? capturedRequest = null;
 
+        var worktreeDir = OperatingSystem.IsWindows() ? @"D:\repo-worktree" : "/repo-worktree";
+
         var exitCode = await BridgeCliEntrypoint.RunAsync(
             ["--continue"],
             stdout,
@@ -59,7 +61,7 @@ public sealed class BridgeCliEntrypointTests
                 readBridgePointerAcrossWorktreesAsync: (_, _) => Task.FromResult<BridgePointerAcrossWorktreesResult?>(
                     new BridgePointerAcrossWorktreesResult(
                         new BridgePointerWithAge("session_123", "env_123", "standalone", TimeSpan.FromMinutes(14).TotalMilliseconds),
-                        @"D:\repo-worktree")),
+                        worktreeDir)),
                 runRuntimeAsync: (request, _, _) =>
                 {
                     capturedRequest = request;
@@ -69,7 +71,7 @@ public sealed class BridgeCliEntrypointTests
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedRequest);
         Assert.Equal("session_123", capturedRequest!.Startup.ResumeSessionId);
-        Assert.Equal(@"D:\repo-worktree", capturedRequest.Startup.ResumePointerDir);
+        Assert.Equal(worktreeDir, capturedRequest.Startup.ResumePointerDir);
         Assert.Equal(SpawnMode.SingleSession, capturedRequest.Startup.Config.SpawnMode);
         Assert.Equal(1, capturedRequest.Startup.Config.MaxSessions);
         Assert.Contains("Resuming session session_123", stderr.ToString(), StringComparison.Ordinal);
@@ -124,9 +126,10 @@ public sealed class BridgeCliEntrypointTests
                     return Task.FromResult(0);
                 }));
 
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedRequest);
-        Assert.Equal([@"D:\repo"], clearedPointerDirs);
+        Assert.Equal([repoRoot], clearedPointerDirs);
         Assert.Equal(SpawnMode.SameDir, capturedRequest!.Startup.Config.SpawnMode);
         Assert.Equal(7, capturedRequest.Startup.Config.MaxSessions);
         Assert.False(capturedRequest.Startup.PreCreateSession);
@@ -163,8 +166,9 @@ public sealed class BridgeCliEntrypointTests
         Func<string, CancellationToken, Task>? clearBridgePointerAsync = null,
         Func<BridgeRuntimeRequest, Action<string>, CancellationToken, Task<int>>? runRuntimeAsync = null)
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
         return new BridgeCliEntrypointDependencies(
-            GetCurrentDirectory: getCurrentDirectory ?? (() => @"D:\repo"),
+            GetCurrentDirectory: getCurrentDirectory ?? (() => repoRoot),
             CheckHasTrustDialogAcceptedAsync: checkHasTrustDialogAcceptedAsync ?? (_ => Task.FromResult(true)),
             GetAccessToken: getAccessToken ?? (() => "oauth-token"),
             GetBridgeBaseUrl: getBridgeBaseUrl ?? (() => "https://api.example.com"),

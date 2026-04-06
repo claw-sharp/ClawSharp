@@ -7,10 +7,11 @@ public sealed class BridgeClientContextUtilitiesTests
     [Fact]
     public async Task CheckHasTrustDialogAcceptedAsync_Returns_True_For_Session_Trust()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
         var utilities = new BridgeClientContextUtilities(
             new BridgeClientContextDependencies(
                 GetSessionTrustAccepted: () => true,
-                GetCurrentDirectory: () => "D:\\repo"));
+                GetCurrentDirectory: () => repoRoot));
 
         var trusted = await utilities.CheckHasTrustDialogAcceptedAsync();
 
@@ -20,11 +21,13 @@ public sealed class BridgeClientContextUtilitiesTests
     [Fact]
     public async Task CheckHasTrustDialogAcceptedAsync_Uses_Git_Root_Project_Key()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var repoRootJson = repoRoot.Replace('\\', '/');
         var globalConfigPath = CreateGlobalConfig(
-            """
+            $$"""
             {
               "projects": {
-                "D:/repo": {
+                "{{repoRootJson}}": {
                   "hasTrustDialogAccepted": true
                 }
               }
@@ -36,8 +39,8 @@ public sealed class BridgeClientContextUtilitiesTests
             var utilities = new BridgeClientContextUtilities(
                 new BridgeClientContextDependencies(
                     GlobalConfigPath: globalConfigPath,
-                    GetCurrentDirectory: () => "D:\\repo\\subdir",
-                    ExecuteAsync: (_, _, _) => Task.FromResult(new ProcessExecutionResult(0, "D:\\repo\n", string.Empty))));
+                    GetCurrentDirectory: () => Path.Combine(repoRoot, "subdir"),
+                    ExecuteAsync: (_, _, _) => Task.FromResult(new ProcessExecutionResult(0, $"{repoRoot}\n", string.Empty))));
 
             var trusted = await utilities.CheckHasTrustDialogAcceptedAsync();
 
@@ -52,11 +55,13 @@ public sealed class BridgeClientContextUtilitiesTests
     [Fact]
     public async Task CheckHasTrustDialogAcceptedAsync_Inherits_Trust_From_Parent_Path()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var repoRootJson = repoRoot.Replace('\\', '/');
         var globalConfigPath = CreateGlobalConfig(
-            """
+            $$"""
             {
               "projects": {
-                "D:/repo": {
+                "{{repoRootJson}}": {
                   "hasTrustDialogAccepted": true
                 }
               }
@@ -68,7 +73,7 @@ public sealed class BridgeClientContextUtilitiesTests
             var utilities = new BridgeClientContextUtilities(
                 new BridgeClientContextDependencies(
                     GlobalConfigPath: globalConfigPath,
-                    GetCurrentDirectory: () => "D:\\repo\\nested\\deeper",
+                    GetCurrentDirectory: () => Path.Combine(repoRoot, "nested", "deeper"),
                     ExecuteAsync: (_, _, _) => Task.FromResult(new ProcessExecutionResult(1, string.Empty, "not a repo"))));
 
             var trusted = await utilities.CheckHasTrustDialogAcceptedAsync();
@@ -84,11 +89,15 @@ public sealed class BridgeClientContextUtilitiesTests
     [Fact]
     public async Task IsPathTrustedAsync_Walks_Ancestor_Directories()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var repoRootJson = repoRoot.Replace('\\', '/');
+        var otherRoot = OperatingSystem.IsWindows() ? @"D:\other" : "/other";
+        
         var globalConfigPath = CreateGlobalConfig(
-            """
+            $$"""
             {
               "projects": {
-                "D:/repo": {
+                "{{repoRootJson}}": {
                   "hasTrustDialogAccepted": true
                 }
               }
@@ -101,8 +110,8 @@ public sealed class BridgeClientContextUtilitiesTests
                 new BridgeClientContextDependencies(
                     GlobalConfigPath: globalConfigPath));
 
-            Assert.True(await utilities.IsPathTrustedAsync("D:\\repo\\child"));
-            Assert.False(await utilities.IsPathTrustedAsync("D:\\other"));
+            Assert.True(await utilities.IsPathTrustedAsync(Path.Combine(repoRoot, "child")));
+            Assert.False(await utilities.IsPathTrustedAsync(otherRoot));
         }
         finally
         {

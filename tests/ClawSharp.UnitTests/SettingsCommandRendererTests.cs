@@ -10,6 +10,9 @@ public class SettingsCommandRendererTests
     [Fact]
     public void Render_Includes_Status_And_Config_Sections_From_Current_CSharp_Data()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var configRoot = OperatingSystem.IsWindows() ? @"D:\config" : "/config";
+        
         var renderer = new SettingsCommandRenderer();
         var settings = new ClawSharpSettings
         {
@@ -41,7 +44,7 @@ public class SettingsCommandRendererTests
                 Allow = ["Read"],
                 Deny = ["Shell"],
                 Ask = ["Write"],
-                AdditionalDirectories = ["D:\\repo\\docs"]
+                AdditionalDirectories = [Path.Combine(repoRoot, "docs")]
             },
             EnabledPlugins = new Dictionary<string, PluginEnabledSetting>(StringComparer.Ordinal)
             {
@@ -53,16 +56,16 @@ public class SettingsCommandRendererTests
             }
         };
 
-        var session = new ConversationSession("session-1", "D:\\repo");
+        var session = new ConversationSession("session-1", repoRoot);
         session.SetCustomTitle("Incident Review");
 
         var state = ClawSharpAppState.CreateDefault(
-            "D:\\repo",
-            new StartupEnvironment("D:\\config", BareMode: true, DisablePolicySkills: true, IsNonInteractive: true),
+            repoRoot,
+            new StartupEnvironment(configRoot, BareMode: true, DisablePolicySkills: true, IsNonInteractive: true),
             settings,
             [],
             [
-                new DiscoveredPluginInstallation("plugin-a", PluginInstallationScope.Local, "D:\\repo\\.plugins\\plugin-a", "D:\\repo", "1.0.0", null, null, null)
+                new DiscoveredPluginInstallation("plugin-a", PluginInstallationScope.Local, Path.Combine(repoRoot, ".plugins", "plugin-a"), repoRoot, "1.0.0", null, null, null)
             ],
             [],
             [],
@@ -83,14 +86,14 @@ public class SettingsCommandRendererTests
             }
         };
 
-        var rendered = renderer.Render(CreateContext(settings, state, session));
+        var rendered = renderer.Render(CreateContext(settings, state, session, repoRoot));
 
         Assert.Contains("Settings", rendered, StringComparison.Ordinal);
         Assert.Contains("Status", rendered, StringComparison.Ordinal);
-        Assert.Contains("Version: ClawSharp 0.1.0", rendered, StringComparison.Ordinal);
+        Assert.Contains("Version: ClawSharp 0.0.2", rendered, StringComparison.Ordinal);
         Assert.Contains("Session name: Incident Review", rendered, StringComparison.Ordinal);
         Assert.Contains("Session ID: session-1", rendered, StringComparison.Ordinal);
-        Assert.Contains("cwd: D:\\repo", rendered, StringComparison.Ordinal);
+        Assert.Contains($"cwd: {repoRoot}", rendered, StringComparison.Ordinal);
         var providerConfig = ProviderRuntimeResolver.Resolve(settings, state.MainLoopModel ?? settings.Runtime.Model);
         Assert.Contains($"Provider: {providerConfig.Provider}", rendered, StringComparison.Ordinal);
         Assert.Contains($"Provider endpoint: {providerConfig.BaseUrl}", rendered, StringComparison.Ordinal);
@@ -131,16 +134,20 @@ public class SettingsCommandRendererTests
     [Fact]
     public void Render_Uses_Rename_Hint_And_Lists_Settings_Issues()
     {
+        var repoPath = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var configPath = OperatingSystem.IsWindows() ? @"D:\config" : "/config";
+        var settingsPath = Path.Combine(repoPath, ".claude", "settings.json");
+
         var renderer = new SettingsCommandRenderer();
         var settings = new ClawSharpSettings();
-        var session = new ConversationSession("session-2", "D:\\repo");
+        var session = new ConversationSession("session-2", repoPath);
         var issue = new SettingsLoadIssue(
-            "D:\\repo\\.claude\\settings.json",
+            settingsPath,
             "runtime.model",
             "Expected string value.");
         var state = ClawSharpAppState.CreateDefault(
-            "D:\\repo",
-            new StartupEnvironment("D:\\config"),
+            repoPath,
+            new StartupEnvironment(configPath),
             settings,
             [issue],
             [],
@@ -149,22 +156,25 @@ public class SettingsCommandRendererTests
             [],
             []);
 
-        var rendered = renderer.Render(CreateContext(settings, state, session));
+        var rendered = renderer.Render(CreateContext(settings, state, session, repoPath));
 
         Assert.Contains("Session name: /rename to add a name", rendered, StringComparison.Ordinal);
         Assert.Contains("Settings Issues", rendered, StringComparison.Ordinal);
-        Assert.Contains("- D:\\repo\\.claude\\settings.json :: runtime.model: Expected string value.", rendered, StringComparison.Ordinal);
+        Assert.Contains($"- {settingsPath} :: runtime.model: Expected string value.", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("- None", rendered, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Handler_Uses_Renderer_Output_For_Config_Command()
     {
+        var repoRoot = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var configRoot = OperatingSystem.IsWindows() ? @"D:\config" : "/config";
+        
         var handler = new SettingsCommandHandler();
         var settings = new ClawSharpSettings();
         var state = ClawSharpAppState.CreateDefault(
-            "D:\\repo",
-            new StartupEnvironment("D:\\config"),
+            repoRoot,
+            new StartupEnvironment(configRoot),
             settings,
             [],
             [],
@@ -172,7 +182,7 @@ public class SettingsCommandRendererTests
             [],
             [],
             []);
-        var context = CreateContext(settings, state, new ConversationSession("session-3", "D:\\repo"));
+        var context = CreateContext(settings, state, new ConversationSession("session-3", repoRoot), repoRoot);
 
         var result = await handler.ExecuteAsync("/config", context);
 
@@ -185,13 +195,14 @@ public class SettingsCommandRendererTests
     private static CommandExecutionContext CreateContext(
         ClawSharpSettings settings,
         ClawSharpAppState state,
-        ConversationSession session)
+        ConversationSession session,
+        string repoRoot)
     {
         return new CommandExecutionContext
         {
             AppStateStore = new ClawSharpAppStateStore(state),
             Session = session,
-            SessionFactory = new DefaultSessionFactory("D:\\repo"),
+            SessionFactory = new DefaultSessionFactory(repoRoot),
             TranscriptStore = new JsonlTranscriptStore(),
             Settings = settings
         };

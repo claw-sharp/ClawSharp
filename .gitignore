@@ -6,3 +6,6 @@ artifacts/
 .env
 local/
 memory/
+tests/ClawSharp.IntegrationTests/TestResults/
+tests/ClawSharp.ParityTests/TestResults/
+tests/ClawSharp.UnitTests/TestResults/

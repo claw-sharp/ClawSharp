@@ -60,10 +60,10 @@ public sealed class PowerShellShellProviderTests
     }
 
     [Theory]
-    [InlineData(@"C:\Program Files\PowerShell\7\pwsh.exe", PowerShellEdition.Core)]
-    [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", PowerShellEdition.Desktop)]
-    [InlineData(@"/usr/bin/pwsh", PowerShellEdition.Core)]
-    [InlineData(@"/usr/bin/powershell", PowerShellEdition.Desktop)]
+    [InlineData("pwsh.exe", PowerShellEdition.Core)]
+    [InlineData("powershell.exe", PowerShellEdition.Desktop)]
+    [InlineData("pwsh", PowerShellEdition.Core)]
+    [InlineData("powershell", PowerShellEdition.Desktop)]
     public void InferEdition_Uses_Binary_Name_Parity(string path, PowerShellEdition expected)
     {
         Assert.Equal(expected, PowerShellDetection.InferEdition(path));
@@ -76,7 +76,7 @@ public sealed class PowerShellShellProviderTests
     [InlineData("robocopy src dst", 1, false, "Files copied successfully")]
     [InlineData("robocopy src dst", 2, false, "Robocopy completed (no errors)")]
     [InlineData("robocopy src dst", 8, true, null)]
-    [InlineData("& \"C:\\tools\\rg.exe\" foo .", 1, false, "No matches found")]
+    [InlineData("& \"rg.exe\" foo .", 1, false, "No matches found")]
     public void InterpretPowerShellCommandResult_Matches_Ts_Command_Semantics(
         string command,
         int exitCode,
@@ -93,7 +93,7 @@ public sealed class PowerShellShellProviderTests
     [InlineData("Start-Sleep -Seconds 1", false)]
     [InlineData("sleep 1", false)]
     [InlineData("Get-Date", true)]
-    [InlineData("& \"C:\\tools\\pwsh.exe\" -NoProfile", true)]
+    [InlineData("& \"pwsh.exe\" -NoProfile", true)]
     public void PowerShellAutobackgroundingAllowance_Matches_Ts_Disallowlist(string command, bool expected)
     {
         Assert.Equal(expected, IsPowerShellAutoBackgroundingAllowed(command));

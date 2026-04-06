@@ -131,7 +131,7 @@ public sealed class PluginSkillHookIntegrationTests
     {
         return shell == HookShell.PowerShell
             ? "Write-Output $env:CLAUDE_PLUGIN_ROOT; Write-Output (Get-Location).Path"
-            : "printf '%s\\n' \"$CLAUDE_PLUGIN_ROOT\" \"$PWD\"";
+            : "printf '%s\\\\n' \\\"$CLAUDE_PLUGIN_ROOT\\\" \\\"$PWD\\\"";
     }
 
     private static string GetShellName(HookShell shell)

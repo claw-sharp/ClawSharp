@@ -246,7 +246,11 @@ public sealed class ProcessSessionSpawner : ISessionSpawner
 
             if (_transcriptPath is not null)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(_transcriptPath)!);
+                var dir = Path.GetDirectoryName(_transcriptPath);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
                 _transcriptWriter = new StreamWriter(
                     new FileStream(_transcriptPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
                     new UTF8Encoding(false))

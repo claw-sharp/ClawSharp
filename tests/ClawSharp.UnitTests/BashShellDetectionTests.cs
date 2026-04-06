@@ -165,12 +165,16 @@ public sealed class BashShellDetectionTests
     [Fact]
     public void TryFindGitBashPathWindows_Uses_Git_Cmd_Path_To_Resolve_Bash()
     {
+        var basePath = OperatingSystem.IsWindows() ? @"C:\Program Files\Git" : "/Program Files/Git";
+        var gitPath = Path.Combine(basePath, "cmd", "git.exe");
+        var bashPath = Path.Combine(basePath, "bin", "bash.exe");
+        
         var result = TryFindGitBashPathWindows(
-            @"C:\repo",
-            path => string.Equals(path, Path.GetFullPath(@"C:\Program Files\Git\bin\bash.exe"), StringComparison.OrdinalIgnoreCase),
-            _ => @"C:\Program Files\Git\cmd\git.exe");
+            OperatingSystem.IsWindows() ? @"C:\repo" : "/repo",
+            path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(bashPath), StringComparison.OrdinalIgnoreCase),
+            _ => gitPath);
 
-        Assert.Equal(Path.GetFullPath(@"C:\Program Files\Git\bin\bash.exe"), result);
+        Assert.Equal(Path.GetFullPath(bashPath), result);
     }
 
     [Fact]

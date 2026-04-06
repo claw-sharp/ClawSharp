@@ -176,8 +176,8 @@ public sealed class ExplicitToolIterationRunnerTests
                         null,
                         new HookCommandDefinition(
                             HookKind.Command,
-                            Command: "Write-Output '{\"continue\":false,\"stopReason\":\"Stopped by stop hook\",\"systemMessage\":\"Stop warning\"}'",
-                            Shell: HookShell.PowerShell))
+                            Command: "echo '{\"continue\":false,\"stopReason\":\"Stopped by stop hook\",\"systemMessage\":\"Stop warning\"}'",
+                            Shell: HookShell.Bash))
                 ]));
         var toolRegistry = new ToolRegistry(tempDir, taskRegistry, appStateStore: appStateStore);
         var transcriptStore = new JsonlTranscriptStore();
@@ -187,6 +187,8 @@ public sealed class ExplicitToolIterationRunnerTests
         var queue = new InMemoryQueuedCommandQueue();
         var queryEngine = new QueryEngine(settings, eventSink, transcriptStore, queryTurnRunner, new QueuedTaskNotificationDrainer(queue, transcriptStore));
         var session = new DefaultSessionFactory(tempDir).Create();
+
+        File.WriteAllText(Path.Combine(tempDir, "missing.txt"), "hello");
 
         var request = QueryTurnRequest.Create(
             session,

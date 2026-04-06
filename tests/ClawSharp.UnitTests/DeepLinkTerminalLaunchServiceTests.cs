@@ -19,8 +19,10 @@ public sealed class DeepLinkTerminalLaunchServiceTests
                     return Task.FromResult(true);
                 }));
 
+        var cwd = OperatingSystem.IsWindows() ? @"C:\work" : "/work";
+        var encodedCwd = Uri.EscapeDataString(cwd);
         var result = await service.HandleUriAsync(
-            "claude-cli://open?q=review%20this&cwd=C%3A%5Cwork",
+            $"claude-cli://open?q=review%20this&cwd={encodedCwd}",
             @"C:\ClawSharp\ClawSharp.exe");
 
         Assert.True(result.Success, result.Error);
@@ -30,7 +32,7 @@ public sealed class DeepLinkTerminalLaunchServiceTests
         Assert.Equal(
             [
                 "-d",
-                @"C:\work",
+                cwd,
                 "--",
                 @"C:\ClawSharp\ClawSharp.exe",
                 "repl",

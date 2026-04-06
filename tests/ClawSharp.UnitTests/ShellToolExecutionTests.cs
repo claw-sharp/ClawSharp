@@ -1065,6 +1065,10 @@ public sealed class ShellToolExecutionTests
             Environment.SetEnvironmentVariable("USER_TYPE", "ant");
             Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_POWERSHELL_TOOL", null);
             PowerShellDetection.ResetPowerShellCache();
+            if (!OperatingSystem.IsWindows() || await PowerShellDetection.GetCachedPowerShellPathAsync() is null)
+            {
+                return;
+            }
             await action();
         }
         finally

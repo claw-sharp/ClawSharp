@@ -9,10 +9,12 @@ public sealed class DeepLinkProtocolServiceTests
     {
         var service = new DeepLinkProtocolService();
 
-        var action = service.Parse("claude-cli://open?q=hello%20world&cwd=C%3A%5Cwork&repo=owner%2Frepo");
+        var cwd = OperatingSystem.IsWindows() ? @"C:\work" : "/work";
+        var encodedCwd = Uri.EscapeDataString(cwd);
+        var action = service.Parse($"claude-cli://open?q=hello%20world&cwd={encodedCwd}&repo=owner%2Frepo");
 
         Assert.Equal("hello world", action.Query);
-        Assert.Equal(@"C:\work", action.Cwd);
+        Assert.Equal(cwd, action.Cwd);
         Assert.Equal("owner/repo", action.Repo);
     }
 

@@ -21,6 +21,8 @@ public sealed class MemoryStorageServiceTests
     [Fact]
     public void IsEnabled_Default_ReturnsTrue()
     {
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_DISABLE_AUTO_MEMORY", null);
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_REMOTE", null);
         var environment = new StartupEnvironment("", false, false, false);
         var settings = new RuntimeSettings();
 

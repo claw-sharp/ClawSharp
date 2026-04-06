@@ -130,9 +130,12 @@ public sealed class AgentRuntimeFoundationTests
         Assert.False(multiAgentResult.Success);
         Assert.Contains("multi-agent coordination", multiAgentResult.Output);
 
+        var testCwd = OperatingSystem.IsWindows() ? @"C:\repo" : "/repo";
+        var encodedTestCwd = testCwd.Replace(@"\", @"\\");
+
         var cwdConflictResult = await registry.ExecuteAsync(
             "Agent",
-            """{"description":"test task","prompt":"do it","cwd":"C:\\repo","isolation":"worktree"}""",
+            $$"""{"description":"test task","prompt":"do it","cwd":"{{encodedTestCwd}}","isolation":"worktree"}""",
             session,
             settings);
         Assert.False(cwdConflictResult.Success);
@@ -140,7 +143,7 @@ public sealed class AgentRuntimeFoundationTests
 
         var cwdResult = await registry.ExecuteAsync(
             "Agent",
-            """{"description":"test task","prompt":"do it","cwd":"C:\\repo"}""",
+            $$"""{"description":"test task","prompt":"do it","cwd":"{{encodedTestCwd}}"}""",
             session,
             settings);
         Assert.False(cwdResult.Success);

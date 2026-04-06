@@ -8,9 +8,11 @@ public sealed class PathUtilitiesTests
     [Fact]
     public void ExpandPath_Resolves_Relative_Path_Against_Base_Directory()
     {
-        var expanded = PathUtilities.ExpandPath(@" .\src ", @"D:\repo");
+        var repoContent = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
+        var srcPath = Path.Combine(".", "src");
+        var expanded = PathUtilities.ExpandPath($" {srcPath} ", repoContent);
 
-        Assert.Equal(@"D:\repo\src", expanded);
+        Assert.Equal(Path.Combine(repoContent, "src"), expanded);
     }
 
     [Fact]
@@ -50,9 +52,11 @@ public sealed class PathUtilitiesTests
     [Fact]
     public void NormalizePathForConfigKey_Uses_Forward_Slashes()
     {
-        var normalized = PathUtilities.NormalizePathForConfigKey(@"D:\repo\child");
+        var basePath = OperatingSystem.IsWindows() ? @"D:\repo\child" : "/repo/child";
+        var expected = OperatingSystem.IsWindows() ? "D:/repo/child" : "/repo/child";
+        var normalized = PathUtilities.NormalizePathForConfigKey(basePath);
 
-        Assert.Equal("D:/repo/child", normalized);
+        Assert.Equal(expected, normalized);
     }
 
     [Fact]
