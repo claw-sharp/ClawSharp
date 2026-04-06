@@ -159,7 +159,6 @@ jobs:
           fi
 
       - name: Publish platform packages
-        if: secrets.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
@@ -177,7 +176,6 @@ jobs:
           done
 
       - name: Publish root package
-        if: secrets.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish ./artifacts/npm/clawsharp --access public --provenance
