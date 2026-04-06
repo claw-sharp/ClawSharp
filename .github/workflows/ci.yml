@@ -51,4 +51,4 @@ jobs:
         run: npm install --prefix artifacts/npm-smoke ./artifacts/npm-packs/clawsharp-cli-linux-x64-0.0.0-ci.tgz ./artifacts/npm-packs/clawsharp-0.0.0-ci.tgz
 
       - name: Smoke test installed CLI
-        run: ./artifacts/npm-smoke/node_modules/.bin/clawsharp --help
+        run: node ./artifacts/npm-smoke/node_modules/clawsharp/bin/clawsharp.js --help
