@@ -37,7 +37,7 @@ public sealed class ToolRegistry
         FileUpdateNotifier = fileUpdateNotifier ?? new NullFileUpdateNotifier();
         AgentDefinitions = agentDefinitions ?? BuiltInAgentDefinitions.GetBuiltInAgents();
         AppStateStore = appStateStore ?? new NullClawSharpAppStateStore(workspaceRoot);
-        _useLivePermissionContext = appStateStore is not null;
+        _useLivePermissionContext = appStateStore is not null && appStateStore is not NullClawSharpAppStateStore;
         PermissionPrompter = permissionPrompter ?? new NullPermissionPrompter();
         _allowedToolNames = allowedToolNames is null
             ? null

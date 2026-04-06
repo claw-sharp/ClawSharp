@@ -52,12 +52,14 @@ public sealed class ShellToolExecutionTests
 
             var queue = new InMemoryQueuedCommandQueue();
             var tasks = new TaskRegistry(tempDir, queuedCommandQueue: queue);
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 tasks,
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var session = new DefaultSessionFactory(tempDir).Create();
             var settings = new ClawSharpSettings();
 
@@ -553,12 +555,14 @@ public sealed class ShellToolExecutionTests
                 return;
             }
 
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 new TaskRegistry(tempDir),
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var session = new DefaultSessionFactory(tempDir).Create();
             var settings = new ClawSharpSettings();
 
@@ -593,12 +597,14 @@ public sealed class ShellToolExecutionTests
                 return;
             }
 
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 new TaskRegistry(tempDir),
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var command = OperatingSystem.IsWindows() ? "pwd -W" : "pwd";
 
             var result = await registry.ExecuteAsync(
@@ -661,14 +667,16 @@ public sealed class ShellToolExecutionTests
                 return;
             }
 
+            var permissionContext = CreatePermissionContext(
+                alwaysAllowRules: new Dictionary<PermissionRuleSource, IReadOnlyList<string>>
+                {
+                    [PermissionRuleSource.Session] = ["Bash(echo:*)"]
+                });
             var registry = new ToolRegistry(
                 tempDir,
                 new TaskRegistry(tempDir),
-                toolPermissionContext: CreatePermissionContext(
-                    alwaysAllowRules: new Dictionary<PermissionRuleSource, IReadOnlyList<string>>
-                    {
-                        [PermissionRuleSource.Session] = ["Bash(echo:*)"]
-                    }));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
 
             var result = await registry.ExecuteAsync(
                 "Bash",
@@ -736,12 +744,14 @@ public sealed class ShellToolExecutionTests
                 return;
             }
 
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 new TaskRegistry(tempDir),
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var session = new DefaultSessionFactory(tempDir).Create();
 
             var result = await registry.ExecuteAsync(
@@ -780,12 +790,14 @@ public sealed class ShellToolExecutionTests
             }
 
             var tasks = new TaskRegistry(tempDir);
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 tasks,
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var session = new DefaultSessionFactory(tempDir).Create();
 
             var result = await registry.ExecuteAsync(

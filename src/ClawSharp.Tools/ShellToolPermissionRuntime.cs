@@ -35,7 +35,7 @@ internal static class ShellToolPermissionRuntime
         bool caseInsensitive,
         CancellationToken cancellationToken = default)
     {
-        var permissionContext = context.AppState.ToolPermissionContext;
+        var permissionContext = context.ToolPermissionContext;
         var cacheKey = CreateCacheKey(toolName, dangerouslyDisableSandbox);
         if (SessionAllowedCommands.ContainsKey(cacheKey))
         {

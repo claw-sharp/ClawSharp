@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Threading;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
 using ClawSharp.Tasks;
@@ -21,10 +22,12 @@ public sealed class ShellAndFileOperationsIntegrationTests
 
         try
         {
+            var permissionContext = CreateBypassPermissionContext();
             var registry = new ToolRegistry(
                 workspaceRoot,
                 new TaskRegistry(workspaceRoot),
-                toolPermissionContext: CreateBypassPermissionContext());
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(workspaceRoot, permissionContext));
             var session = new DefaultSessionFactory(workspaceRoot).Create();
             var settings = new ClawSharpSettings();
 
@@ -71,10 +74,12 @@ public sealed class ShellAndFileOperationsIntegrationTests
         try
         {
             var tasks = new TaskRegistry(workspaceRoot);
+            var permissionContext = CreateBypassPermissionContext();
             var registry = new ToolRegistry(
                 workspaceRoot,
                 tasks,
-                toolPermissionContext: CreateBypassPermissionContext());
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(workspaceRoot, permissionContext));
             var session = new DefaultSessionFactory(workspaceRoot).Create();
             var settings = new ClawSharpSettings();
 
@@ -105,6 +110,23 @@ public sealed class ShellAndFileOperationsIntegrationTests
         }
     }
 
+
+    private static ClawSharpAppStateStore CreateAppStateStore(string workspaceRoot, ToolPermissionContext permissionContext)
+    {
+        return new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                workspaceRoot,
+                StartupEnvironment.Capture(),
+                new ClawSharpSettings(),
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                permissionContext));
+    }
+
     private static ToolPermissionContext CreateBypassPermissionContext()
     {
         return new ToolPermissionContext(
@@ -125,9 +147,33 @@ public sealed class ShellAndFileOperationsIntegrationTests
 
     private static void DeleteDirectory(string path)
     {
-        if (Directory.Exists(path))
+        for (var attempt = 0; attempt < 10; attempt++)
         {
-            Directory.Delete(path, recursive: true);
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+
+                return;
+            }
+            catch (IOException) when (attempt < 9)
+            {
+                Thread.Sleep(100);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 9)
+            {
+                Thread.Sleep(100);
+            }
+            catch (IOException)
+            {
+                return;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return;
+            }
         }
     }
 }

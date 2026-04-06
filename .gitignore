@@ -4,3 +4,4 @@ obj/
 artifacts/
 .env
 local/
+memory/

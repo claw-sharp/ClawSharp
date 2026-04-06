@@ -165,25 +165,32 @@ public sealed class BridgeSessionApiClientTests
         List<string> debug = [];
         HttpRequestMessage? capturedRequest = null;
         BridgeSessionIdCompat.SetCseShimGate(static () => true);
-        var successDependencies = CreateDependencies(new HttpClient(new StubHandler(request =>
+        try
         {
-            capturedRequest = request;
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            var successDependencies = CreateDependencies(new HttpClient(new StubHandler(request =>
             {
-                Content = new StringContent("{}", Encoding.UTF8, "application/json")
-            };
-        })), debug.Add);
-        var failingDependencies = CreateDependencies(new HttpClient(new ThrowingHandler(new HttpRequestException("boom"))), debug.Add);
+                capturedRequest = request;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+            })), debug.Add);
+            var failingDependencies = CreateDependencies(new HttpClient(new ThrowingHandler(new HttpRequestException("boom"))), debug.Add);
 
-        await BridgeSessionApiClient.UpdateBridgeSessionTitleAsync(successDependencies, "cse_123", "Renamed");
-        await BridgeSessionApiClient.UpdateBridgeSessionTitleAsync(failingDependencies, "session_456", "Renamed");
+            await BridgeSessionApiClient.UpdateBridgeSessionTitleAsync(successDependencies, "cse_123", "Renamed");
+            await BridgeSessionApiClient.UpdateBridgeSessionTitleAsync(failingDependencies, "session_456", "Renamed");
 
-        Assert.NotNull(capturedRequest);
-        Assert.Equal("PATCH", capturedRequest!.Method.Method);
-        Assert.Contains("/v1/sessions/session_123", capturedRequest.RequestUri!.ToString(), StringComparison.Ordinal);
-        Assert.Contains(debug, line => line.Contains("Updating session title: session_123", StringComparison.Ordinal));
-        Assert.Contains(debug, line => line.Contains("Session title updated successfully", StringComparison.Ordinal));
-        Assert.Contains(debug, line => line.Contains("Session title update request failed: boom", StringComparison.Ordinal));
+            Assert.NotNull(capturedRequest);
+            Assert.Equal("PATCH", capturedRequest!.Method.Method);
+            Assert.Contains("/v1/sessions/session_123", capturedRequest.RequestUri!.ToString(), StringComparison.Ordinal);
+            Assert.Contains(debug, line => line.Contains("Updating session title: session_123", StringComparison.Ordinal));
+            Assert.Contains(debug, line => line.Contains("Session title updated successfully", StringComparison.Ordinal));
+            Assert.Contains(debug, line => line.Contains("Session title update request failed: boom", StringComparison.Ordinal));
+        }
+        finally
+        {
+            BridgeSessionIdCompat.ResetCseShimGate();
+        }
     }
 
     private static BridgeSessionApiDependencies CreateDependencies(HttpClient httpClient, Action<string>? onDebug = null)

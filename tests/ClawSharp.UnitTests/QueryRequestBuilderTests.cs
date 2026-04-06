@@ -125,7 +125,7 @@ public class QueryRequestBuilderTests
                 TaskBudget: new QueryTaskBudget(1200, 700),
                 ShouldIncludeFirstPartyOnlyBetas: true));
 
-        Assert.Equal(MainLoopModelResolver.DefaultMainLoopModel, modelRequest.Model);
+        Assert.Equal(ProviderRuntimeResolver.GetDefaultModelForCurrentProvider(), modelRequest.Model);
         Assert.Equal(32_000, modelRequest.MaxTokens);
         Assert.Equal(request.SessionId, modelRequest.SessionId);
         Assert.Equal(QueryRequestBuilder.TaskBudgetsBetaHeader, Assert.Single(modelRequest.Betas));
@@ -324,7 +324,7 @@ public class QueryRequestBuilderTests
 
         Assert.NotNull(result.Request);
         Assert.Equal(session.Id, result.Request!.SessionId);
-        Assert.Equal(MainLoopModelResolver.DefaultMainLoopModel, result.Request.Model);
+        Assert.Equal(ProviderRuntimeResolver.GetDefaultModelForCurrentProvider(), result.Request.Model);
         Assert.Contains(result.Request.Tools, tool => tool.Name == "Read");
         Assert.Equal("user", result.Request.Messages[0].Role);
     }

@@ -22,12 +22,14 @@ public sealed class TaskRuntimeParityTests
 
             var queue = new InMemoryQueuedCommandQueue();
             var tasks = new TaskRegistry(tempDir, queuedCommandQueue: queue);
+            var permissionContext = CreatePermissionContext(
+                mode: PermissionMode.BypassPermissions,
+                isBypassPermissionsModeAvailable: true);
             var registry = new ToolRegistry(
                 tempDir,
                 tasks,
-                toolPermissionContext: CreatePermissionContext(
-                    mode: PermissionMode.BypassPermissions,
-                    isBypassPermissionsModeAvailable: true));
+                toolPermissionContext: permissionContext,
+                appStateStore: CreateAppStateStore(tempDir, permissionContext));
             var session = new DefaultSessionFactory(tempDir).Create();
 
             var backgroundResult = await registry.ExecuteAsync(
@@ -102,6 +104,24 @@ public sealed class TaskRuntimeParityTests
             new Dictionary<PermissionRuleSource, IReadOnlyList<string>>(),
             new Dictionary<PermissionRuleSource, IReadOnlyList<string>>(),
             IsBypassPermissionsModeAvailable: isBypassPermissionsModeAvailable);
+    }
+
+    private static IClawSharpAppStateStore CreateAppStateStore(
+        string workspaceRoot,
+        ToolPermissionContext permissionContext)
+    {
+        return new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                workspaceRoot,
+                StartupEnvironment.Capture(),
+                new ClawSharpSettings(),
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                permissionContext));
     }
 
     private static async Task<ClawSharpTask?> WaitForTaskStatusAsync(

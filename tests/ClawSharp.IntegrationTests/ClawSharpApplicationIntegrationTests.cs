@@ -30,9 +30,19 @@ public class ClawSharpApplicationIntegrationTests
     {
         var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         var originalApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        var originalUseOpenAi = Environment.GetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI");
+        var originalOpenAiModel = Environment.GetEnvironmentVariable("OPENAI_MODEL");
+        var originalOpenAiBaseUrl = Environment.GetEnvironmentVariable("OPENAI_BASE_URL");
+        var originalOpenAiApiBase = Environment.GetEnvironmentVariable("OPENAI_API_BASE");
+        var originalCodexApiKey = Environment.GetEnvironmentVariable("CODEX_API_KEY");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
         Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
         Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", string.Empty);
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", null);
+        Environment.SetEnvironmentVariable("OPENAI_MODEL", null);
+        Environment.SetEnvironmentVariable("OPENAI_BASE_URL", null);
+        Environment.SetEnvironmentVariable("OPENAI_API_BASE", null);
+        Environment.SetEnvironmentVariable("CODEX_API_KEY", null);
 
         try
         {
@@ -60,6 +70,11 @@ public class ClawSharpApplicationIntegrationTests
         {
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", originalApiKey);
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", originalUseOpenAi);
+            Environment.SetEnvironmentVariable("OPENAI_MODEL", originalOpenAiModel);
+            Environment.SetEnvironmentVariable("OPENAI_BASE_URL", originalOpenAiBaseUrl);
+            Environment.SetEnvironmentVariable("OPENAI_API_BASE", originalOpenAiApiBase);
+            Environment.SetEnvironmentVariable("CODEX_API_KEY", originalCodexApiKey);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);

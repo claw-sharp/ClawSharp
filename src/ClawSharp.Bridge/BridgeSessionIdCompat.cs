@@ -9,6 +9,11 @@ public static class BridgeSessionIdCompat
         _isCseShimEnabled = gate ?? throw new ArgumentNullException(nameof(gate));
     }
 
+    public static void ResetCseShimGate()
+    {
+        _isCseShimEnabled = null;
+    }
+
     public static string ToCompatSessionId(string id)
     {
         ArgumentNullException.ThrowIfNull(id);

@@ -1,4 +1,5 @@
 // TS parity status: focused coverage for the env-backed query-model HTTP client config provider foundation, including first-party auth-token fallbacks from env and persisted Claude AI OAuth state.
+using System.Threading;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
 using ClawSharp.Query;
@@ -7,19 +8,48 @@ namespace ClawSharp.UnitTests;
 
 public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
 {
+    private static readonly SemaphoreSlim EnvironmentLock = new(1, 1);
+
+    private sealed class EnvironmentVariableScope : IDisposable
+    {
+        private readonly Dictionary<string, string?> _previous = new(StringComparer.Ordinal);
+
+        public EnvironmentVariableScope(params (string Name, string? Value)[] values)
+        {
+            foreach (var (name, value) in values)
+            {
+                _previous[name] = Environment.GetEnvironmentVariable(name);
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+
+        public void Dispose()
+        {
+            foreach (var pair in _previous)
+            {
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
+        }
+    }
+
     [Fact]
     public void GetConfig_Uses_Ts_Default_BaseUrl_When_Env_Is_Unset()
     {
-        var previousBaseUrl = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL");
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
-        var previousOauthToken = Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", null);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", null);
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_BASE_URL", null),
+                ("ANTHROPIC_API_KEY", null),
+                ("ANTHROPIC_AUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_BASE_URL", null),
+                ("OPENAI_API_BASE", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var provider = new EnvironmentQueryModelHttpClientConfigProvider();
 
             var config = provider.GetConfig(
@@ -34,24 +64,26 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", previousBaseUrl);
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", previousOauthToken);
+            EnvironmentLock.Release();
         }
     }
 
     [Fact]
     public void GetConfig_Uses_Anthropic_Env_Overrides()
     {
-        var previousBaseUrl = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL");
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", "https://proxy.example.test");
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "env-key");
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "ignored-auth-token");
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_BASE_URL", "https://proxy.example.test"),
+                ("ANTHROPIC_API_KEY", "env-key"),
+                ("ANTHROPIC_AUTH_TOKEN", "ignored-auth-token"),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_BASE_URL", null),
+                ("OPENAI_API_BASE", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var provider = new EnvironmentQueryModelHttpClientConfigProvider();
 
             var config = provider.GetConfig(
@@ -66,21 +98,25 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_BASE_URL", previousBaseUrl);
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
+            EnvironmentLock.Release();
         }
     }
 
     [Fact]
     public void GetConfig_Uses_Anthropic_Auth_Token_When_Api_Key_Is_Unset()
     {
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "anthropic-auth-token");
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_API_KEY", null),
+                ("ANTHROPIC_AUTH_TOKEN", "anthropic-auth-token"),
+                ("CLAUDE_CODE_OAUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var provider = new EnvironmentQueryModelHttpClientConfigProvider();
 
             var config = provider.GetConfig(
@@ -94,20 +130,25 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
+            EnvironmentLock.Release();
         }
     }
 
     [Fact]
     public void GetConfig_Uses_Stored_Claude_Api_Key_When_Env_Key_Is_Unset()
     {
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", null);
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_API_KEY", null),
+                ("ANTHROPIC_AUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var provider = new EnvironmentQueryModelHttpClientConfigProvider();
 
             var config = provider.GetConfig(
@@ -124,22 +165,25 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
+            EnvironmentLock.Release();
         }
     }
 
     [Fact]
     public void GetConfig_Falls_Back_To_Persisted_Claude_Ai_OAuth_Token()
     {
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
-        var previousOauthToken = Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", null);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", null);
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_API_KEY", null),
+                ("ANTHROPIC_AUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var provider = new EnvironmentQueryModelHttpClientConfigProvider(
                 new InMemorySecureStorage(
                     new McpSecureStorageData(
@@ -159,25 +203,25 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", previousOauthToken);
+            EnvironmentLock.Release();
         }
     }
 
     [Fact]
     public void GetConfig_Uses_FileDescriptor_OAuth_Token_Fallback()
     {
-        var previousApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        var previousAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
-        var previousOauthToken = Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN");
-        var previousFd = Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR");
+        EnvironmentLock.Wait();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", null);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", null);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null);
+            using var env = new EnvironmentVariableScope(
+                ("ANTHROPIC_API_KEY", null),
+                ("ANTHROPIC_AUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN", null),
+                ("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", null),
+                ("CLAUDE_CODE_USE_OPENAI", null),
+                ("OPENAI_MODEL", null),
+                ("CLAUDE_CODE_OPENAI_MODEL", null),
+                ("CODEX_API_KEY", null));
             var tokenFile = Path.Combine(Path.GetTempPath(), "clawsharp-model-http-config-provider-tests", Guid.NewGuid().ToString("N"), ".oauth_token");
             Directory.CreateDirectory(Path.GetDirectoryName(tokenFile)!);
             File.WriteAllText(tokenFile, "fd-oauth-token");
@@ -195,14 +239,11 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousApiKey);
-            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAuthToken);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN", previousOauthToken);
-            Environment.SetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", previousFd);
+            EnvironmentLock.Release();
         }
     }
 
-    [Fact]
+[Fact]
     public void GetConfig_Resolves_OpenAi_Compatible_Provider_Config()
     {
         var previousUseOpenAi = Environment.GetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI");

@@ -8,20 +8,30 @@ public sealed class BridgeStatusUtilitiesTests
     public void ToCompatSessionId_Translates_Cse_Id_When_Shared_Shim_Is_Enabled()
     {
         BridgeSessionIdCompat.SetCseShimGate(() => true);
-
-        var result = BridgeSessionIdCompat.ToCompatSessionId("cse_123");
-
-        Assert.Equal("session_123", result);
+        try
+        {
+            var result = BridgeSessionIdCompat.ToCompatSessionId("cse_123");
+            Assert.Equal("session_123", result);
+        }
+        finally
+        {
+            BridgeSessionIdCompat.ResetCseShimGate();
+        }
     }
 
     [Fact]
     public void ToCompatSessionId_Leaves_Cse_Id_Alone_When_Shared_Shim_Is_Disabled()
     {
         BridgeSessionIdCompat.SetCseShimGate(() => false);
-
-        var result = BridgeSessionIdCompat.ToCompatSessionId("cse_123");
-
-        Assert.Equal("cse_123", result);
+        try
+        {
+            var result = BridgeSessionIdCompat.ToCompatSessionId("cse_123");
+            Assert.Equal("cse_123", result);
+        }
+        finally
+        {
+            BridgeSessionIdCompat.ResetCseShimGate();
+        }
     }
 
     [Fact]
@@ -50,12 +60,18 @@ public sealed class BridgeStatusUtilitiesTests
     public void BuildBridgeUrls_Use_Product_And_Compat_Session_Helpers()
     {
         BridgeSessionIdCompat.SetCseShimGate(() => true);
+        try
+        {
+            var connectUrl = BridgeStatusUtilities.BuildBridgeConnectUrl("env_123");
+            var sessionUrl = BridgeStatusUtilities.BuildBridgeSessionUrl("cse_123", "env_123");
 
-        var connectUrl = BridgeStatusUtilities.BuildBridgeConnectUrl("env_123");
-        var sessionUrl = BridgeStatusUtilities.BuildBridgeSessionUrl("cse_123", "env_123");
-
-        Assert.Equal("https://claude.ai/code?bridge=env_123", connectUrl);
-        Assert.Equal("https://claude.ai/code/session_123?bridge=env_123", sessionUrl);
+            Assert.Equal("https://claude.ai/code?bridge=env_123", connectUrl);
+            Assert.Equal("https://claude.ai/code/session_123?bridge=env_123", sessionUrl);
+        }
+        finally
+        {
+            BridgeSessionIdCompat.ResetCseShimGate();
+        }
     }
 
     [Fact]

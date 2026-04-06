@@ -22,6 +22,7 @@ Documentation:
 - authentication: [docs/authentication.md](docs/authentication.md)
 - telemetry and diagnostics: [docs/telemetry-and-diagnostics.md](docs/telemetry-and-diagnostics.md)
 - distribution and release process: [docs/distribution.md](docs/distribution.md)
+- maintainer release process: [docs/release-process.md](docs/release-process.md)
 
 ## Install
 

@@ -91,9 +91,10 @@ public class SettingsCommandRendererTests
         Assert.Contains("Session name: Incident Review", rendered, StringComparison.Ordinal);
         Assert.Contains("Session ID: session-1", rendered, StringComparison.Ordinal);
         Assert.Contains("cwd: D:\\repo", rendered, StringComparison.Ordinal);
-        Assert.Contains("Provider: Anthropic", rendered, StringComparison.Ordinal);
-        Assert.Contains("Provider endpoint: https://api.anthropic.com", rendered, StringComparison.Ordinal);
-        Assert.Contains("Model: gpt-5.4", rendered, StringComparison.Ordinal);
+        var providerConfig = ProviderRuntimeResolver.Resolve(settings, state.MainLoopModel ?? settings.Runtime.Model);
+        Assert.Contains($"Provider: {providerConfig.Provider}", rendered, StringComparison.Ordinal);
+        Assert.Contains($"Provider endpoint: {providerConfig.BaseUrl}", rendered, StringComparison.Ordinal);
+        Assert.Contains("Model: GPT-5.4", rendered, StringComparison.Ordinal);
         Assert.Contains("Active permission mode: AcceptEdits", rendered, StringComparison.Ordinal);
         Assert.Contains("Background tasks: 1", rendered, StringComparison.Ordinal);
         Assert.Contains("Plugin installations: 1", rendered, StringComparison.Ordinal);
