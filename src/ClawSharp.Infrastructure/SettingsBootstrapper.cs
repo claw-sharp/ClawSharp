@@ -112,7 +112,9 @@ public sealed class SettingsBootstrapper
             ForceLoginOrgUUID = next.ForceLoginOrgUUID ?? current.ForceLoginOrgUUID,
             OtelHeadersHelper = next.OtelHeadersHelper ?? current.OtelHeadersHelper,
             EnabledPlugins = MergePluginEnablement(current.EnabledPlugins, next.EnabledPlugins),
-            PluginConfigs = MergePluginConfigs(current.PluginConfigs, next.PluginConfigs)
+            PluginConfigs = MergePluginConfigs(current.PluginConfigs, next.PluginConfigs),
+            AgentModels = MergeAgentModels(current.AgentModels, next.AgentModels),
+            AgentRouting = MergeAgentRouting(current.AgentRouting, next.AgentRouting)
         };
     }
 
@@ -227,7 +229,9 @@ public sealed class SettingsBootstrapper
             ForceLoginOrgUUID = partial.ForceLoginOrgUUID ?? defaults.ForceLoginOrgUUID,
             OtelHeadersHelper = partial.OtelHeadersHelper ?? defaults.OtelHeadersHelper,
             EnabledPlugins = partial.EnabledPlugins ?? defaults.EnabledPlugins,
-            PluginConfigs = partial.PluginConfigs ?? defaults.PluginConfigs
+            PluginConfigs = partial.PluginConfigs ?? defaults.PluginConfigs,
+            AgentModels = partial.AgentModels ?? defaults.AgentModels,
+            AgentRouting = partial.AgentRouting ?? defaults.AgentRouting
         };
     }
 
@@ -343,6 +347,52 @@ public sealed class SettingsBootstrapper
         return merged;
     }
 
+    private static IReadOnlyDictionary<string, AgentModelConnection>? MergeAgentModels(
+        IReadOnlyDictionary<string, AgentModelConnection>? current,
+        IReadOnlyDictionary<string, AgentModelConnection>? next)
+    {
+        if (current is null)
+        {
+            return next;
+        }
+
+        if (next is null)
+        {
+            return current;
+        }
+
+        var merged = new Dictionary<string, AgentModelConnection>(current, StringComparer.Ordinal);
+        foreach (var pair in next)
+        {
+            merged[pair.Key] = pair.Value;
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyDictionary<string, string>? MergeAgentRouting(
+        IReadOnlyDictionary<string, string>? current,
+        IReadOnlyDictionary<string, string>? next)
+    {
+        if (current is null)
+        {
+            return next;
+        }
+
+        if (next is null)
+        {
+            return current;
+        }
+
+        var merged = new Dictionary<string, string>(current, StringComparer.Ordinal);
+        foreach (var pair in next)
+        {
+            merged[pair.Key] = pair.Value;
+        }
+
+        return merged;
+    }
+
     private sealed class PartialClawSharpSettings
     {
         public PartialRuntimeSettings? Runtime { get; init; }
@@ -363,6 +413,8 @@ public sealed class SettingsBootstrapper
         public string? OtelHeadersHelper { get; init; }
         public IReadOnlyDictionary<string, PluginEnabledSetting>? EnabledPlugins { get; init; }
         public IReadOnlyDictionary<string, PluginConfigSettings>? PluginConfigs { get; init; }
+        public IReadOnlyDictionary<string, AgentModelConnection>? AgentModels { get; init; }
+        public IReadOnlyDictionary<string, string>? AgentRouting { get; init; }
     }
 
     private sealed class PartialRuntimeSettings

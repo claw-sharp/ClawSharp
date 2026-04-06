@@ -3,6 +3,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using ClawSharp.Core;
 using ClawSharp.Query;
 
 namespace ClawSharp.UnitTests;
@@ -123,6 +124,88 @@ public sealed class QueryModelSseStreamingClientTests
 
         Assert.Equal((HttpStatusCode)529, exception.StatusCode);
         Assert.Contains("\"type\":\"overloaded_error\"", exception.ResponseBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StreamAsync_Normalizes_OpenAi_Stream_To_Anthropic_Shaped_Events()
+    {
+        using var httpClient = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    string.Join(
+                        "\n",
+                        [
+                            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}",
+                            string.Empty,
+                            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":7}}",
+                            string.Empty,
+                            "data: [DONE]",
+                            string.Empty
+                        ]),
+                    Encoding.UTF8,
+                    "text/event-stream")
+            }));
+        var client = new QueryModelSseStreamingClient(httpClient);
+
+        var payloads = new List<JsonNode>();
+        await foreach (var payload in client.StreamAsync(
+                           new QueryModelHttpClientConfig(
+                               "https://api.openai.test/v1",
+                               ApiKey: "openai-key",
+                               TransportKind: ModelTransportKind.OpenAiChatCompletions,
+                               ProviderKind: ApiProviderKind.OpenAi),
+                           CreateStreamingRequest()))
+        {
+            payloads.Add(payload);
+        }
+
+        Assert.Equal("message_start", payloads[0]["type"]?.GetValue<string>());
+        Assert.Contains(payloads, payload => payload["type"]?.GetValue<string>() == "content_block_start");
+        Assert.Contains(payloads, payload => payload["type"]?.GetValue<string>() == "content_block_delta");
+        Assert.Contains(payloads, payload => payload["type"]?.GetValue<string>() == "message_delta");
+        Assert.Equal("message_stop", payloads[^1]["type"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task StreamAsync_Normalizes_Codex_Stream_To_Anthropic_Shaped_Events()
+    {
+        using var httpClient = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    string.Join(
+                        "\n",
+                        [
+                            "event: response.output_text.delta",
+                            "data: {\"delta\":\"Hello\"}",
+                            string.Empty,
+                            "event: response.completed",
+                            "data: {\"response\":{\"usage\":{\"input_tokens\":4,\"output_tokens\":5},\"output\":[{\"type\":\"message\"}]}}",
+                            string.Empty
+                        ]),
+                    Encoding.UTF8,
+                    "text/event-stream")
+            }));
+        var client = new QueryModelSseStreamingClient(httpClient);
+
+        var payloads = new List<JsonNode>();
+        await foreach (var payload in client.StreamAsync(
+                           new QueryModelHttpClientConfig(
+                               ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                               ApiKey: "codex-token",
+                               TransportKind: ModelTransportKind.CodexResponses,
+                               ProviderKind: ApiProviderKind.Codex,
+                               AccountId: "account-1"),
+                           CreateStreamingRequest()))
+        {
+            payloads.Add(payload);
+        }
+
+        Assert.Equal("message_start", payloads[0]["type"]?.GetValue<string>());
+        Assert.Contains(payloads, payload => payload["type"]?.GetValue<string>() == "content_block_delta");
+        Assert.Contains(payloads, payload => payload["type"]?.GetValue<string>() == "message_delta");
+        Assert.Equal("message_stop", payloads[^1]["type"]?.GetValue<string>());
     }
 
     private static QueryModelHttpStreamingRequest CreateStreamingRequest()

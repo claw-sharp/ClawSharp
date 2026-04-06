@@ -10,6 +10,7 @@ public sealed class SettingsCommandRenderer
         var state = context.AppStateStore.GetState();
         var settings = context.Settings;
         var session = context.Session;
+        var providerConfig = ProviderRuntimeResolver.Resolve(settings, state.MainLoopModel ?? settings.Runtime.Model);
         var lines = new List<string>
         {
             "Settings",
@@ -20,6 +21,8 @@ public sealed class SettingsCommandRenderer
             $"Session ID: {session.Id}",
             $"cwd: {session.ProjectDirectory}",
             $"Workspace root: {state.WorkspaceRoot}",
+            $"Provider: {providerConfig.Provider}",
+            $"Provider endpoint: {providerConfig.BaseUrl}",
             $"Model: {FormatModel(state.MainLoopModel ?? settings.Runtime.Model)}",
             $"Active permission mode: {state.ToolPermissionContext.Mode}",
             $"Background tasks: {state.Tasks.Count}",

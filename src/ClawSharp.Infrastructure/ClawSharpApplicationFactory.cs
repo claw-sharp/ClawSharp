@@ -165,13 +165,15 @@ public static class ClawSharpApplicationFactory
         commands.Register(new DesktopCommandHandler(desktopDeepLinkService));
         commands.Register(new VersionCommandHandler());
         commands.Register(new SettingsCommandHandler());
+        commands.Register(new ProviderCommandHandler());
         commands.Register(new ClearCommandHandler());
         var modelTurnContextProvider = new ReplMainThreadTurnContextProvider(
             workspaceRoot,
             settings,
             tools,
             memoryStorageService,
-            startupEnvironment);
+            startupEnvironment,
+            appStateStore);
         var queryEngine = new QueryEngine(
             settings,
             eventSink,
@@ -180,7 +182,8 @@ public static class ClawSharpApplicationFactory
             queuedTaskNotificationDrainer,
             fileUpdateNotifier: fileUpdateNotifier,
             toolRegistry: tools,
-            modelTurnContextProvider: modelTurnContextProvider);
+            modelTurnContextProvider: modelTurnContextProvider,
+            appStateStore: appStateStore);
         var localMainSessionTaskService = new LocalMainSessionTaskService(
             tasks,
             queuedCommandQueue,

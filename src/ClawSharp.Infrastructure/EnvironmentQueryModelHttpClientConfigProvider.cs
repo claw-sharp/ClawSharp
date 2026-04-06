@@ -7,7 +7,7 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class EnvironmentQueryModelHttpClientConfigProvider : IQueryModelHttpClientConfigProvider
 {
-    public const string DefaultBaseUrl = "https://api.anthropic.com";
+    public const string DefaultBaseUrl = ProviderRuntimeResolver.DefaultAnthropicBaseUrl;
     private readonly IMcpSecureStorage? _secureStorage;
     private readonly ClaudeAiOAuthTokenSource _oauthTokenSource;
 
@@ -30,21 +30,43 @@ public sealed class EnvironmentQueryModelHttpClientConfigProvider : IQueryModelH
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(settings);
 
-        var baseUrl = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL");
-        var apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var effectiveModel =
+            state.ToolUseContext.MainLoopModel ??
+            settings.Runtime.Model;
+        var runtimeConfig = ProviderRuntimeResolver.Resolve(settings, effectiveModel);
+
+        if (runtimeConfig.Provider is ApiProviderKind.Anthropic or ApiProviderKind.Bedrock or ApiProviderKind.Vertex or ApiProviderKind.Foundry)
         {
-            apiKey = settings.ClaudeApiKey;
+            var apiKey = runtimeConfig.ApiKey ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                apiKey = settings.ClaudeApiKey;
+            }
+
+            var authToken = string.IsNullOrWhiteSpace(apiKey)
+                ? runtimeConfig.AuthToken ?? ResolveAuthToken()
+                : null;
+
+            return new QueryModelHttpClientConfig(
+                runtimeConfig.BaseUrl,
+                string.IsNullOrWhiteSpace(apiKey) ? null : apiKey,
+                authToken,
+                runtimeConfig.Transport,
+                runtimeConfig.Provider,
+                runtimeConfig.AccountId,
+                runtimeConfig.ApiVersion,
+                runtimeConfig.AdditionalHeaders);
         }
 
-        var authToken = string.IsNullOrWhiteSpace(apiKey)
-            ? ResolveAuthToken()
-            : null;
-
         return new QueryModelHttpClientConfig(
-            string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl,
-            string.IsNullOrWhiteSpace(apiKey) ? null : apiKey,
-            authToken);
+            runtimeConfig.BaseUrl,
+            runtimeConfig.ApiKey,
+            runtimeConfig.AuthToken,
+            runtimeConfig.Transport,
+            runtimeConfig.Provider,
+            runtimeConfig.AccountId,
+            runtimeConfig.ApiVersion,
+            runtimeConfig.AdditionalHeaders);
     }
 
     private string? ResolveAuthToken()

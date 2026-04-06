@@ -206,7 +206,8 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             _transcriptStore,
             queryTurnRunner,
             new QueuedTaskNotificationDrainer(_queuedCommandQueue, _transcriptStore, context.Tasks),
-            toolRegistry: childTools);
+            toolRegistry: childTools,
+            appStateStore: childTools.AppStateStore);
     }
 
     private async Task<ToolExecutionResult> ExecuteForegroundAsync(
@@ -512,7 +513,12 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         AgentExecutionRequest request)
     {
         var parentModel = context.AppState.MainLoopModel ?? context.Settings.Runtime.Model;
+        var routedModel = AgentRoutingResolver.ResolveRoutedModel(
+            context.Settings,
+            request.Name,
+            request.SubagentType ?? selectedAgent.AgentType);
         var preferredModel = NormalizeInheritedModel(request.Model)
+            ?? NormalizeInheritedModel(routedModel)
             ?? NormalizeInheritedModel(selectedAgent.Model)
             ?? parentModel;
 

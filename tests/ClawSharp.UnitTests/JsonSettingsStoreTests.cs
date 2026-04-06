@@ -25,6 +25,23 @@ public class JsonSettingsStoreTests
             {
                 ShowTimestamps = true,
                 UseColor = false
+            },
+            AgentModels = new Dictionary<string, AgentModelConnection>(StringComparer.Ordinal)
+            {
+                ["gpt-4o"] = new()
+                {
+                    BaseUrl = "https://api.openai.com/v1",
+                    ApiKey = "sk-openai",
+                    Provider = "openai",
+                    Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["x-test-header"] = "value"
+                    }
+                }
+            },
+            AgentRouting = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["default"] = "gpt-4o"
             }
         };
 
@@ -36,5 +53,9 @@ public class JsonSettingsStoreTests
         Assert.True(loaded.Runtime.EnableTelemetry);
         Assert.True(loaded.Terminal.ShowTimestamps);
         Assert.False(loaded.Terminal.UseColor);
+        Assert.Equal("https://api.openai.com/v1", loaded.AgentModels["gpt-4o"].BaseUrl);
+        Assert.Equal("openai", loaded.AgentModels["gpt-4o"].Provider);
+        Assert.Equal("value", loaded.AgentModels["gpt-4o"].Headers["x-test-header"]);
+        Assert.Equal("gpt-4o", loaded.AgentRouting["default"]);
     }
 }

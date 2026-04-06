@@ -177,9 +177,9 @@ That path is:
 What each layer does:
 
 - `QueryRequestBuilder` converts session messages into provider request messages, system prompt blocks, tool schemas, and output config
-- `EnvironmentQueryModelHttpClientConfigProvider` injects base URL and auth config
+- `EnvironmentQueryModelHttpClientConfigProvider` injects base URL, transport kind, and auth config
 - `QueryModelHttpCallExecutor` handles retry, overload, fallback, and auth-recovery hooks
-- `QueryModelAnthropicStreamUpdateParser` turns SSE payloads into:
+- `QueryModelAnthropicStreamUpdateParser` consumes the normalized stream events and turns SSE payloads into:
   - text deltas
   - assistant text messages
   - assistant tool-use messages
@@ -187,10 +187,19 @@ What each layer does:
 
 Important current implementation detail:
 
-- the transport/config path is still Anthropic-shaped
-- base URL comes from `ANTHROPIC_BASE_URL` or defaults to `https://api.anthropic.com`
-- auth comes from `ANTHROPIC_API_KEY` or OAuth-style token sources
-- `RuntimeSettings.Model` currently defaults to `foundation-placeholder` unless overridden by settings/bootstrap configuration
+- the runtime now has a provider-aware transport boundary
+- request transport currently supports:
+  - Anthropic messages
+  - OpenAI-compatible chat completions
+  - Codex responses
+- provider selection can come from:
+  - `agentModels`
+  - `agentRouting`
+  - `CLAUDE_CODE_USE_*` provider flags
+  - CLI `--provider` and `--model`
+  - REPL `/provider`
+- the high-level stream parser is still Anthropic-shaped, so non-Anthropic transports are normalized into Anthropic-style stream events before parsing
+- `RuntimeSettings.Model` still defaults to `foundation-placeholder`, but runtime resolution now substitutes provider defaults such as Anthropic, OpenAI, Gemini, GitHub Models, or Codex defaults
 
 Relevant files:
 
@@ -199,7 +208,10 @@ Relevant files:
 - `ClawSharp/src/ClawSharp.Query/QueryRequestBuilder.cs`
 - `ClawSharp/src/ClawSharp.Query/QueryModelHttpCallExecutor.cs`
 - `ClawSharp/src/ClawSharp.Query/QueryModelAnthropicStreamUpdateParser.cs`
+- `ClawSharp/src/ClawSharp.Query/QueryModelHttpRequestFactory.cs`
+- `ClawSharp/src/ClawSharp.Query/QueryModelSseStreamingClient.cs`
 - `ClawSharp/src/ClawSharp.Infrastructure/EnvironmentQueryModelHttpClientConfigProvider.cs`
+- `ClawSharp/src/ClawSharp.Core/ProviderRuntimeResolver.cs`
 - `ClawSharp/src/ClawSharp.Core/RuntimeSettings.cs`
 
 ## Tool Execution Path

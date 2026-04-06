@@ -46,6 +46,16 @@ public sealed class QueryModelIterationRequestBuilder : IQueryModelIterationRequ
             };
         }
 
+        var providerRuntimeConfig = ProviderRuntimeResolver.Resolve(settings, modelRequest.Model);
+        if (!string.Equals(modelRequest.Model, providerRuntimeConfig.ResolvedModel, StringComparison.Ordinal))
+        {
+            modelRequest = modelRequest with
+            {
+                Model = providerRuntimeConfig.ResolvedModel,
+                MaxTokens = QueryMaxOutputTokensResolver.GetMaxOutputTokensForModel(providerRuntimeConfig.ResolvedModel)
+            };
+        }
+
         if (state.MaxOutputTokensOverride is not null &&
             modelRequest.MaxTokens != state.MaxOutputTokensOverride)
         {

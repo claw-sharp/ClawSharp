@@ -16,6 +16,7 @@ public sealed class QueryEngine
     private readonly ToolRegistry? _toolRegistry;
     private readonly QueryRequestBuilder _queryRequestBuilder;
     private readonly IQueryModelTurnContextProvider? _modelTurnContextProvider;
+    private readonly IClawSharpAppStateStore? _appStateStore;
 
     public QueryEngine(
         ClawSharpSettings settings,
@@ -26,7 +27,8 @@ public sealed class QueryEngine
         IFileUpdateNotifier? fileUpdateNotifier = null,
         ToolRegistry? toolRegistry = null,
         QueryRequestBuilder? queryRequestBuilder = null,
-        IQueryModelTurnContextProvider? modelTurnContextProvider = null)
+        IQueryModelTurnContextProvider? modelTurnContextProvider = null,
+        IClawSharpAppStateStore? appStateStore = null)
     {
         _settings = settings;
         _eventSink = eventSink;
@@ -37,6 +39,7 @@ public sealed class QueryEngine
         _toolRegistry = toolRegistry;
         _queryRequestBuilder = queryRequestBuilder ?? new QueryRequestBuilder();
         _modelTurnContextProvider = modelTurnContextProvider;
+        _appStateStore = appStateStore;
     }
 
     public async Task<QueryResult> RunTurnAsync(
@@ -151,6 +154,7 @@ public sealed class QueryEngine
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var settings = _appStateStore?.GetState().Settings ?? _settings;
         using var interactionSpan = ClawSharpTelemetry.StartInteractionSpan(request.UserInput);
         await _queuedTaskNotificationDrainer.DrainAsync(session, cancellationToken);
         await _fileUpdateNotifier.HandleQueryStartAsync(cancellationToken).ConfigureAwait(false);
@@ -167,7 +171,7 @@ public sealed class QueryEngine
         {
             userMessage = ChatMessageFactory.CreateText(MessageRole.User, request.UserInput);
             session.Add(userMessage);
-            await FileHistoryService.MakeSnapshotAsync(session, _settings, userMessage.Id, _fileUpdateNotifier, cancellationToken);
+            await FileHistoryService.MakeSnapshotAsync(session, settings, userMessage.Id, _fileUpdateNotifier, cancellationToken);
             await _transcriptStore.RecordTranscriptAsync(session, session.Messages, cancellationToken);
         }
         else if (session.Messages.Count > 0)
@@ -180,7 +184,7 @@ public sealed class QueryEngine
         };
         request = request with
         {
-            FallbackModel = request.FallbackModel ?? _settings.Runtime.FallbackModel
+            FallbackModel = request.FallbackModel ?? settings.Runtime.FallbackModel
         };
         request = request with
         {
@@ -201,7 +205,7 @@ public sealed class QueryEngine
         var modelRequest = _queryRequestBuilder.BuildFromMessages(
             request,
             session.Messages,
-            _settings,
+            settings,
             _toolRegistry?.All ?? [],
             new QueryRequestBuildOptions(
                 SystemPrompt: request.ModelTurnContext.SystemPrompt,
@@ -216,7 +220,7 @@ public sealed class QueryEngine
 
         try
         {
-            await foreach (var runtimeEvent in _queryTurnRunner.RunAsync(request, session, _settings, cancellationToken))
+            await foreach (var runtimeEvent in _queryTurnRunner.RunAsync(request, session, settings, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 

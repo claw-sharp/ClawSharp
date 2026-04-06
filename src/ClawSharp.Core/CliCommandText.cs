@@ -9,6 +9,8 @@ public static class CliCommandText
         "tasks",
         "completion",
         "update",
+        "--provider",
+        "--model",
         "help",
         "--help",
         "-h",
@@ -25,6 +27,8 @@ public static class CliCommandText
         "-r",
         "--name",
         "-n",
+        "--provider",
+        "--model",
         "--help",
         "-h"
     ];
@@ -64,6 +68,7 @@ Usage:
   {{AppMetadata.CommandName}} repl --continue
   {{AppMetadata.CommandName}} repl --resume <session-id>
   {{AppMetadata.CommandName}} repl --name <name>
+  {{AppMetadata.CommandName}} --provider <provider> [--model <model>]
   {{AppMetadata.CommandName}} remote-control [options]
   {{AppMetadata.CommandName}} tasks
   {{AppMetadata.CommandName}} completion <bash|zsh|powershell>

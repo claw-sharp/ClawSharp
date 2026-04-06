@@ -102,6 +102,62 @@ public sealed class LocalAgentExecutionServiceTests
     }
 
     [Fact]
+    public async Task AgentTool_Uses_Agent_Routing_Model_When_Configured()
+    {
+        var tempDir = CreateTempDirectory();
+        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".claude-config"));
+        var queue = new InMemoryQueuedCommandQueue();
+        var transcriptStore = new JsonlTranscriptStore();
+        var settings = new ClawSharpSettings
+        {
+            AgentModels = new Dictionary<string, AgentModelConnection>(StringComparer.Ordinal)
+            {
+                ["deepseek-chat"] = new()
+                {
+                    BaseUrl = "https://api.deepseek.com/v1",
+                    ApiKey = "sk-deepseek"
+                }
+            },
+            AgentRouting = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Explore"] = "deepseek-chat"
+            }
+        };
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [],
+                [],
+                [],
+                []));
+        var tasks = new TaskRegistry(tempDir, queuedCommandQueue: queue, appStateStore: appStateStore);
+        var service = new LocalAgentExecutionService(
+            new InMemoryEventSink(),
+            transcriptStore,
+            new AgentPersistenceService(transcriptStore),
+            queue,
+            new NotImplementedQueryModelCallExecutor(),
+            queryEngineFactory: (context, childTools) =>
+                CreateQueryEngine(context.Settings, transcriptStore, queue, new SuccessfulAgentQueryTurnRunner("Routed result")));
+        var registry = new ToolRegistry(tempDir, tasks, appStateStore: appStateStore, agentExecutionService: service);
+        var session = new DefaultSessionFactory(tempDir).Create();
+
+        var result = await registry.ExecuteAsync(
+            "Agent",
+            """{"description":"inspect repo","prompt":"inspect the repo","subagent_type":"Explore"}""",
+            session,
+            settings);
+
+        Assert.True(result.Success);
+        var task = Assert.IsType<LocalAgentTask>(tasks.GetAll().Single());
+        Assert.Equal("deepseek-chat", task.Model);
+    }
+
+    [Fact]
     public async Task TaskStopTool_Stops_Background_Local_Agent_And_Queues_Stopped_Notification()
     {
         var tempDir = CreateTempDirectory();

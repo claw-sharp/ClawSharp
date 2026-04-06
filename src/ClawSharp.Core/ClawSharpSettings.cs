@@ -26,4 +26,8 @@ public sealed class ClawSharpSettings
         new Dictionary<string, PluginEnabledSetting>(StringComparer.Ordinal);
     public IReadOnlyDictionary<string, PluginConfigSettings> PluginConfigs { get; init; } =
         new Dictionary<string, PluginConfigSettings>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, AgentModelConnection> AgentModels { get; init; } =
+        new Dictionary<string, AgentModelConnection>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, string> AgentRouting { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }

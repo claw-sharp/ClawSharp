@@ -97,13 +97,9 @@ public static class ClawSharpAppStateMutations
             ToolPermissionContext = transitionedContext,
             Settings = CloneSettings(
                 state.Settings,
-                new RuntimeSettings
-                {
-                    PermissionMode = transitionedContext.Mode,
-                    Model = state.Settings.Runtime.Model,
-                    EnableTelemetry = state.Settings.Runtime.EnableTelemetry,
-                    FileCheckpointingEnabled = state.Settings.Runtime.FileCheckpointingEnabled
-                })
+                CloneRuntimeSettings(
+                    state.Settings.Runtime,
+                    permissionMode: transitionedContext.Mode))
         };
     }
 
@@ -118,13 +114,9 @@ public static class ClawSharpAppStateMutations
             MainLoopModel = nextModel,
             Settings = CloneSettings(
                 state.Settings,
-                new RuntimeSettings
-                {
-                    PermissionMode = state.Settings.Runtime.PermissionMode,
-                    Model = nextModel,
-                    EnableTelemetry = state.Settings.Runtime.EnableTelemetry,
-                    FileCheckpointingEnabled = state.Settings.Runtime.FileCheckpointingEnabled
-                })
+                CloneRuntimeSettings(
+                    state.Settings.Runtime,
+                    model: nextModel))
         };
     }
 
@@ -138,14 +130,38 @@ public static class ClawSharpAppStateMutations
         {
             Settings = CloneSettings(
                 state.Settings,
-                new RuntimeSettings
-                {
-                    PermissionMode = state.Settings.Runtime.PermissionMode,
-                    Model = state.Settings.Runtime.Model,
-                    EnableTelemetry = state.Settings.Runtime.EnableTelemetry,
-                    FileCheckpointingEnabled = state.Settings.Runtime.FileCheckpointingEnabled
-                },
+                CloneRuntimeSettings(state.Settings.Runtime),
                 normalizedApiKey)
+        };
+    }
+
+    public static ClawSharpAppState WithSettings(
+        ClawSharpAppState state,
+        ClawSharpSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return state with
+        {
+            Settings = settings,
+            MainLoopModel = MainLoopModelResolver.Resolve(settings.Runtime.Model)
+        };
+    }
+
+    private static RuntimeSettings CloneRuntimeSettings(
+        RuntimeSettings source,
+        PermissionMode? permissionMode = null,
+        string? model = null)
+    {
+        return new RuntimeSettings
+        {
+            PermissionMode = permissionMode ?? source.PermissionMode,
+            Model = model ?? source.Model,
+            FallbackModel = source.FallbackModel,
+            EnableTelemetry = source.EnableTelemetry,
+            FileCheckpointingEnabled = source.FileCheckpointingEnabled,
+            AutoMemoryEnabled = source.AutoMemoryEnabled,
+            AutoMemoryDirectory = source.AutoMemoryDirectory
         };
     }
 
@@ -162,11 +178,20 @@ public static class ClawSharpAppStateMutations
                 ShowTimestamps = source.Terminal.ShowTimestamps,
                 UseColor = source.Terminal.UseColor
             },
+            Sandbox = new SandboxSettings
+            {
+                Enabled = source.Sandbox.Enabled,
+                AllowUnsandboxedCommands = source.Sandbox.AllowUnsandboxedCommands,
+                FailIfUnavailable = source.Sandbox.FailIfUnavailable
+            },
             ClaudeApiKey = claudeApiKeyOverride ?? source.ClaudeApiKey,
+            SkipAutoPermissionPrompt = source.SkipAutoPermissionPrompt,
+            UseAutoModeDuringPlan = source.UseAutoModeDuringPlan,
             ApiKeyHelper = source.ApiKeyHelper,
             AwsCredentialExport = source.AwsCredentialExport,
             AwsAuthRefresh = source.AwsAuthRefresh,
             Agent = source.Agent,
+            Attribution = source.Attribution,
             Permissions = source.Permissions,
             AllowManagedPermissionRulesOnly = source.AllowManagedPermissionRulesOnly,
             Hooks = source.Hooks,
@@ -175,7 +200,9 @@ public static class ClawSharpAppStateMutations
             ForceLoginOrgUUID = source.ForceLoginOrgUUID,
             OtelHeadersHelper = source.OtelHeadersHelper,
             EnabledPlugins = source.EnabledPlugins,
-            PluginConfigs = source.PluginConfigs
+            PluginConfigs = source.PluginConfigs,
+            AgentModels = source.AgentModels,
+            AgentRouting = source.AgentRouting
         };
     }
 }

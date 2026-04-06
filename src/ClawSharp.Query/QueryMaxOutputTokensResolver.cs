@@ -76,6 +76,23 @@ public static class QueryMaxOutputTokensResolver
             return (32_000, 64_000);
         }
 
+        if (normalized.Contains("gpt-5", StringComparison.Ordinal) ||
+            normalized.Contains("codex", StringComparison.Ordinal))
+        {
+            return (32_000, 128_000);
+        }
+
+        if (normalized.Contains("gpt-4.1", StringComparison.Ordinal) ||
+            normalized.Contains("gpt-4o", StringComparison.Ordinal))
+        {
+            return (16_384, 65_536);
+        }
+
+        if (normalized.Contains("gemini", StringComparison.Ordinal))
+        {
+            return (8_192, 65_536);
+        }
+
         return (MaxOutputTokensDefault, MaxOutputTokensUpperLimit);
     }
 

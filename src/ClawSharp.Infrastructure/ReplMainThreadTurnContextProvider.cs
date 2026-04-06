@@ -15,19 +15,22 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
     private readonly ToolRegistry? _toolRegistry;
     private readonly MemoryStorageService? _memoryStorageService;
     private readonly StartupEnvironment? _startupEnvironment;
+    private readonly IClawSharpAppStateStore? _appStateStore;
 
     public ReplMainThreadTurnContextProvider(
         string workspaceRoot,
         ClawSharpSettings settings,
         ToolRegistry? toolRegistry = null,
         MemoryStorageService? memoryStorageService = null,
-        StartupEnvironment? startupEnvironment = null)
+        StartupEnvironment? startupEnvironment = null,
+        IClawSharpAppStateStore? appStateStore = null)
     {
         _workspaceRoot = workspaceRoot;
         _settings = settings;
         _toolRegistry = toolRegistry;
         _memoryStorageService = memoryStorageService;
         _startupEnvironment = startupEnvironment;
+        _appStateStore = appStateStore;
     }
 
     public async Task<QueryModelTurnContext> GetReplMainThreadContextAsync(CancellationToken cancellationToken = default)
@@ -96,12 +99,13 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<string?> BuildAutoMemorySectionAsync(CancellationToken cancellationToken)
     {
+        var settings = _appStateStore?.GetState().Settings ?? _settings;
         if (_memoryStorageService is null || _startupEnvironment is null)
         {
             return null;
         }
 
-        if (!_memoryStorageService.IsEnabled(_startupEnvironment, _settings.Runtime))
+        if (!_memoryStorageService.IsEnabled(_startupEnvironment, settings.Runtime))
         {
             return null;
         }
@@ -111,7 +115,8 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<string> ComputeSimpleEnvInfoAsync(CancellationToken cancellationToken)
     {
-        var resolvedModel = MainLoopModelResolver.Resolve(_settings.Runtime.Model);
+        var settings = _appStateStore?.GetState().Settings ?? _settings;
+        var resolvedModel = MainLoopModelResolver.Resolve(settings.Runtime.Model);
         var modelDescription = $"You are powered by the model named {MainLoopModelResolver.RenderSetting(resolvedModel)}. The exact model ID is {resolvedModel}.";
         var isGit = await IsGitRepositoryAsync(cancellationToken);
         var osVersion = Environment.OSVersion.VersionString;

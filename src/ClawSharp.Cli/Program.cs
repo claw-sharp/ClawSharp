@@ -65,7 +65,14 @@ try
     }
 
     var deepLinkRuntimeContext = ParseDeepLinkRuntimeContext(argsList);
-    var visibleArgs = StripDeepLinkRuntimeArgs(argsList);
+    var providerFlagError = ProviderFlagUtilities.ApplyProviderFlags(argsList);
+    if (!string.IsNullOrWhiteSpace(providerFlagError))
+    {
+        Console.Error.WriteLine(providerFlagError);
+        return 1;
+    }
+
+    var visibleArgs = ProviderFlagUtilities.StripProviderFlags(StripDeepLinkRuntimeArgs(argsList));
 
     if (TryHandleStaticTopLevelCommand(visibleArgs, out var staticCommandExitCode))
     {
@@ -76,6 +83,7 @@ try
 
     var app = await ClawSharpApplicationFactory.CreateDefaultAsync();
     StartupProfiler.Checkpoint("application_factory_end");
+    ApplyCliModelOverride(app.AppStateStore, argsList);
 
     if (ShouldRunRepl(visibleArgs))
     {
@@ -139,7 +147,7 @@ static bool ShouldRunRepl(IReadOnlyList<string> argsList)
 {
     return argsList.Count == 0 ||
            string.Equals(argsList[0], "repl", StringComparison.OrdinalIgnoreCase) ||
-           argsList[0] is "--continue" or "-c" or "--resume" or "-r" or "--name" or "-n";
+           argsList[0] is "--continue" or "-c" or "--resume" or "-r" or "--name" or "-n" or "--provider" or "--model";
 }
 
 static bool IsHelpRequest(IReadOnlyList<string> argsList)
@@ -241,4 +249,19 @@ static List<string> StripDeepLinkRuntimeArgs(IReadOnlyList<string> argsList)
     }
 
     return stripped;
+}
+
+static void ApplyCliModelOverride(IClawSharpAppStateStore appStateStore, IReadOnlyList<string> argsList)
+{
+    var provider = ProviderFlagUtilities.ParseProviderFlag(argsList);
+    var model = ProviderFlagUtilities.ParseModelFlag(argsList);
+    if (string.IsNullOrWhiteSpace(provider) && string.IsNullOrWhiteSpace(model))
+    {
+        return;
+    }
+
+    var selectedModel = string.IsNullOrWhiteSpace(model)
+        ? ProviderRuntimeResolver.GetDefaultModelForCurrentProvider()
+        : model.Trim();
+    appStateStore.SetState(state => ClawSharpAppStateMutations.WithMainLoopModel(state, selectedModel));
 }

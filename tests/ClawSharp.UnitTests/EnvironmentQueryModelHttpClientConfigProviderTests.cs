@@ -203,6 +203,121 @@ public sealed class EnvironmentQueryModelHttpClientConfigProviderTests
         }
     }
 
+    [Fact]
+    public void GetConfig_Resolves_OpenAi_Compatible_Provider_Config()
+    {
+        var previousUseOpenAi = Environment.GetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI");
+        var previousBaseUrl = Environment.GetEnvironmentVariable("OPENAI_BASE_URL");
+        var previousModel = Environment.GetEnvironmentVariable("OPENAI_MODEL");
+        var previousApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", "1");
+            Environment.SetEnvironmentVariable("OPENAI_BASE_URL", "https://api.openai.test/v1");
+            Environment.SetEnvironmentVariable("OPENAI_MODEL", "gpt-4o");
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", "sk-openai");
+            var provider = new EnvironmentQueryModelHttpClientConfigProvider();
+
+            var config = provider.GetConfig(
+                CreateRequest(),
+                QueryLoopStateFactory.CreateInitial([]),
+                CreateSession(),
+                new ClawSharpSettings());
+
+            Assert.Equal("https://api.openai.test/v1", config.BaseUrl);
+            Assert.Equal(ModelTransportKind.OpenAiChatCompletions, config.TransportKind);
+            Assert.Equal(ApiProviderKind.OpenAi, config.ProviderKind);
+            Assert.Equal("sk-openai", config.ApiKey);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", previousUseOpenAi);
+            Environment.SetEnvironmentVariable("OPENAI_BASE_URL", previousBaseUrl);
+            Environment.SetEnvironmentVariable("OPENAI_MODEL", previousModel);
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", previousApiKey);
+        }
+    }
+
+    [Fact]
+    public void GetConfig_Resolves_Codex_Transport_For_Codex_Alias()
+    {
+        var previousUseOpenAi = Environment.GetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI");
+        var previousModel = Environment.GetEnvironmentVariable("OPENAI_MODEL");
+        var previousCodexKey = Environment.GetEnvironmentVariable("CODEX_API_KEY");
+        var previousAccount = Environment.GetEnvironmentVariable("CHATGPT_ACCOUNT_ID");
+        try
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", "1");
+            Environment.SetEnvironmentVariable("OPENAI_MODEL", "codexplan");
+            Environment.SetEnvironmentVariable("CODEX_API_KEY", "codex-token");
+            Environment.SetEnvironmentVariable("CHATGPT_ACCOUNT_ID", "account-1");
+            var provider = new EnvironmentQueryModelHttpClientConfigProvider();
+
+            var config = provider.GetConfig(
+                CreateRequest(),
+                QueryLoopStateFactory.CreateInitial([]),
+                CreateSession(),
+                new ClawSharpSettings());
+
+            Assert.Equal(ModelTransportKind.CodexResponses, config.TransportKind);
+            Assert.Equal(ApiProviderKind.Codex, config.ProviderKind);
+            Assert.Equal("codex-token", config.ApiKey);
+            Assert.Equal("account-1", config.AccountId);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", previousUseOpenAi);
+            Environment.SetEnvironmentVariable("OPENAI_MODEL", previousModel);
+            Environment.SetEnvironmentVariable("CODEX_API_KEY", previousCodexKey);
+            Environment.SetEnvironmentVariable("CHATGPT_ACCOUNT_ID", previousAccount);
+        }
+    }
+
+    [Fact]
+    public void GetConfig_Uses_Custom_Anthropic_Model_Connection_Credentials()
+    {
+        var previousAnthropicApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        var previousAnthropicAuthToken = Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
+            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", null);
+            var provider = new EnvironmentQueryModelHttpClientConfigProvider();
+            var settings = new ClawSharpSettings
+            {
+                Runtime = new RuntimeSettings
+                {
+                    Model = "claude-custom"
+                },
+                AgentModels = new Dictionary<string, AgentModelConnection>(StringComparer.Ordinal)
+                {
+                    ["claude-custom"] = new()
+                    {
+                        Provider = "anthropic",
+                        BaseUrl = "https://anthropic-proxy.test",
+                        ApiKey = "custom-anthropic-key"
+                    }
+                }
+            };
+
+            var config = provider.GetConfig(
+                CreateRequest(),
+                QueryLoopStateFactory.CreateInitial([]),
+                CreateSession(),
+                settings);
+
+            Assert.Equal("https://anthropic-proxy.test", config.BaseUrl);
+            Assert.Equal(ApiProviderKind.Anthropic, config.ProviderKind);
+            Assert.Equal("custom-anthropic-key", config.ApiKey);
+            Assert.Null(config.AuthToken);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousAnthropicApiKey);
+            Environment.SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", previousAnthropicAuthToken);
+        }
+    }
+
     private static QueryTurnRequest CreateRequest()
     {
         return QueryTurnRequest.Create(CreateSession(), "hello");
