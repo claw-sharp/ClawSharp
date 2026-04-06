@@ -148,9 +148,24 @@ public sealed class PluginSkillHookIntegrationTests
 
     private static void DeleteDirectory(string path)
     {
-        if (Directory.Exists(path))
+        for (var attempt = 0; attempt < 5; attempt++)
         {
-            Directory.Delete(path, recursive: true);
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+                return;
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                Thread.Sleep(100);
+            }
+            catch (IOException)
+            {
+                return;
+            }
         }
     }
 }

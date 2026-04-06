@@ -77,7 +77,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CODEX_API_KEY", originalCodexApiKey);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -115,7 +115,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -145,7 +145,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -187,7 +187,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -225,7 +225,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -261,7 +261,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -300,7 +300,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -339,7 +339,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -374,7 +374,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -419,7 +419,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -472,7 +472,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -521,7 +521,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -557,7 +557,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -594,7 +594,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -636,7 +636,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -665,7 +665,7 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
         }
     }
@@ -730,12 +730,12 @@ public class ClawSharpApplicationIntegrationTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
-                Directory.Delete(tempConfigDir, recursive: true);
+                DeleteDirectoryWithRetry(tempConfigDir);
             }
 
             if (Directory.Exists(workspaceRoot))
             {
-                Directory.Delete(workspaceRoot, recursive: true);
+                DeleteDirectoryWithRetry(workspaceRoot);
             }
         }
     }
