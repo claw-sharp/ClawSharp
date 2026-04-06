@@ -1,0 +1,20 @@
+{
+  "name": "@clawsharp/cli-win32-arm64",
+  "version": "0.0.0-development",
+  "description": "ClawSharp CLI binary for Windows ARM64.",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ]
+}

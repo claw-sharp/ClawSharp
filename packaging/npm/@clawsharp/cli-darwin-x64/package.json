@@ -1,0 +1,20 @@
+{
+  "name": "@clawsharp/cli-darwin-x64",
+  "version": "0.0.0-development",
+  "description": "ClawSharp CLI binary for macOS x64.",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ]
+}

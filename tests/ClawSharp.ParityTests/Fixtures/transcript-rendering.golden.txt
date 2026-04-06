@@ -1,0 +1,7 @@
+> first prompt
+
+* first answer
+  continued answer
+
+! System notice
+! ● Background command completed

@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="1.2.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClawSharp.Bridge\ClawSharp.Bridge.csproj" />
+    <ProjectReference Include="..\ClawSharp.Core\ClawSharp.Core.csproj" />
+    <ProjectReference Include="..\ClawSharp.Query\ClawSharp.Query.csproj" />
+    <ProjectReference Include="..\ClawSharp.Tasks\ClawSharp.Tasks.csproj" />
+    <ProjectReference Include="..\ClawSharp.Tools\ClawSharp.Tools.csproj" />
+    <ProjectReference Include="..\ClawSharp.Ui.Terminal\ClawSharp.Ui.Terminal.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
