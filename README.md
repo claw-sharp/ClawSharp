@@ -1,18 +1,20 @@
 # ClawSharp
 
-**ClawSharp** is a C# port of Claude Code (Anthropic's terminal-based AI assistant). 
+**ClawSharp** is a C# port of Claude Code, Anthropic’s terminal-based AI assistant.
 
-I built this because I wanted something with all the exact same features as the original TypeScript version—the same conversation loop, tools, session persistence, and UI—but shipped as a single, self-contained, cross-platform binary built on **.NET 10**. No Node.js required!
+I built it because I wanted the Claude Code workflow in a single self-contained .NET binary, without needing Node.js at runtime. The goal is to stay close to the original experience: terminal chat, tool use, session persistence, and a familiar conversation loop, while being easy to install and run across Windows, Linux, and macOS.
 
+## Why use ClawSharp?
 
+- **Single binary** — no Node.js runtime after install
+- **Cross-platform** — Windows, Linux, and macOS on x64 and ARM64
+- **Multi-provider** — Anthropic, Gemini, OpenAI, Codex, GitHub Models, Bedrock, Vertex, Foundry, and Ollama
+- **Persistent sessions** — resume chats, keep transcripts, and retain file history
+- **Extensible** — supports plugins, hooks, agents, skills, and MCP servers
 
-## Why ClawSharp?
+## Current status
 
-- **Single binary** — no Node.js runtime required after install
-- **Cross-platform** — native binaries for Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64
-- **Multi-provider** — Anthropic, Gemini, OpenAI, Codex, GitHub Models, Bedrock, Vertex, Foundry, Ollama
-- **Full session model** — resume, continue, transcript persistence, file history
-- **Extensible** — plugins, skills, hooks, agents, and MCP server integrations
+ClawSharp is usable today, but some parts of Claude Code are still being aligned.
 
 ## Install
 
@@ -20,6 +22,8 @@ I built this because I wanted something with all the exact same features as the 
 npm install -g clawsharp
 clawsharp --help
 ```
+
+*Note: Node.js is only needed for the npm-based install; the GitHub Releases provide standalone binaries.*
 
 Or download a self-contained binary directly from [GitHub Releases](https://github.com/claw-sharp/ClawSharp/releases).
 
@@ -69,7 +73,7 @@ When the REPL starts, type any message and press Enter. Claude will respond in t
 
 ## Quick Start: Codex (auth.json)
 
-ClawSharp supports the Codex provider through its native auth.json token file, matching the original Claude Code behavior exactly.
+ClawSharp supports the Codex provider through its native auth.json token file, designed to mirror the original Claude Code behavior.
 
 ### Locate or create your auth.json
 
