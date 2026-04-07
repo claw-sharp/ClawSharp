@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 10%;
+    --foreground: 210 20% 90%;
+
+    --card: 220 14% 13%;
+    --card-foreground: 210 20% 90%;
+
+    --popover: 220 14% 15%;
+    --popover-foreground: 210 20% 90%;
+
+    --primary: 210 100% 56%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 210 20% 80%;
+
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 220 14% 20%;
+    --accent-foreground: 210 20% 90%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 20%;
+    --input: 220 14% 18%;
+    --ring: 210 100% 56%;
+
+    --radius: 0.5rem;
+
+    /* Status colors */
+    --status-running: 142 71% 45%;
+    --status-idle: 215 15% 55%;
+    --status-waiting: 38 92% 50%;
+    --status-completed: 142 71% 45%;
+    --status-failed: 0 72% 51%;
+    --status-scheduled: 262 83% 58%;
+
+    /* Diff colors */
+    --diff-add-bg: 142 71% 45% / 0.12;
+    --diff-add-text: 142 71% 65%;
+    --diff-del-bg: 0 72% 51% / 0.12;
+    --diff-del-text: 0 72% 65%;
+    --diff-hunk: 210 100% 56% / 0.08;
+
+    /* Surface layers */
+    --surface-0: 220 14% 8%;
+    --surface-1: 220 14% 10%;
+    --surface-2: 220 14% 13%;
+    --surface-3: 220 14% 16%;
+    --surface-4: 220 14% 20%;
+
+    /* Sidebar */
+    --sidebar-background: 220 14% 8%;
+    --sidebar-foreground: 210 20% 80%;
+    --sidebar-primary: 210 100% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 14%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 220 14% 16%;
+    --sidebar-ring: 210 100% 56%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer utilities {
+  .surface-0 { background-color: hsl(var(--surface-0)); }
+  .surface-1 { background-color: hsl(var(--surface-1)); }
+  .surface-2 { background-color: hsl(var(--surface-2)); }
+  .surface-3 { background-color: hsl(var(--surface-3)); }
+  .surface-4 { background-color: hsl(var(--surface-4)); }
+}

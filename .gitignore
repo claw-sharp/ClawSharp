@@ -9,3 +9,5 @@ memory/
 tests/ClawSharp.IntegrationTests/TestResults/
 tests/ClawSharp.ParityTests/TestResults/
 tests/ClawSharp.UnitTests/TestResults/
+apps/.DS_Store
+.DS_Store
