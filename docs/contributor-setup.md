@@ -6,8 +6,8 @@ Welcome to the ClawSharp project! This document outlines how to set up your loca
 
 To build and run ClawSharp locally, you need the following dependencies installed on your machine:
 
-1. **.NET 9.0 SDK**: Required to build the core C# projects and run tests.
-   - [Download .NET 9.0](https://dotnet.microsoft.com/download/dotnet/9.0)
+1. **.NET 10.0 SDK**: Required to build the core C# projects and run tests.
+   - [Download .NET 10.0](https://dotnet.microsoft.com/download/dotnet/10.0)
 2. **Node.js (v22+)**: Required if you intend to test the NPM packaging and Javascript scripts.
    - [Download Node.js](https://nodejs.org/)
 3. **PowerShell (pwsh)**: Required to run the release and packaging scripts in the `eng/` directory (`publish-cli.ps1`, `stage-npm-packages.ps1`).
