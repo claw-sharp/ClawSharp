@@ -2,7 +2,11 @@
 
 **ClawSharp** is a C# port of Claude Code, Anthropic’s terminal-based AI assistant.
 
-I built it because I wanted the Claude Code workflow in a single self-contained .NET binary, without needing Node.js at runtime. The goal is to stay close to the original experience: terminal chat, tool use, session persistence, and a familiar conversation loop, while being easy to install and run across Windows, Linux, and macOS.
+I built it because I love .NET, and there still are not many open-source code-agent projects in the .NET ecosystem. I also wanted to learn how a terminal-based coding agent is structured end to end — conversation loop, tool execution, session persistence, provider integration, and terminal UX — by building one myself.
+
+The goal with ClawSharp is to stay close to the original Claude Code workflow while shipping as a single self-contained .NET binary that runs across Windows, Linux, and macOS without requiring Node.js at runtime.
+
+This started as a vibe-coded side project, but I’m treating it as a real tool and a real learning project. Contributions, bug reports, and feedback are very welcome.
 
 ## Why use ClawSharp?
 
@@ -16,14 +20,21 @@ I built it because I wanted the Claude Code workflow in a single self-contained 
 
 ClawSharp is usable today, but some parts of Claude Code are still being aligned.
 
+## Related projects
+
+A few open projects in a similar space that I’ve looked at for reference and inspiration:
+
+- [claw-code](https://github.com/ultraworkers/claw-code) — a public Rust implementation of the `claw` CLI agent harness
+- [openclaude](https://github.com/Gitlawb/openclaude) — an open-source coding-agent CLI for cloud and local model providers
+
 ## Install
 
 ```bash
 npm install -g clawsharp
 clawsharp --help
-```
+````
 
-*Note: Node.js is only needed for the npm-based install; the GitHub Releases provide standalone binaries.*
+*Note: Node.js is only needed for the npm-based install; GitHub Releases provide standalone binaries.*
 
 Or download a self-contained binary directly from [GitHub Releases](https://github.com/claw-sharp/ClawSharp/releases).
 
@@ -126,13 +137,13 @@ clawsharp --provider codex
 
 ## Other Providers
 
-| Provider | Environment variable | Example |
-|---|---|---|
-| Anthropic | `ANTHROPIC_API_KEY` | `clawsharp --provider anthropic` |
-| Gemini | `GEMINI_API_KEY` | `clawsharp --provider gemini --model gemini-2.0-flash` |
-| OpenAI | `OPENAI_API_KEY` | `clawsharp --provider openai --model gpt-4o` |
-| GitHub Models | `GITHUB_TOKEN` | `clawsharp --provider github` |
-| Ollama | _(none required)_ | `clawsharp --provider ollama --model llama3.2` |
+| Provider      | Environment variable | Example                                                |
+| ------------- | -------------------- | ------------------------------------------------------ |
+| Anthropic     | `ANTHROPIC_API_KEY`  | `clawsharp --provider anthropic`                       |
+| Gemini        | `GEMINI_API_KEY`     | `clawsharp --provider gemini --model gemini-2.0-flash` |
+| OpenAI        | `OPENAI_API_KEY`     | `clawsharp --provider openai --model gpt-4o`           |
+| GitHub Models | `GITHUB_TOKEN`       | `clawsharp --provider github`                          |
+| Ollama        | *(none required)*    | `clawsharp --provider ollama --model llama3.2`         |
 
 Full provider setup details: [docs/authentication.md](docs/authentication.md)
 
@@ -142,14 +153,14 @@ Full provider setup details: [docs/authentication.md](docs/authentication.md)
 
 Self-contained binaries are produced for all supported platforms:
 
-| Platform | RID |
-|---|---|
-| Windows 64-bit | `win-x64` |
-| Windows ARM64 | `win-arm64` |
-| Linux 64-bit | `linux-x64` |
-| Linux ARM64 | `linux-arm64` |
-| macOS Intel | `osx-x64` |
-| macOS Apple Silicon | `osx-arm64` |
+| Platform            | RID           |
+| ------------------- | ------------- |
+| Windows 64-bit      | `win-x64`     |
+| Windows ARM64       | `win-arm64`   |
+| Linux 64-bit        | `linux-x64`   |
+| Linux ARM64         | `linux-arm64` |
+| macOS Intel         | `osx-x64`     |
+| macOS Apple Silicon | `osx-arm64`   |
 
 Release archives: `.zip` (Windows), `.tar.gz` (Linux/macOS), plus a shared `SHA256SUMS` checksum file.
 
@@ -178,19 +189,23 @@ dotnet test ClawSharp.sln
 
 See [docs/contributor-setup.md](docs/contributor-setup.md) for a full contributor guide.
 
+## Contributing
+
+ClawSharp started as a personal learning project and is still evolving. If you're interested in code agents, terminal tooling, or building more AI-native tools in .NET, contributions, issues, and feedback are welcome.
+
 ---
 
 ## Documentation
 
-| Document | Description |
-|---|---|
-| [docs/architect.md](docs/architect.md) | Architecture overview and layer model |
-| [docs/authentication.md](docs/authentication.md) | All provider setup and credential options |
-| [docs/user-chat-flow.md](docs/user-chat-flow.md) | Turn-by-turn conversation flow |
-| [docs/contributor-setup.md](docs/contributor-setup.md) | Local development setup |
-| [docs/extension-migration.md](docs/extension-migration.md) | Migrating extensions and plugins |
-| [docs/release-process.md](docs/release-process.md) | Maintainer release process |
-| [docs/distribution.md](docs/distribution.md) | Distribution, install, and verification |
-| [docs/telemetry-and-diagnostics.md](docs/telemetry-and-diagnostics.md) | Debugging and diagnostics |
-| [docs/runbooks.md](docs/runbooks.md) | Operator support runbooks |
-| [docs/known-gaps.md](docs/known-gaps.md) | Known gaps and deferred work |
+| Document                                                               | Description                               |
+| ---------------------------------------------------------------------- | ----------------------------------------- |
+| [docs/architect.md](docs/architect.md)                                 | Architecture overview and layer model     |
+| [docs/authentication.md](docs/authentication.md)                       | All provider setup and credential options |
+| [docs/user-chat-flow.md](docs/user-chat-flow.md)                       | Turn-by-turn conversation flow            |
+| [docs/contributor-setup.md](docs/contributor-setup.md)                 | Local development setup                   |
+| [docs/extension-migration.md](docs/extension-migration.md)             | Migrating extensions and plugins          |
+| [docs/release-process.md](docs/release-process.md)                     | Maintainer release process                |
+| [docs/distribution.md](docs/distribution.md)                           | Distribution, install, and verification   |
+| [docs/telemetry-and-diagnostics.md](docs/telemetry-and-diagnostics.md) | Debugging and diagnostics                 |
+| [docs/runbooks.md](docs/runbooks.md)                                   | Operator support runbooks                 |
+| [docs/known-gaps.md](docs/known-gaps.md)                               | Known gaps and deferred work              |
