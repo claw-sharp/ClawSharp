@@ -20,6 +20,7 @@ public sealed record ToolExecutionContext(
     Action<ToolProgressUpdate>? OnProgress = null,
     Action<ChatMessage>? OnMessage = null,
     string? QuerySource = null,
+    string? AgentId = null,
     IReadOnlyList<string>? CurrentSystemPrompt = null,
     IReadOnlyList<ToolDescriptor>? AvailableTools = null)
 {

@@ -18,6 +18,8 @@ public sealed class ToolRegistry
         new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string>? _allowedToolNames;
 
+    public string? AgentId { get; }
+
     public ToolRegistry(
         string workspaceRoot,
         TaskRegistry tasks,
@@ -28,10 +30,12 @@ public sealed class ToolRegistry
         IClawSharpAppStateStore? appStateStore = null,
         IPermissionPrompter? permissionPrompter = null,
         IAgentExecutionService? agentExecutionService = null,
-        IReadOnlySet<string>? allowedToolNames = null)
+        IReadOnlySet<string>? allowedToolNames = null,
+        string? agentId = null)
     {
         WorkspaceRoot = workspaceRoot;
         Tasks = tasks;
+        AgentId = agentId;
         ReadFileState = readFileState ?? FileStateCache.CreateWithSizeLimit(FileStateCache.DefaultMaxEntries);
         _toolPermissionContext = toolPermissionContext ?? ToolPermissionContexts.CreateEmpty();
         FileUpdateNotifier = fileUpdateNotifier ?? new NullFileUpdateNotifier();
@@ -52,7 +56,13 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new PowerShellTool());
         RegisterBuiltIn(new AgentTool(AgentDefinitions, agentExecutionService ?? new NullAgentExecutionService()));
         RegisterBuiltIn(new SendMessageTool());
+        RegisterBuiltIn(new SendUserMessageTool());
         RegisterBuiltIn(new TaskOutputTool());
+        RegisterBuiltIn(new TodoWriteTool());
+        RegisterBuiltIn(new StructuredOutputTool());
+        RegisterBuiltIn(new SleepTool());
+        RegisterBuiltIn(new WebFetchTool());
+        RegisterBuiltIn(new WebSearchTool());
         RegisterBuiltIn(new TaskStopTool());
     }
 
@@ -173,6 +183,7 @@ public sealed class ToolRegistry
         Action<ToolProgressUpdate>? onProgress = null,
         Action<ChatMessage>? onMessage = null,
         string? querySource = null,
+        string? agentId = null,
         IReadOnlyList<string>? currentSystemPrompt = null,
         IReadOnlyList<ToolDescriptor>? availableTools = null,
         CancellationToken cancellationToken = default)
@@ -190,6 +201,7 @@ public sealed class ToolRegistry
             onProgress,
             onMessage,
             querySource,
+            agentId,
             currentSystemPrompt,
             availableTools,
             cancellationToken);
@@ -203,6 +215,7 @@ public sealed class ToolRegistry
         Action<ToolProgressUpdate>? onProgress,
         Action<ChatMessage>? onMessage,
         string? querySource,
+        string? agentId,
         IReadOnlyList<string>? currentSystemPrompt,
         IReadOnlyList<ToolDescriptor>? availableTools,
         CancellationToken cancellationToken)
@@ -223,6 +236,7 @@ public sealed class ToolRegistry
             onProgress,
             onMessage,
             querySource,
+            agentId ?? AgentId,
             currentSystemPrompt,
             availableTools ?? All);
         var validation = await tool.ValidateAsync(context, cancellationToken);
