@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClawSharp.Core\ClawSharp.Core.csproj" />
+    <ProjectReference Include="..\ClawSharp.Infrastructure\ClawSharp.Infrastructure.csproj" />
+    <ProjectReference Include="..\ClawSharp.Query\ClawSharp.Query.csproj" />
+    <ProjectReference Include="..\ClawSharp.Tools\ClawSharp.Tools.csproj" />
+    <ProjectReference Include="..\ClawSharp.Tasks\ClawSharp.Tasks.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>clawsharp-agenthost</AssemblyName>
+    <RootNamespace>ClawSharp.AgentHost</RootNamespace>
+  </PropertyGroup>
+
+</Project>
