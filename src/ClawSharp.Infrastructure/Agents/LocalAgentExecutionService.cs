@@ -24,6 +24,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
     private readonly AgentPersistenceService _agentPersistenceService;
     private readonly IQueuedCommandQueue _queuedCommandQueue;
     private readonly IQueryModelCallExecutor _modelCallExecutor;
+    private readonly INativeWebSearchService _nativeWebSearchService;
     private readonly HookRegistry _hookRegistry;
     private readonly HookExecutor _hookExecutor;
     private readonly Func<ToolExecutionContext, ToolRegistry, QueryEngine> _queryEngineFactory;
@@ -34,6 +35,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         AgentPersistenceService agentPersistenceService,
         IQueuedCommandQueue queuedCommandQueue,
         IQueryModelCallExecutor modelCallExecutor,
+        INativeWebSearchService? nativeWebSearchService = null,
         HookRegistry? hookRegistry = null,
         HookExecutor? hookExecutor = null,
         Func<ToolExecutionContext, ToolRegistry, QueryEngine>? queryEngineFactory = null)
@@ -43,6 +45,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         _agentPersistenceService = agentPersistenceService;
         _queuedCommandQueue = queuedCommandQueue;
         _modelCallExecutor = modelCallExecutor;
+        _nativeWebSearchService = nativeWebSearchService ?? new NullNativeWebSearchService();
         _hookRegistry = hookRegistry ?? new HookRegistry();
         _hookExecutor = hookExecutor ?? new HookExecutor();
         _queryEngineFactory = queryEngineFactory ?? CreateQueryEngine;
@@ -435,6 +438,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             childAppStateStore,
             runInBackground ? new NullPermissionPrompter() : context.PermissionPrompter,
             agentExecutionService: isForkPath ? this : new NullAgentExecutionService(),
+            nativeWebSearchService: _nativeWebSearchService,
             allowedToolNames: ResolveAllowedToolNames(selectedAgent, isForkPath, context.AvailableTools),
             agentId: agentId);
     }

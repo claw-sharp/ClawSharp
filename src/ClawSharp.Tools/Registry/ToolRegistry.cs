@@ -30,6 +30,7 @@ public sealed class ToolRegistry
         IClawSharpAppStateStore? appStateStore = null,
         IPermissionPrompter? permissionPrompter = null,
         IAgentExecutionService? agentExecutionService = null,
+        INativeWebSearchService? nativeWebSearchService = null,
         IReadOnlySet<string>? allowedToolNames = null,
         string? agentId = null)
     {
@@ -62,7 +63,7 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new StructuredOutputTool());
         RegisterBuiltIn(new SleepTool());
         RegisterBuiltIn(new WebFetchTool());
-        RegisterBuiltIn(new WebSearchTool());
+        RegisterBuiltIn(new WebSearchTool(nativeWebSearchService));
         RegisterBuiltIn(new TaskStopTool());
     }
 

@@ -109,12 +109,14 @@ public static class ClawSharpApplicationFactory
             modelStreamUpdateParser,
             authAccountStateProvider,
             authFailureRecoveryRunner);
+        var nativeWebSearchService = new NativeWebSearchService(modelCallExecutor);
         var agentExecutionService = new LocalAgentExecutionService(
             eventSink,
             transcriptStore,
             agentPersistenceService,
             queuedCommandQueue,
-            modelCallExecutor);
+            modelCallExecutor,
+            nativeWebSearchService: nativeWebSearchService);
         var tools = new ToolRegistry(
             workspaceRoot,
             tasks,
@@ -124,7 +126,8 @@ public static class ClawSharpApplicationFactory
             agentDefinitions.ActiveAgents,
             appStateStore,
             permissionPrompter,
-            agentExecutionService);
+            agentExecutionService,
+            nativeWebSearchService: nativeWebSearchService);
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
