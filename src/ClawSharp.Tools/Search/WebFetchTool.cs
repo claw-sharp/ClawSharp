@@ -107,7 +107,7 @@ internal sealed class WebFetchTool : BaseTool
                 ["url"] = url
             };
 
-            return Success(data);
+            return Success(result, data);
         }
         catch (Exception ex)
         {

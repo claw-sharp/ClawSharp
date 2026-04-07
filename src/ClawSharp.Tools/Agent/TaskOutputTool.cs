@@ -407,7 +407,7 @@ internal sealed class TaskOutputTool : BaseTool
                     [taskId] = task with { Notified = true }
                 };
 
-                return new TaskAppState(updatedTasks);
+                return new TaskAppState(updatedTasks, previousState.Todos, previousState.BoardTasks);
             });
     }
 

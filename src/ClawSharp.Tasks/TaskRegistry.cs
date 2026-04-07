@@ -25,6 +25,7 @@ public sealed class TaskRegistry : ITaskAppStateStore
     private readonly Lock _stateLock = new();
     private ConcurrentDictionary<string, ClawSharpTask> _tasks = new(StringComparer.Ordinal);
     private ConcurrentDictionary<string, IReadOnlyList<TodoItem>> _todos = new(StringComparer.Ordinal);
+    private ConcurrentDictionary<string, IReadOnlyDictionary<string, BoardTask>> _boardTasks = new(StringComparer.Ordinal);
     private readonly string _workspaceRoot;
     private readonly DiskTaskOutputStore _taskOutputStore;
     private readonly IQueuedCommandQueue _queuedCommandQueue;
@@ -71,7 +72,8 @@ public sealed class TaskRegistry : ITaskAppStateStore
         {
             return new TaskAppState(
                 new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal),
-                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal));
+                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyDictionary<string, BoardTask>>(_boardTasks, StringComparer.Ordinal));
         }
     }
 
@@ -81,11 +83,13 @@ public sealed class TaskRegistry : ITaskAppStateStore
         {
             var previousState = new TaskAppState(
                 new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal),
-                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal));
+                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyDictionary<string, BoardTask>>(_boardTasks, StringComparer.Ordinal));
             var updatedState = updater(previousState);
             
             _tasks = new ConcurrentDictionary<string, ClawSharpTask>(updatedState.Tasks, StringComparer.Ordinal);
             _todos = new ConcurrentDictionary<string, IReadOnlyList<TodoItem>>(updatedState.Todos, StringComparer.Ordinal);
+            _boardTasks = new ConcurrentDictionary<string, IReadOnlyDictionary<string, BoardTask>>(updatedState.BoardTasks, StringComparer.Ordinal);
             SyncAppStateLocked();
         }
     }

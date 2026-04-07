@@ -244,7 +244,7 @@ internal sealed class WebSearchTool : BaseTool
                 ["query"] = query 
             });
 
-            return Success(FormatOutputString(input.Query, results), structuredOutput);
+            return Success(WebSearchFormatting.FormatOutputString(input.Query, results), structuredOutput);
         }
         catch (Exception ex)
         {
@@ -331,7 +331,7 @@ internal sealed class WebSearchTool : BaseTool
                 ["query"] = input.Query 
             });
 
-            return Success(FormatOutputString(input.Query, results), structuredOutput);
+            return Success(WebSearchFormatting.FormatOutputString(input.Query, results), structuredOutput);
         }
         catch (Exception ex)
         {
@@ -343,8 +343,5 @@ internal sealed class WebSearchTool : BaseTool
     {
         // Placeholder for Codex search logic as it depends on internal response structures
         return Failure("Codex web search not yet fully implemented in C#. Please use FIRECRAWL_API_KEY for robust search capabilities.");
-    }
-
-        return Success(WebSearchFormatting.FormatOutputString(input.Query, results), structuredOutput);
     }
 }

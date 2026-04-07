@@ -44,7 +44,20 @@ internal static class ToolJsonSchemaFactory
         return result;
     }
 
-    public static JsonObject String(string? description = null)
+    public static JsonObject Object(
+        IEnumerable<(string Name, JsonNode Schema)>? properties = null,
+        IEnumerable<string>? required = null,
+        string? description = null)
+    {
+        return StrictObject(properties ?? [], required, description);
+    }
+
+    public static JsonObject Object(bool Required, string? description = null)
+    {
+        return StrictObject([], null, description);
+    }
+
+    public static JsonObject String(string? description = null, bool? Required = null)
     {
         return Primitive("string", description);
     }
@@ -52,7 +65,9 @@ internal static class ToolJsonSchemaFactory
     public static JsonObject Number(
         string? description = null,
         double? minimum = null,
-        double? maximum = null)
+        double? maximum = null,
+        double? defaultValue = null,
+        bool? Required = null)
     {
         var result = Primitive("number", description);
         if (minimum is not null)
@@ -65,13 +80,20 @@ internal static class ToolJsonSchemaFactory
             result["maximum"] = maximum.Value;
         }
 
+        if (defaultValue is not null)
+        {
+            result["default"] = defaultValue.Value;
+        }
+
         return result;
     }
 
     public static JsonObject Integer(
         string? description = null,
         int? minimum = null,
-        int? maximum = null)
+        int? maximum = null,
+        int? defaultValue = null,
+        bool? Required = null)
     {
         var result = Primitive("integer", description);
         if (minimum is not null)
@@ -84,10 +106,15 @@ internal static class ToolJsonSchemaFactory
             result["maximum"] = maximum.Value;
         }
 
+        if (defaultValue is not null)
+        {
+            result["default"] = defaultValue.Value;
+        }
+
         return result;
     }
 
-    public static JsonObject Boolean(string? description = null, bool? defaultValue = null)
+    public static JsonObject Boolean(string? description = null, bool? defaultValue = null, bool? Required = null)
     {
         var result = Primitive("boolean", description);
         if (defaultValue is not null)
@@ -98,7 +125,7 @@ internal static class ToolJsonSchemaFactory
         return result;
     }
 
-    public static JsonObject Array(JsonNode items, string? description = null)
+    public static JsonObject Array(JsonNode items, string? description = null, bool? Required = null)
     {
         var result = new JsonObject
         {
@@ -114,7 +141,7 @@ internal static class ToolJsonSchemaFactory
         return result;
     }
 
-    public static JsonObject StringEnum(IEnumerable<string> values, string? description = null)
+    public static JsonObject StringEnum(IEnumerable<string> values, string? description = null, string? defaultValue = null, bool? Required = null)
     {
         var result = Primitive("string", description);
         var enumArray = new JsonArray();
@@ -124,10 +151,16 @@ internal static class ToolJsonSchemaFactory
         }
 
         result["enum"] = enumArray;
+
+        if (defaultValue is not null)
+        {
+            result["default"] = defaultValue;
+        }
+
         return result;
     }
 
-    public static JsonObject Nullable(JsonNode schema, string? description = null)
+    public static JsonObject Nullable(JsonNode schema, string? description = null, bool? Required = null)
     {
         return AnyOf(
             [

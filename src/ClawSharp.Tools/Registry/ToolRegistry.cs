@@ -1,6 +1,12 @@
 // TS parity status: alias resolution, built-in-first catalog assembly, and blanket deny-rule filtering are ported for the current C# tool surface; full 1:1 parity still depends on TS simple-mode/REPL-specific filtering, feature-gated tool surfaces such as ToolSearchTool, and separate MCP permission-check identity when SDK no-prefix mode is active.
 using ClawSharp.Core;
 using ClawSharp.Tasks;
+using ClawSharp.Tools.REPL;
+using ClawSharp.Tools.Notebook;
+using ClawSharp.Tools.Skill;
+using ClawSharp.Tools.Plan;
+using ClawSharp.Tools.Search;
+using ClawSharp.Tools.Tasks;
 
 namespace ClawSharp.Tools;
 
@@ -64,8 +70,37 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new SleepTool());
         RegisterBuiltIn(new WebFetchTool());
         RegisterBuiltIn(new WebSearchTool(nativeWebSearchService));
+        RegisterBuiltIn(new NotebookEditTool());
+        RegisterBuiltIn(new EnterPlanModeTool());
+        RegisterBuiltIn(new ExitPlanModeTool());
+        RegisterBuiltIn(new ToolSearchTool());
+        RegisterBuiltIn(new TaskCreateTool());
+        RegisterBuiltIn(new TaskGetTool());
+        RegisterBuiltIn(new TaskUpdateTool());
+        RegisterBuiltIn(new TaskListTool());
         RegisterBuiltIn(new TaskStopTool());
+        RegisterBuiltIn(new REPLTool());
+        RegisterBuiltIn(new SkillTool(new SkillRegistry()));
     }
+
+    private static readonly HashSet<string> REPL_ONLY_TOOLS = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "FileRead",
+        "FileWrite",
+        "FileEdit",
+        "Glob",
+        "Grep",
+        "Bash",
+        "NotebookEdit",
+        "Agent",
+        "Read", // aliases
+        "Edit",
+        "Write"
+    };
+
+    public bool IsReplModeEnabled => 
+        Environment.GetEnvironmentVariable("CLAUDE_CODE_REPL") == "1" ||
+        Environment.GetEnvironmentVariable("CLAUDE_REPL_MODE") == "1";
 
     public string WorkspaceRoot { get; }
 
@@ -239,7 +274,8 @@ public sealed class ToolRegistry
             querySource,
             agentId ?? AgentId,
             currentSystemPrompt,
-            availableTools ?? All);
+            availableTools ?? All,
+            this);
         var validation = await tool.ValidateAsync(context, cancellationToken);
         if (!validation.IsValid)
         {
@@ -262,11 +298,27 @@ public sealed class ToolRegistry
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var publishedTools = new List<IClawSharpTool>();
+        var isRepl = IsReplModeEnabled;
+
         foreach (var tool in builtInTools.Concat(dynamicTools))
         {
+            if (isRepl && REPL_ONLY_TOOLS.Contains(tool.Descriptor.Name))
+            {
+                continue;
+            }
+
             if (seenNames.Add(tool.Descriptor.Name))
             {
                 publishedTools.Add(tool);
+            }
+        }
+
+        // Always include REPL if enabled, even if it's not marked as primitive
+        if (isRepl && !publishedTools.Any(t => t.Descriptor.Name == "REPL"))
+        {
+            if (TryResolve("REPL", out var replTool) && replTool != null)
+            {
+                publishedTools.Insert(0, replTool);
             }
         }
 

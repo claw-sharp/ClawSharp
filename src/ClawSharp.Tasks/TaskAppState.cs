@@ -2,4 +2,5 @@ namespace ClawSharp.Tasks;
 
 public sealed record TaskAppState(
     IReadOnlyDictionary<string, ClawSharpTask> Tasks,
-    IReadOnlyDictionary<string, IReadOnlyList<TodoItem>> Todos);
+    IReadOnlyDictionary<string, IReadOnlyList<TodoItem>> Todos,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, BoardTask>> BoardTasks);

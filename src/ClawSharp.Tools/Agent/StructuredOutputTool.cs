@@ -5,14 +5,14 @@ namespace ClawSharp.Tools;
 
 internal sealed class StructuredOutputTool : BaseTool
 {
-    private static readonly JsonNode StaticInputSchema = JsonNode.Parse("""
+    private static readonly JsonObject StaticInputSchema = (JsonObject)JsonNode.Parse("""
         {
           "type": "object",
           "additionalProperties": true
         }
         """)!;
 
-    private static readonly JsonNode StaticOutputSchema = JsonNode.Parse("""
+    private static readonly JsonObject StaticOutputSchema = (JsonObject)JsonNode.Parse("""
         {
           "type": "string",
           "description": "Structured output tool result"

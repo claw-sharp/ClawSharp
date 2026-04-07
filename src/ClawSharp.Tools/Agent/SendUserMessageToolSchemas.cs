@@ -5,7 +5,7 @@ namespace ClawSharp.Tools;
 
 internal static class SendUserMessageToolSchemas
 {
-    public static readonly JsonNode InputSchema = JsonNode.Parse("""
+    public static readonly JsonObject InputSchema = (JsonObject)JsonNode.Parse("""
         {
           "type": "object",
           "properties": {
@@ -31,7 +31,7 @@ internal static class SendUserMessageToolSchemas
         }
         """)!;
 
-    public static readonly JsonNode OutputSchema = JsonNode.Parse("""
+    public static readonly JsonObject OutputSchema = (JsonObject)JsonNode.Parse("""
         {
           "type": "object",
           "properties": {

@@ -51,7 +51,7 @@ public sealed class NativeWebSearchService : INativeWebSearchService
         );
 
         var streamingRequest = new QueryModelHttpStreamingRequest(request, "web_search_tool");
-        var loopState = new QueryLoopState([userMessage], new QueryToolUseContextState(context.ReadFileState, context.ToolPermissionContext, model));
+        var loopState = new QueryLoopState([userMessage], 0, new QueryToolUseContextState(context.ReadFileState, context.ToolPermissionContext, model));
 
         var results = new List<object>();
 

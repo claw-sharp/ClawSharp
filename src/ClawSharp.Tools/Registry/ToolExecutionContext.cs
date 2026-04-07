@@ -22,7 +22,8 @@ public sealed record ToolExecutionContext(
     string? QuerySource = null,
     string? AgentId = null,
     IReadOnlyList<string>? CurrentSystemPrompt = null,
-    IReadOnlyList<ToolDescriptor>? AvailableTools = null)
+    IReadOnlyList<ToolDescriptor>? AvailableTools = null,
+    ToolRegistry? ToolRegistry = null)
 {
     public void ReportProgress(string toolUseId, JsonObject data)
     {

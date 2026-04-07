@@ -15,6 +15,7 @@ internal sealed class SendUserMessageTool : BaseTool
                 new ToolParameter("status", "Use 'proactive' for unsolicited updates, 'normal' for replies."),
                 new ToolParameter("attachments", "Optional file paths to attach.", Required: false)
             ],
+            Aliases: ["Brief"],
             InputSchema: SendUserMessageToolSchemas.InputSchema,
             OutputSchema: SendUserMessageToolSchemas.OutputSchema,
             Strict: true))

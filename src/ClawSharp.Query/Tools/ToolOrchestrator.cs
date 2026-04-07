@@ -199,6 +199,7 @@ public sealed class ToolOrchestrator
             },
             message => writer.WriteAsync(new ToolExecutionUpdate(Message: message), cancellationToken).AsTask().GetAwaiter().GetResult(),
             querySource,
+            null,
             currentSystemPrompt,
             _toolRegistry.All,
             cancellationToken);
@@ -233,7 +234,12 @@ public sealed class ToolOrchestrator
                 ["output_length"] = result.Output.Length
             });
 
-        var record = new ToolExecutionRecord(toolCall, result.Success, result.Output, result.StructuredOutput);
+        var record = new ToolExecutionRecord(
+            toolCall,
+            result.Success,
+            result.Output,
+            result.StructuredOutput,
+            result.InjectedMessages);
         await writer.WriteAsync(
             new ToolExecutionUpdate(
                 Result: record,
