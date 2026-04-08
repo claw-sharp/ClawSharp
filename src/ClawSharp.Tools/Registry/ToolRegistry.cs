@@ -9,6 +9,8 @@ using ClawSharp.Tools.Search;
 using ClawSharp.Tools.Tasks;
 using ClawSharp.Tools.Worktree;
 using ClawSharp.Tools.Mcp;
+using ClawSharp.Tools.Agent;
+using ClawSharp.Tools.Lsp;
 
 namespace ClawSharp.Tools;
 
@@ -81,9 +83,11 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new SleepTool());
         RegisterBuiltIn(new WebFetchTool());
         RegisterBuiltIn(new WebSearchTool(nativeWebSearchService));
+        RegisterBuiltIn(new WebBrowserTool());
         RegisterBuiltIn(new NotebookEditTool());
         RegisterBuiltIn(new EnterPlanModeTool());
         RegisterBuiltIn(new ExitPlanModeTool());
+        RegisterBuiltIn(new VerifyPlanExecutionTool());
         RegisterBuiltIn(new EnterWorktreeTool());
         RegisterBuiltIn(new ExitWorktreeTool());
         RegisterBuiltIn(new ToolSearchTool());
@@ -94,7 +98,12 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new TaskStopTool());
         RegisterBuiltIn(new REPLTool());
         RegisterBuiltIn(new ConfigTool());
-        RegisterBuiltIn(new SkillTool(new SkillRegistry()));
+        RegisterBuiltIn(new SkillTool());
+        RegisterBuiltIn(new CronCreateTool());
+        RegisterBuiltIn(new CronListTool());
+        RegisterBuiltIn(new CronDeleteTool());
+        RegisterBuiltIn(new RemoteTriggerTool());
+        RegisterBuiltIn(new LspTool());
     }
 
     private static readonly HashSet<string> REPL_ONLY_TOOLS = new(StringComparer.OrdinalIgnoreCase)

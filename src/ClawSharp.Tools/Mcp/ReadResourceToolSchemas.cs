@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using ClawSharp.Tools.Registry;
 
 namespace ClawSharp.Tools.Mcp;
 

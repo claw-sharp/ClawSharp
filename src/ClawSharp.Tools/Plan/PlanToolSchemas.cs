@@ -27,4 +27,17 @@ internal static class PlanToolSchemas
                 ("message", ToolJsonSchemaFactory.String("Confirmation message"))
             ],
             required: ["message"]);
+
+    public static JsonObject VerifyInputSchema =>
+        ToolJsonSchemaFactory.StrictObject([], required: []);
+
+    public static JsonObject VerifyOutputSchema =>
+        ToolJsonSchemaFactory.StrictObject(
+            [
+                ("message", ToolJsonSchemaFactory.String("Verification status summary")),
+                ("plan", ToolJsonSchemaFactory.String("The plan being verified")),
+                ("verificationStarted", ToolJsonSchemaFactory.Boolean("Whether verification has started")),
+                ("verificationCompleted", ToolJsonSchemaFactory.Boolean("Whether verification has completed"))
+            ],
+            required: ["message", "plan", "verificationStarted", "verificationCompleted"]);
 }

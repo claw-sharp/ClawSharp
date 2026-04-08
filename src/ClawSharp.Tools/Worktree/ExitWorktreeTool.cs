@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClawSharp.Core.Worktree;
-using ClawSharp.Tools.Registry;
 
 namespace ClawSharp.Tools.Worktree;
 

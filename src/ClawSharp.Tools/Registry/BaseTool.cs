@@ -3,7 +3,7 @@ using ClawSharp.Core;
 
 namespace ClawSharp.Tools;
 
-internal abstract class BaseTool : IClawSharpTool
+public abstract class BaseTool : IClawSharpTool
 {
     protected BaseTool(ToolDescriptor descriptor)
     {

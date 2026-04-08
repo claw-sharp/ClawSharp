@@ -3,6 +3,7 @@ using ClawSharp.Core;
 using ClawSharp.Query;
 using ClawSharp.Tools;
 using System.Text;
+using System.Threading;
 
 namespace ClawSharp.Ui.Terminal;
 
@@ -29,6 +30,9 @@ public sealed class TerminalShell
     private readonly LocalMainSessionTaskService? _localMainSessionTaskService;
     private readonly ISessionBackgroundKeyMonitor _sessionBackgroundKeyMonitor;
     private readonly IPreventSleepService _preventSleepService;
+    private readonly CronSchedulerService? _cronSchedulerService;
+    private readonly SemaphoreSlim _sessionTurnGate = new(1, 1);
+    private int _mainTurnInFlight;
 
     public TerminalShell(
         QueryEngine queryEngine,
@@ -50,7 +54,8 @@ public sealed class TerminalShell
         IQueryModelTurnContextProvider? modelTurnContextProvider = null,
         LocalMainSessionTaskService? localMainSessionTaskService = null,
         ISessionBackgroundKeyMonitor? sessionBackgroundKeyMonitor = null,
-        IPreventSleepService? preventSleepService = null)
+        IPreventSleepService? preventSleepService = null,
+        CronSchedulerService? cronSchedulerService = null)
     {
         _queryEngine = queryEngine;
         _queuedTaskNotificationDrainer = queuedTaskNotificationDrainer;
@@ -83,6 +88,7 @@ public sealed class TerminalShell
         _localMainSessionTaskService = localMainSessionTaskService;
         _sessionBackgroundKeyMonitor = sessionBackgroundKeyMonitor ?? new ConsoleSessionBackgroundKeyMonitor();
         _preventSleepService = preventSleepService ?? new MacOsPreventSleepService();
+        _cronSchedulerService = cronSchedulerService;
     }
 
     public async Task<int> RunReplAsync(
@@ -96,120 +102,134 @@ public sealed class TerminalShell
         _appStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
         _eventSink.Publish(new AppEvent(AppEventType.SessionStarted, "Session started", DateTimeOffset.UtcNow));
 
-        await output.WriteLineAsync($"{AppMetadata.DisplayVersion}");
-        await output.WriteLineAsync("Interactive foundation ready. Type /help for commands.");
-        if (deepLinkRuntimeContext?.IsDeepLinkOrigin == true)
+        try
         {
-            foreach (var line in BuildDeepLinkNoticeLines(session, deepLinkRuntimeContext))
-            {
-                await output.WriteLineAsync(line);
-            }
-        }
+            _cronSchedulerService?.Start(
+                isIdle: () => Volatile.Read(ref _mainTurnInFlight) == 0,
+                onFireAsync: (job, innerCancellationToken) => ExecuteScheduledCronAsync(session, job, innerCancellationToken));
 
-        if (initialSession is not null)
-        {
-            await ReplaySessionAsync(initialSession, output, cancellationToken);
-        }
-
-        var lastFooterLines = Array.Empty<string>();
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            var drainedNotifications = await _queuedTaskNotificationDrainer.DrainAsync(session, cancellationToken);
-            foreach (var notificationMessage in drainedNotifications)
+            await output.WriteLineAsync($"{AppMetadata.DisplayVersion}");
+            await output.WriteLineAsync("Interactive foundation ready. Type /help for commands.");
+            if (deepLinkRuntimeContext?.IsDeepLinkOrigin == true)
             {
-                await WriteTranscriptMessageAsync(notificationMessage, output, previousRole: null);
-            }
-
-            lastFooterLines = await WriteFooterIfChangedAsync(output, lastFooterLines);
-            var submission = await _promptInputReader.ReadSubmissionAsync(input, output, cancellationToken);
-            if (submission is null)
-            {
-                break;
-            }
-
-            var trimmed = submission.Value.Trim();
-            if (trimmed.Length == 0)
-            {
-                continue;
-            }
-
-            if (submission.Mode == PromptInputMode.Bash)
-            {
-                await output.WriteLineAsync("Bash input mode is not implemented yet.");
-                continue;
-            }
-
-            if (trimmed.Equals("/exit", StringComparison.OrdinalIgnoreCase))
-            {
-                await output.WriteLineAsync("Exiting ClawSharp.");
-                return 0;
-            }
-
-            if (trimmed.StartsWith("/", StringComparison.Ordinal))
-            {
-                var commandName = trimmed[1..].Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
-                if (_commands.TryResolve(commandName, out var handler) && handler is not null)
+                foreach (var line in BuildDeepLinkNoticeLines(session, deepLinkRuntimeContext))
                 {
-                    var commandResult = await handler.ExecuteAsync(
-                        trimmed,
-                        new CommandExecutionContext
+                    await output.WriteLineAsync(line);
+                }
+            }
+
+            if (initialSession is not null)
+            {
+                await ReplaySessionAsync(initialSession, output, cancellationToken);
+            }
+
+            var lastFooterLines = Array.Empty<string>();
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var drainedNotifications = await _queuedTaskNotificationDrainer.DrainAsync(session, cancellationToken);
+                foreach (var notificationMessage in drainedNotifications)
+                {
+                    await WriteTranscriptMessageAsync(notificationMessage, output, previousRole: null);
+                }
+
+                lastFooterLines = await WriteFooterIfChangedAsync(output, lastFooterLines);
+                var submission = await _promptInputReader.ReadSubmissionAsync(input, output, cancellationToken);
+                if (submission is null)
+                {
+                    break;
+                }
+
+                var trimmed = submission.Value.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (submission.Mode == PromptInputMode.Bash)
+                {
+                    await output.WriteLineAsync("Bash input mode is not implemented yet.");
+                    continue;
+                }
+
+                if (trimmed.Equals("/exit", StringComparison.OrdinalIgnoreCase))
+                {
+                    await output.WriteLineAsync("Exiting ClawSharp.");
+                    return 0;
+                }
+
+                if (trimmed.StartsWith("/", StringComparison.Ordinal))
+                {
+                    var commandName = trimmed[1..].Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+                    if (_commands.TryResolve(commandName, out var handler) && handler is not null)
+                    {
+                        var commandResult = await handler.ExecuteAsync(
+                            trimmed,
+                            new CommandExecutionContext
+                            {
+                                AppStateStore = _appStateStore,
+                                Session = session,
+                                SessionFactory = _sessionFactory,
+                                TranscriptStore = _transcriptStore,
+                                Settings = _settings,
+                                ReadFileState = _readFileState,
+                                InteractionService = _interactionService
+                            },
+                            cancellationToken);
+
+                        _eventSink.Publish(
+                            new AppEvent(
+                                AppEventType.CommandExecuted,
+                                $"Command executed: {commandName}",
+                                DateTimeOffset.UtcNow));
+
+                        ClawSharpTelemetry.LogEvent("tengu_input_command", new Dictionary<string, object?>
                         {
-                            AppStateStore = _appStateStore,
-                            Session = session,
-                            SessionFactory = _sessionFactory,
-                            TranscriptStore = _transcriptStore,
-                            Settings = _settings,
-                            ReadFileState = _readFileState,
-                            InteractionService = _interactionService
-                        },
-                        cancellationToken);
+                            ["input"] = commandName,
+                            ["invocation_trigger"] = "user-slash"
+                        });
 
-                    _eventSink.Publish(
-                        new AppEvent(
-                            AppEventType.CommandExecuted,
-                            $"Command executed: {commandName}",
-                            DateTimeOffset.UtcNow));
+                        if (!string.IsNullOrWhiteSpace(commandResult.Output))
+                        {
+                            await output.WriteLineAsync(commandResult.Output);
+                        }
 
-                    ClawSharpTelemetry.LogEvent("tengu_input_command", new Dictionary<string, object?>
-                    {
-                        ["input"] = commandName,
-                        ["invocation_trigger"] = "user-slash"
-                    });
+                        if (commandResult.SessionOverride is not null)
+                        {
+                            session = commandResult.SessionOverride;
+                            _appStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
+                            await ReplaySessionAsync(session, output, cancellationToken);
+                        }
 
-                    if (!string.IsNullOrWhiteSpace(commandResult.Output))
-                    {
-                        await output.WriteLineAsync(commandResult.Output);
+                        continue;
                     }
 
-                    if (commandResult.SessionOverride is not null)
-                    {
-                        session = commandResult.SessionOverride;
-                        _appStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
-                        await ReplaySessionAsync(session, output, cancellationToken);
-                    }
-
+                    await output.WriteLineAsync($"Unknown command: {commandName}");
                     continue;
                 }
 
-                await output.WriteLineAsync($"Unknown command: {commandName}");
-                continue;
-            }
-
-            try
-            {
-                var turnResult = await RunPromptTurnAsync(session, submission, input, output, cancellationToken);
-                if (turnResult == PromptTurnResult.Backgrounded)
+                try
                 {
-                    continue;
+                    var turnResult = await RunPromptTurnAsync(session, submission, input, output, cancellationToken);
+                    if (turnResult == PromptTurnResult.Backgrounded)
+                    {
+                        continue;
+                    }
+                }
+                catch (QueryExecutionNotImplementedException exception)
+                {
+                    await output.WriteLineAsync(exception.Message);
                 }
             }
-            catch (QueryExecutionNotImplementedException exception)
+
+            return 0;
+        }
+        finally
+        {
+            if (_cronSchedulerService is not null)
             {
-                await output.WriteLineAsync(exception.Message);
+                await _cronSchedulerService.StopAsync();
             }
         }
-
-        return 0;
     }
 
     private async Task ReplaySessionAsync(
@@ -276,15 +296,17 @@ public sealed class TerminalShell
         TextWriter output,
         CancellationToken cancellationToken)
     {
+        await _sessionTurnGate.WaitAsync(cancellationToken);
+        Interlocked.Exchange(ref _mainTurnInFlight, 1);
         ClawSharpTelemetry.LogEvent("tengu_input_prompt", new Dictionary<string, object?>
         {
             ["prompt_length"] = submission.Value.Length
         });
 
-        var request = await BuildTerminalTurnRequestAsync(session, submission.Value, cancellationToken);
-        _preventSleepService.StartPreventSleep();
         try
         {
+            var request = await BuildTerminalTurnRequestAsync(session, submission.Value, cancellationToken);
+            _preventSleepService.StartPreventSleep();
             using var turnCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var queryTask = ExecutePromptTurnCoreAsync(session, request, output, turnCancellationSource.Token);
 
@@ -326,6 +348,55 @@ public sealed class TerminalShell
         finally
         {
             _preventSleepService.StopPreventSleep();
+            Interlocked.Exchange(ref _mainTurnInFlight, 0);
+            _sessionTurnGate.Release();
+        }
+    }
+
+    private async Task<bool> ExecuteScheduledCronAsync(
+        ConversationSession session,
+        CronFireRequest job,
+        CancellationToken cancellationToken)
+    {
+        if (_localMainSessionTaskService is null || string.IsNullOrWhiteSpace(job.Prompt))
+        {
+            return false;
+        }
+
+        if (!await _sessionTurnGate.WaitAsync(0, cancellationToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (Volatile.Read(ref _mainTurnInFlight) != 0)
+            {
+                return false;
+            }
+
+            var scheduledPrompt = job.Prompt.Trim();
+            if (scheduledPrompt.Length == 0)
+            {
+                return true;
+            }
+
+            var userMessage = ChatMessageFactory.CreateText(MessageRole.User, scheduledPrompt);
+            session.Add(userMessage);
+            await _transcriptStore.RecordTranscriptAsync(session, session.Messages, cancellationToken);
+
+            var request = await BuildTerminalTurnRequestAsync(session, scheduledPrompt, cancellationToken);
+            var description = $"Scheduled job {job.JobId}";
+            await _localMainSessionTaskService.StartBackgroundSessionAsync(
+                session,
+                request,
+                description,
+                cancellationToken);
+            return true;
+        }
+        finally
+        {
+            _sessionTurnGate.Release();
         }
     }
 

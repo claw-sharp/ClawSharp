@@ -1,8 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
-using ClawSharp.Core.Storage;
-using ClawSharp.Tools.Registry;
 
 namespace ClawSharp.Tools.Mcp;
 

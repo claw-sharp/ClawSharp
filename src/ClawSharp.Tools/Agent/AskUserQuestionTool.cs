@@ -34,7 +34,7 @@ internal sealed class AskUserQuestionTool : BaseTool
         var questionTexts = new HashSet<string>(StringComparer.Ordinal);
         foreach (var q in questions)
         {
-            if (!questionTexts.Add(q.Question))
+            if (!questionTexts.Add(q.Text))
             {
                 return ToolValidationResult.Invalid("Question texts must be unique.");
             }
@@ -44,17 +44,7 @@ internal sealed class AskUserQuestionTool : BaseTool
             {
                 if (!labels.Add(opt.Label))
                 {
-                    return ToolValidationResult.Invalid($"Option labels must be unique within each question (duplicate label '{opt.Label}' in question '{q.Question}').");
-                }
-
-                // HTML preview check
-                if (!string.IsNullOrWhiteSpace(opt.Preview))
-                {
-                    var htmlErr = ValidateHtmlPreview(opt.Preview);
-                    if (htmlErr != null)
-                    {
-                        return ToolValidationResult.Invalid($"Option '{opt.Label}' in question '{q.Question}': {htmlErr}");
-                    }
+                    return ToolValidationResult.Invalid($"Option labels must be unique within each question (duplicate label '{opt.Label}' in question '{q.Text}').");
                 }
             }
         }
@@ -66,20 +56,11 @@ internal sealed class AskUserQuestionTool : BaseTool
     {
         var inputNode = JsonNode.Parse(context.Arguments);
         var answersNode = inputNode?["answers"]?.AsObject();
-        var annotationsNode = inputNode?["annotations"]?.AsObject();
 
         if (answersNode == null || answersNode.Count == 0)
         {
-            // If we are here and answers are missing, it means the interaction didn't happen or didn't inject answers.
-            // In a fully ported system, the prompter would have handled this.
-            // For now, we'll return a message indicating that the user hasn't answered yet, 
-            // or we could try to prompt the user if the environment allows it.
-            
-            // However, looking at parity, the tool is 'deferred'. 
-            // If the orchestrator doesn't handle the deferred interaction, we might want to fail or wait.
-            
-            // For now, let's return a result that mimics the 'data' structure in TS.
-            return Success("Questions asked.", inputNode?.DeepClone());
+            return Failure(
+                "AskUserQuestion requires collected user answers before it can succeed. No answers were attached to the tool input.");
         }
 
         return Success("User answered Claude's questions.", inputNode?.DeepClone());
@@ -91,18 +72,38 @@ internal sealed class AskUserQuestionTool : BaseTool
 
         var answers = structuredOutput["answers"]?.AsObject();
         if (answers == null || answers.Count == 0) return null;
+        var annotations = structuredOutput["annotations"]?.AsObject();
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("User answered Claude's questions:");
         foreach (var property in answers)
         {
             sb.AppendLine($"· {property.Key} → {property.Value?.GetValue<string>()}");
+
+            if (annotations?[property.Key] is not JsonObject annotation)
+            {
+                continue;
+            }
+
+            var preview = annotation["preview"]?.GetValue<string>();
+            var notes = annotation["notes"]?.GetValue<string>();
+
+            if (!string.IsNullOrWhiteSpace(preview))
+            {
+                sb.AppendLine("  selected preview:");
+                AppendIndentedBlock(sb, preview);
+            }
+
+            if (!string.IsNullOrWhiteSpace(notes))
+            {
+                sb.AppendLine($"  user notes: {notes}");
+            }
         }
 
         return sb.ToString();
     }
 
-    private static bool TryParseArguments(string arguments, out List<Question>? questions, out string? errorMessage)
+    private static bool TryParseArguments(string arguments, out List<AskUserQuestion>? questions, out string? errorMessage)
     {
         questions = null;
         errorMessage = null;
@@ -116,7 +117,7 @@ internal sealed class AskUserQuestionTool : BaseTool
                 return false;
             }
 
-            questions = new List<Question>();
+            questions = new List<AskUserQuestion>();
             foreach (var qEl in questionsElement.EnumerateArray())
             {
                 var questionText = qEl.GetProperty("question").GetString() ?? "";
@@ -133,7 +134,7 @@ internal sealed class AskUserQuestionTool : BaseTool
                     ));
                 }
 
-                questions.Add(new Question(questionText, header, options, multiSelect));
+                questions.Add(new AskUserQuestion(questionText, header, options, multiSelect));
             }
 
             return true;
@@ -145,23 +146,17 @@ internal sealed class AskUserQuestionTool : BaseTool
         }
     }
 
-    private static string? ValidateHtmlPreview(string preview)
+    private static void AppendIndentedBlock(System.Text.StringBuilder sb, string text)
     {
-        if (System.Text.RegularExpressions.Regex.IsMatch(preview, @"<\s*(html|body|!doctype)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        using var reader = new StringReader(text);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
         {
-            return "preview must be an HTML fragment, not a full document (no <html>, <body>, or <!DOCTYPE>)";
+            sb.Append("    ");
+            sb.AppendLine(line);
         }
-        if (System.Text.RegularExpressions.Regex.IsMatch(preview, @"<\s*(script|style)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-        {
-            return "preview must not contain <script> or <style> tags. Use inline styles via the style attribute if needed.";
-        }
-        if (!System.Text.RegularExpressions.Regex.IsMatch(preview, @"<[a-z][^>]*>", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-        {
-            return "preview must contain HTML (previewFormat is set to \"html\"). Wrap content in a tag like <div> or <pre>.";
-        }
-        return null;
     }
 
-    private record Question(string Question, string Header, List<QuestionOption> Options, bool MultiSelect);
+    private record AskUserQuestion(string Text, string Header, List<QuestionOption> Options, bool MultiSelect);
     private record QuestionOption(string Label, string Description, string? Preview);
 }

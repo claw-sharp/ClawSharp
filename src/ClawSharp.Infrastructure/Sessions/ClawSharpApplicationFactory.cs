@@ -200,6 +200,7 @@ public static class ClawSharpApplicationFactory
             queryEngine,
             appStateStore,
             transcriptStore);
+        var cronSchedulerService = new CronSchedulerService(workspaceRoot);
         var terminalShell = new TerminalShell(
             queryEngine,
             queuedTaskNotificationDrainer,
@@ -216,7 +217,8 @@ public static class ClawSharpApplicationFactory
             readFileState: readFileState,
             toolRegistry: tools,
             modelTurnContextProvider: modelTurnContextProvider,
-            localMainSessionTaskService: localMainSessionTaskService);
+            localMainSessionTaskService: localMainSessionTaskService,
+            cronSchedulerService: cronSchedulerService);
 
         var application = new ClawSharpApplication(
             sessionFactory,
