@@ -7,6 +7,8 @@ using ClawSharp.Tools.Skill;
 using ClawSharp.Tools.Plan;
 using ClawSharp.Tools.Search;
 using ClawSharp.Tools.Tasks;
+using ClawSharp.Tools.Worktree;
+using ClawSharp.Tools.Mcp;
 
 namespace ClawSharp.Tools;
 
@@ -37,6 +39,10 @@ public sealed class ToolRegistry
         IPermissionPrompter? permissionPrompter = null,
         IAgentExecutionService? agentExecutionService = null,
         INativeWebSearchService? nativeWebSearchService = null,
+        ClawSharp.Core.Worktree.IWorktreeService? worktreeService = null,
+        ClawSharp.Core.McpResourceCatalog? mcpResources = null,
+        ClawSharp.Core.IMcpLifecycleManager? mcpLifecycle = null,
+        ClawSharp.Core.ISettingsStore? settingsStore = null,
         IReadOnlySet<string>? allowedToolNames = null,
         string? agentId = null)
     {
@@ -53,6 +59,10 @@ public sealed class ToolRegistry
         _allowedToolNames = allowedToolNames is null
             ? null
             : new HashSet<string>(allowedToolNames, StringComparer.OrdinalIgnoreCase);
+        WorktreeService = worktreeService ?? new ClawSharp.Core.Worktree.NullWorktreeService();
+        McpResources = mcpResources ?? new ClawSharp.Core.McpResourceCatalog();
+        McpLifecycle = mcpLifecycle;
+        SettingsStore = settingsStore;
 
         RegisterBuiltIn(new ReadTool());
         RegisterBuiltIn(new EditTool());
@@ -64,6 +74,7 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new AgentTool(AgentDefinitions, agentExecutionService ?? new NullAgentExecutionService()));
         RegisterBuiltIn(new SendMessageTool());
         RegisterBuiltIn(new SendUserMessageTool());
+        RegisterBuiltIn(new AskUserQuestionTool());
         RegisterBuiltIn(new TaskOutputTool());
         RegisterBuiltIn(new TodoWriteTool());
         RegisterBuiltIn(new StructuredOutputTool());
@@ -73,6 +84,8 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new NotebookEditTool());
         RegisterBuiltIn(new EnterPlanModeTool());
         RegisterBuiltIn(new ExitPlanModeTool());
+        RegisterBuiltIn(new EnterWorktreeTool());
+        RegisterBuiltIn(new ExitWorktreeTool());
         RegisterBuiltIn(new ToolSearchTool());
         RegisterBuiltIn(new TaskCreateTool());
         RegisterBuiltIn(new TaskGetTool());
@@ -80,6 +93,7 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new TaskListTool());
         RegisterBuiltIn(new TaskStopTool());
         RegisterBuiltIn(new REPLTool());
+        RegisterBuiltIn(new ConfigTool());
         RegisterBuiltIn(new SkillTool(new SkillRegistry()));
     }
 
@@ -120,6 +134,13 @@ public sealed class ToolRegistry
     public IClawSharpAppStateStore AppStateStore { get; }
 
     public IPermissionPrompter PermissionPrompter { get; }
+
+    public ClawSharp.Core.Worktree.IWorktreeService WorktreeService { get; }
+
+    public ClawSharp.Core.McpResourceCatalog McpResources { get; }
+
+    public ClawSharp.Core.IMcpLifecycleManager? McpLifecycle { get; }
+    public ClawSharp.Core.ISettingsStore? SettingsStore { get; }
 
     public IReadOnlyList<ToolDescriptor> All =>
         BuildPublishedToolPool()
@@ -269,6 +290,10 @@ public sealed class ToolRegistry
             AgentDefinitions,
             FileUpdateNotifier,
             PermissionPrompter,
+            WorktreeService,
+            McpResources,
+            McpLifecycle,
+            SettingsStore,
             onProgress,
             onMessage,
             querySource,

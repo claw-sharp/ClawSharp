@@ -127,7 +127,11 @@ public static class ClawSharpApplicationFactory
             appStateStore,
             permissionPrompter,
             agentExecutionService,
-            nativeWebSearchService: nativeWebSearchService);
+            nativeWebSearchService: nativeWebSearchService,
+            worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(), 
+            mcpResources: mcpResourceCatalog,
+            mcpLifecycle: mcpLifecycleManager,
+            settingsStore: settingsStore);
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);

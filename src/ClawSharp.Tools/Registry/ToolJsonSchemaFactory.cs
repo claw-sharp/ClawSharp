@@ -125,13 +125,23 @@ internal static class ToolJsonSchemaFactory
         return result;
     }
 
-    public static JsonObject Array(JsonNode items, string? description = null, bool? Required = null)
+    public static JsonObject Array(JsonNode items, int? minItems = null, int? maxItems = null, string? description = null, bool? Required = null)
     {
         var result = new JsonObject
         {
             ["type"] = "array",
             ["items"] = items.DeepClone()
         };
+
+        if (minItems is not null)
+        {
+            result["minItems"] = minItems.Value;
+        }
+
+        if (maxItems is not null)
+        {
+            result["maxItems"] = maxItems.Value;
+        }
 
         if (!string.IsNullOrWhiteSpace(description))
         {
