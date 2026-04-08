@@ -11,9 +11,16 @@ public static class ClawSharpApplicationFactory
 {
     public static async Task<ClawSharpApplication> CreateDefaultAsync(CancellationToken cancellationToken = default)
     {
+        return await CreateForWorkspaceAsync(Directory.GetCurrentDirectory(), cancellationToken);
+    }
+
+    public static async Task<ClawSharpApplication> CreateForWorkspaceAsync(
+        string workspaceRoot,
+        CancellationToken cancellationToken = default)
+    {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         StartupProfiler.Checkpoint("create_default_application_start");
-        var workspaceRoot = Directory.GetCurrentDirectory();
+        workspaceRoot = Path.GetFullPath(workspaceRoot);
         ClawSharpTelemetry.Initialize(workspaceRoot);
         var startupEnvironment = StartupEnvironment.Capture();
         WindowsShellEnvironmentBootstrapper.Initialize();
@@ -109,12 +116,14 @@ public static class ClawSharpApplicationFactory
             modelStreamUpdateParser,
             authAccountStateProvider,
             authFailureRecoveryRunner);
+        var nativeWebSearchService = new NativeWebSearchService(modelCallExecutor);
         var agentExecutionService = new LocalAgentExecutionService(
             eventSink,
             transcriptStore,
             agentPersistenceService,
             queuedCommandQueue,
-            modelCallExecutor);
+            modelCallExecutor,
+            nativeWebSearchService: nativeWebSearchService);
         var tools = new ToolRegistry(
             workspaceRoot,
             tasks,
@@ -124,7 +133,8 @@ public static class ClawSharpApplicationFactory
             agentDefinitions.ActiveAgents,
             appStateStore,
             permissionPrompter,
-            agentExecutionService);
+            agentExecutionService,
+            nativeWebSearchService: nativeWebSearchService);
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);

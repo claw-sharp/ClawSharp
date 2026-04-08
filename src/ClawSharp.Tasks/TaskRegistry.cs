@@ -24,6 +24,8 @@ public sealed class TaskRegistry : ITaskAppStateStore
 
     private readonly Lock _stateLock = new();
     private ConcurrentDictionary<string, ClawSharpTask> _tasks = new(StringComparer.Ordinal);
+    private ConcurrentDictionary<string, IReadOnlyList<TodoItem>> _todos = new(StringComparer.Ordinal);
+    private ConcurrentDictionary<string, IReadOnlyDictionary<string, BoardTask>> _boardTasks = new(StringComparer.Ordinal);
     private readonly string _workspaceRoot;
     private readonly DiskTaskOutputStore _taskOutputStore;
     private readonly IQueuedCommandQueue _queuedCommandQueue;
@@ -68,7 +70,10 @@ public sealed class TaskRegistry : ITaskAppStateStore
     {
         lock (_stateLock)
         {
-            return new TaskAppState(new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal));
+            return new TaskAppState(
+                new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyDictionary<string, BoardTask>>(_boardTasks, StringComparer.Ordinal));
         }
     }
 
@@ -76,15 +81,15 @@ public sealed class TaskRegistry : ITaskAppStateStore
     {
         lock (_stateLock)
         {
-            var previousState = new TaskAppState(new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal));
+            var previousState = new TaskAppState(
+                new Dictionary<string, ClawSharpTask>(_tasks, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyList<TodoItem>>(_todos, StringComparer.Ordinal),
+                new Dictionary<string, IReadOnlyDictionary<string, BoardTask>>(_boardTasks, StringComparer.Ordinal));
             var updatedState = updater(previousState);
-            if (ReferenceEquals(updatedState, previousState) ||
-                ReferenceEquals(updatedState.Tasks, previousState.Tasks))
-            {
-                return;
-            }
-
+            
             _tasks = new ConcurrentDictionary<string, ClawSharpTask>(updatedState.Tasks, StringComparer.Ordinal);
+            _todos = new ConcurrentDictionary<string, IReadOnlyList<TodoItem>>(updatedState.Todos, StringComparer.Ordinal);
+            _boardTasks = new ConcurrentDictionary<string, IReadOnlyDictionary<string, BoardTask>>(updatedState.BoardTasks, StringComparer.Ordinal);
             SyncAppStateLocked();
         }
     }
@@ -213,6 +218,7 @@ public sealed class TaskRegistry : ITaskAppStateStore
     public async Task<LocalAgentTask> CreateLocalAgentForSessionAsync(
         string sessionId,
         string description,
+        string? taskId,
         string prompt,
         string agentType,
         TaskStatus status = TaskStatus.Pending,
@@ -224,12 +230,12 @@ public sealed class TaskRegistry : ITaskAppStateStore
         CancellationTokenSource? cancellationSource = null,
         CancellationToken cancellationToken = default)
     {
-        var taskId = TaskIdGenerator.Generate(TaskType.LocalAgent);
-        var outputFile = TaskOutputStoragePaths.GetTaskOutputPath(_workspaceRoot, sessionId, taskId);
-        await InitializeTaskOutputAsync(TaskType.LocalAgent, sessionId, taskId, outputFile, cancellationToken);
+        var resolvedTaskId = taskId ?? TaskIdGenerator.Generate(TaskType.LocalAgent);
+        var outputFile = TaskOutputStoragePaths.GetTaskOutputPath(_workspaceRoot, sessionId, resolvedTaskId);
+        await InitializeTaskOutputAsync(TaskType.LocalAgent, sessionId, resolvedTaskId, outputFile, cancellationToken);
 
         var task = new LocalAgentTask(
-            Id: taskId,
+            Id: resolvedTaskId,
             Description: description,
             Status: status,
             StartTime: DateTimeOffset.UtcNow,
@@ -293,6 +299,7 @@ public sealed class TaskRegistry : ITaskAppStateStore
     public Task<LocalAgentTask> CreateForegroundLocalAgentForSessionAsync(
         string sessionId,
         string description,
+        string? taskId,
         string prompt,
         string agentType,
         TaskStatus status = TaskStatus.Running,
@@ -306,6 +313,7 @@ public sealed class TaskRegistry : ITaskAppStateStore
         return CreateLocalAgentForSessionAsync(
             sessionId,
             description,
+            taskId,
             prompt,
             agentType,
             status,

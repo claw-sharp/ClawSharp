@@ -95,7 +95,7 @@ public sealed class LocalMainSessionTaskService
                     nextTasks[previousForegroundedTaskId] = previousAgentTask with { IsBackgrounded = true };
                 }
 
-                return new TaskAppState(nextTasks);
+                return new TaskAppState(nextTasks, state.Todos, state.BoardTasks);
             });
 
         if (taskMessages is null)

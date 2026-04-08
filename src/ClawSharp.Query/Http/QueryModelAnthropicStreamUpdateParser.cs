@@ -94,6 +94,22 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
                 contentBlock["name"]?.GetValue<string>() ?? string.Empty,
                 contentBlock["id"]?.GetValue<string>() ?? string.Empty,
                 string.Empty);
+            return;
+        }
+
+        if (string.Equals(blockType, "server_tool_use", StringComparison.Ordinal))
+        {
+            _contentBlocks[index] = PartialAssistantContentBlock.ForServerToolUse(
+                contentBlock["name"]?.GetValue<string>() ?? string.Empty,
+                contentBlock["id"]?.GetValue<string>() ?? string.Empty);
+            return;
+        }
+
+        if (string.Equals(blockType, "web_search_tool_result", StringComparison.Ordinal))
+        {
+            _contentBlocks[index] = PartialAssistantContentBlock.ForWebSearchToolResult(
+                contentBlock["tool_use_id"]?.GetValue<string>() ?? string.Empty,
+                contentBlock["content"]?.ToJsonString() ?? string.Empty);
         }
     }
 
@@ -227,6 +243,18 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
             return block;
         }
 
+        public static PartialAssistantContentBlock ForServerToolUse(string name, string toolUseId)
+        {
+            return new PartialAssistantContentBlock(MessageContentKind.ToolUse, name, toolUseId);
+        }
+
+        public static PartialAssistantContentBlock ForWebSearchToolResult(string toolUseId, string content)
+        {
+            var block = new PartialAssistantContentBlock(MessageContentKind.WebSearchToolResult, toolUseId: toolUseId);
+            block.InputBuilder.Append(content);
+            return block;
+        }
+
         public MessageContentBlock ToMessageContentBlock()
         {
             return Kind switch
@@ -239,6 +267,13 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
                     InputBuilder.ToString(),
                     Name,
                     new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["toolUseId"] = ToolUseId ?? string.Empty
+                    }),
+                MessageContentKind.WebSearchToolResult => new MessageContentBlock(
+                    MessageContentKind.WebSearchToolResult,
+                    InputBuilder.ToString(),
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["toolUseId"] = ToolUseId ?? string.Empty
                     }),

@@ -11,4 +11,5 @@ public sealed record QueryRequestTool(
     bool IsLongRunningCapable = false,
     string? SearchHint = null,
     bool DeferLoading = false,
-    bool AlwaysLoad = false);
+    bool AlwaysLoad = false,
+    string? Type = null);

@@ -24,6 +24,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
     private readonly AgentPersistenceService _agentPersistenceService;
     private readonly IQueuedCommandQueue _queuedCommandQueue;
     private readonly IQueryModelCallExecutor _modelCallExecutor;
+    private readonly INativeWebSearchService _nativeWebSearchService;
     private readonly HookRegistry _hookRegistry;
     private readonly HookExecutor _hookExecutor;
     private readonly Func<ToolExecutionContext, ToolRegistry, QueryEngine> _queryEngineFactory;
@@ -34,6 +35,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         AgentPersistenceService agentPersistenceService,
         IQueuedCommandQueue queuedCommandQueue,
         IQueryModelCallExecutor modelCallExecutor,
+        INativeWebSearchService? nativeWebSearchService = null,
         HookRegistry? hookRegistry = null,
         HookExecutor? hookExecutor = null,
         Func<ToolExecutionContext, ToolRegistry, QueryEngine>? queryEngineFactory = null)
@@ -43,6 +45,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         _agentPersistenceService = agentPersistenceService;
         _queuedCommandQueue = queuedCommandQueue;
         _modelCallExecutor = modelCallExecutor;
+        _nativeWebSearchService = nativeWebSearchService ?? new NullNativeWebSearchService();
         _hookRegistry = hookRegistry ?? new HookRegistry();
         _hookExecutor = hookExecutor ?? new HookExecutor();
         _queryEngineFactory = queryEngineFactory ?? CreateQueryEngine;
@@ -86,13 +89,15 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
                               ForkSubagentFoundation.IsForkSubagentEnabled();
         var resolvedModel = ResolveAgentModel(context, selectedAgent, request);
         var permissionContext = ResolvePermissionContext(context.ToolPermissionContext, selectedAgent, runInBackground);
+        var taskId = TaskIdGenerator.Generate(runInBackground ? TaskType.LocalAgent : TaskType.LocalAgent); // Both are local agent
         var childTools = CreateChildToolRegistry(
             context,
             selectedAgent,
             permissionContext,
             resolvedModel,
             runInBackground,
-            isForkPath);
+            isForkPath,
+            taskId);
         var queryEngine = _queryEngineFactory(context, childTools);
         var backgroundCancellationSource = runInBackground ? new CancellationTokenSource() : null;
 
@@ -100,6 +105,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             ? await context.Tasks.CreateLocalAgentForSessionAsync(
                 context.Session.Id,
                 description,
+                taskId,
                 prompt,
                 selectedAgent.AgentType,
                 TaskStatus.Running,
@@ -110,6 +116,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             : await context.Tasks.CreateForegroundLocalAgentForSessionAsync(
                 context.Session.Id,
                 description,
+                taskId,
                 prompt,
                 selectedAgent.AgentType,
                 TaskStatus.Running,
@@ -408,7 +415,8 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
         ToolPermissionContext permissionContext,
         string resolvedModel,
         bool runInBackground,
-        bool isForkPath)
+        bool isForkPath,
+        string? agentId)
     {
         var childAppStateStore = new ClawSharpAppStateStore(
             context.AppState with
@@ -430,7 +438,9 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             childAppStateStore,
             runInBackground ? new NullPermissionPrompter() : context.PermissionPrompter,
             agentExecutionService: isForkPath ? this : new NullAgentExecutionService(),
-            allowedToolNames: ResolveAllowedToolNames(selectedAgent, isForkPath, context.AvailableTools));
+            nativeWebSearchService: _nativeWebSearchService,
+            allowedToolNames: ResolveAllowedToolNames(selectedAgent, isForkPath, context.AvailableTools),
+            agentId: agentId);
     }
 
     private static IReadOnlySet<string> ResolveAllowedToolNames(
