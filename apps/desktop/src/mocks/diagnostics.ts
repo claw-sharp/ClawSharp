@@ -1,0 +1,43 @@
+import { DiagnosticsRecord } from '@/types';
+
+export const mockDiagnostics: Record<string, DiagnosticsRecord> = {
+  'thread-1': {
+    sessionId: 'sess-a1b2c3d4',
+    runId: 'run-x7y8z9',
+    configPath: '~/.clawsharp/config.toml',
+    provider: 'anthropic',
+    model: 'claude-4-sonnet',
+    environment: 'development',
+    warnings: ['Potential import conflict: existing Sidebar component in ui/'],
+    errors: [],
+    uptime: '32m 14s',
+    memoryUsage: '128 MB',
+    threadId: 'thread-1',
+  },
+  'thread-3': {
+    sessionId: 'sess-e5f6g7h8',
+    runId: 'run-p1q2r3',
+    configPath: '~/.clawsharp/config.toml',
+    provider: 'openai',
+    model: 'o3',
+    environment: 'development',
+    warnings: [],
+    errors: [],
+    uptime: '12m 45s',
+    memoryUsage: '96 MB',
+    threadId: 'thread-3',
+  },
+  'thread-8': {
+    sessionId: 'sess-i9j0k1l2',
+    runId: 'run-s4t5u6',
+    configPath: '~/.clawsharp/config.toml',
+    provider: 'anthropic',
+    model: 'claude-4-sonnet',
+    environment: 'development',
+    warnings: ['CSP headers may block inline script execution'],
+    errors: ['Refused to execute inline script: Content Security Policy violation'],
+    uptime: '10m 02s',
+    memoryUsage: '84 MB',
+    threadId: 'thread-8',
+  },
+};
