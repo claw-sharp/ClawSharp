@@ -353,12 +353,19 @@ public sealed class HookExecutor
 
         if (trace.ExitCode == 2)
         {
+            var blocking = new HookBlockingError(
+                $"[{commandDisplay}]: {(string.IsNullOrWhiteSpace(trace.Stderr) ? "No stderr output" : trace.Stderr)}",
+                commandDisplay);
+
             return
             [
                 new HookExecutionUpdate(
-                    BlockingError: new HookBlockingError(
-                        $"[{commandDisplay}]: {(string.IsNullOrWhiteSpace(trace.Stderr) ? "No stderr output" : trace.Stderr)}",
-                        commandDisplay))
+                    Message: ChatMessageFactory.CreateHookBlockingErrorAttachmentMessage(
+                        blocking,
+                        hookName,
+                        request.ToolUseId!,
+                        request.Event),
+                    BlockingError: blocking)
             ];
         }
 

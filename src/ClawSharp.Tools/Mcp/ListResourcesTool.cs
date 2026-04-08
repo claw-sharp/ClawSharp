@@ -1,11 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ClawSharp.Core;
 
 namespace ClawSharp.Tools.Mcp;
 
 public sealed class ListMcpResourcesTool : BaseTool
 {
-    public const string ToolName = "ListMcpResources";
+    public const string ToolName = "ListMcpResourcesTool";
+
+    // Fallback catalog used when the tool execution context does not provide one
+    public static McpResourceCatalog? DefaultCatalog;
 
     public ListMcpResourcesTool()
         : base(new ToolDescriptor(
@@ -37,7 +41,8 @@ public sealed class ListMcpResourcesTool : BaseTool
             // Ignore parse errors, default to all servers
         }
 
-        var resources = context.McpResources.GetResources(targetServer);
+        var catalog = context.McpResources ?? DefaultCatalog ?? new McpResourceCatalog();
+        var resources = catalog.GetResources(targetServer);
         
         var resultArr = new JsonArray();
         foreach (var resource in resources)

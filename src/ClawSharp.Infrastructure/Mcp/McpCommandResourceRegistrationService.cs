@@ -69,8 +69,11 @@ public sealed class McpCommandResourceRegistrationService
 
         foreach (var connection in connections)
         {
-            foreach (var command in await FetchCommandsForConnectionAsync(connection, cancellationToken).ConfigureAwait(false))
+            var fetchedCommands = await FetchCommandsForConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"DEBUG: FetchCommandsForConnectionAsync returned {fetchedCommands.Count} commands for connection {connection.Name}");
+            foreach (var command in fetchedCommands)
             {
+                Console.WriteLine($"DEBUG: Registering prompt command: {command.Descriptor.Name}");
                 _promptCommands.RegisterOrReplace(command);
             }
 
@@ -83,6 +86,15 @@ public sealed class McpCommandResourceRegistrationService
             if (resources.Count > 0)
             {
                 _resourceCatalog.RegisterOrReplace(connected.Name, connected.Config, resources);
+                // Also register resources into the ToolRegistry's MCP catalog if the caller provided one
+                try
+                {
+                    toolRegistry?.McpResources?.RegisterOrReplace(connected.Name, connected.Config, resources);
+                }
+                catch
+                {
+                    // Ignore any issues while synchronizing catalogs to avoid breaking registration flow
+                }
             }
 
             shouldRegisterResourceTools |= connected.Capabilities.ContainsKey("resources");
@@ -90,6 +102,11 @@ public sealed class McpCommandResourceRegistrationService
 
         if (shouldRegisterResourceTools)
         {
+            // Ensure registered tools have access to the lifecycle manager and resource catalog when executed
+            ListMcpResourcesTool.DefaultCatalog = toolRegistry.McpResources ?? _resourceCatalog;
+            ReadMcpResourceTool.DefaultCatalog = toolRegistry.McpResources ?? _resourceCatalog;
+            ReadMcpResourceTool.DefaultLifecycle = _lifecycleManager;
+
             toolRegistry.RegisterOrReplace(new ListMcpResourcesTool());
             toolRegistry.RegisterOrReplace(new ReadMcpResourceTool());
         }

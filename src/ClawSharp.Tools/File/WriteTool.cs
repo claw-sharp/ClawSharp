@@ -119,6 +119,7 @@ internal sealed class WriteTool : BaseTool
         };
 
         return Success(
+
             oldContent is null
                 ? $"Created {relativePath}."
                 : $"Updated {relativePath}.",

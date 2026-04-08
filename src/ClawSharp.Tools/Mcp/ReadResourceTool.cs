@@ -7,8 +7,12 @@ namespace ClawSharp.Tools.Mcp;
 
 public sealed class ReadMcpResourceTool : BaseTool
 {
-    public const string ToolName = "ReadMcpResource";
+    public const string ToolName = "ReadMcpResourceTool";
     private const int MaxSessionRetries = 1;
+
+    // Fallbacks used when the tool execution context does not provide them
+    public static IMcpLifecycleManager? DefaultLifecycle;
+    public static McpResourceCatalog? DefaultCatalog;
 
     public ReadMcpResourceTool()
         : base(new ToolDescriptor(
@@ -32,17 +36,20 @@ public sealed class ReadMcpResourceTool : BaseTool
             return Failure("Invalid input.");
         }
 
-        if (context.McpLifecycle == null)
+        var lifecycle = context.McpLifecycle ?? DefaultLifecycle;
+        var resourcesCatalog = context.McpResources ?? DefaultCatalog;
+
+        if (lifecycle == null)
         {
             return Failure("MCP lifecycle manager is not available.");
         }
 
-        if (context.McpResources == null)
+        if (resourcesCatalog == null)
         {
             return Failure("MCP resource catalog is not available.");
         }
 
-        if (!context.McpResources.TryGetServer(serverName, out var resourceSet) || resourceSet == null)
+        if (!resourcesCatalog.TryGetServer(serverName, out var resourceSet) || resourceSet == null)
         {
             return Failure($"Server \"{serverName}\" not found.");
         }
@@ -52,7 +59,7 @@ public sealed class ReadMcpResourceTool : BaseTool
             McpReadResourceResult result;
             for (var attempt = 0; ; attempt++)
             {
-                var connection = await context.McpLifecycle.ConnectToServerAsync(serverName, resourceSet.Config, cancellationToken: cancellationToken);
+                var connection = await lifecycle.ConnectToServerAsync(serverName, resourceSet.Config, cancellationToken: cancellationToken);
                 if (connection is not ConnectedMcpServerConnection connected)
                 {
                     return Failure($"Server \"{serverName}\" is not connected (Status: {connection.Status}).");
@@ -70,7 +77,7 @@ public sealed class ReadMcpResourceTool : BaseTool
                 }
                 catch (Exception exception) when (attempt < MaxSessionRetries && ShouldRetry(exception, resourceSet.Config))
                 {
-                    await context.McpLifecycle.ClearServerCacheAsync(serverName, resourceSet.Config, cancellationToken);
+                    await lifecycle.ClearServerCacheAsync(serverName, resourceSet.Config, cancellationToken);
                 }
             }
             
