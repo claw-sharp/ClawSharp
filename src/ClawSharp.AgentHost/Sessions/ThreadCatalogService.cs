@@ -11,13 +11,16 @@ public sealed class ThreadCatalogService
 {
     private readonly WorkspaceApplicationRegistry _applicationRegistry;
     private readonly RecentProjectStore _recentProjectStore;
+    private readonly ThreadStateStore _threadStateStore;
 
     public ThreadCatalogService(
         WorkspaceApplicationRegistry applicationRegistry,
-        RecentProjectStore recentProjectStore)
+        RecentProjectStore recentProjectStore,
+        ThreadStateStore threadStateStore)
     {
         _applicationRegistry = applicationRegistry;
         _recentProjectStore = recentProjectStore;
+        _threadStateStore = threadStateStore;
     }
 
     public async Task<ListThreadsResponse> ListThreadsAsync(
@@ -95,6 +98,56 @@ public sealed class ThreadCatalogService
         throw new AgentHostException("thread_not_found", $"Thread '{request.ThreadId}' was not found.");
     }
 
+    public async Task<RenameThreadResponse> RenameThreadAsync(
+        RenameThreadRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.ThreadId) || string.IsNullOrWhiteSpace(request.Title))
+        {
+            throw new AgentHostException("invalid_request", "threadId and title are required.");
+        }
+
+        var projectPath = await ResolveProjectPathAsync(request.ProjectId, cancellationToken);
+        var app = await _applicationRegistry.GetOrCreateAsync(projectPath, cancellationToken);
+        var session = await app.SessionFactory.ResumeAsync(request.ThreadId, cancellationToken);
+        if (session is null)
+        {
+            throw new AgentHostException("thread_not_found", $"Thread '{request.ThreadId}' was not found in project '{request.ProjectId}'.");
+        }
+
+        session.SetCustomTitle(request.Title);
+        await app.TranscriptStore.RecordSessionMetadataAsync(session, cancellationToken);
+        var threads = await ListThreadsByPathAsync(projectPath, cancellationToken);
+        var project = DesktopContractMapper.MapProject(
+            projectPath,
+            threads,
+            (await _recentProjectStore.FindByIdAsync(request.ProjectId, cancellationToken))?.LastOpenedAt);
+        var lastUpdatedAt = threads.FirstOrDefault(thread => thread.Id == request.ThreadId)?.LastUpdatedAt ?? DateTimeOffset.UtcNow;
+        var detail = DesktopContractMapper.MapThreadDetail(request.ProjectId, session, lastUpdatedAt);
+        return new RenameThreadResponse(project, detail);
+    }
+
+    public async Task<ArchiveThreadResponse> ArchiveThreadAsync(
+        ArchiveThreadRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProjectId) || string.IsNullOrWhiteSpace(request.ThreadId))
+        {
+            throw new AgentHostException("invalid_request", "projectId and threadId are required.");
+        }
+
+        var projectPath = await ResolveProjectPathAsync(request.ProjectId, cancellationToken);
+        var app = await _applicationRegistry.GetOrCreateAsync(projectPath, cancellationToken);
+        var session = await app.SessionFactory.ResumeAsync(request.ThreadId, cancellationToken);
+        if (session is null)
+        {
+            throw new AgentHostException("thread_not_found", $"Thread '{request.ThreadId}' was not found in project '{request.ProjectId}'.");
+        }
+
+        _threadStateStore.Archive(request.ProjectId, request.ThreadId);
+        return new ArchiveThreadResponse(request.ProjectId, request.ThreadId, true, DateTimeOffset.UtcNow);
+    }
+
     public async Task<IReadOnlyList<ThreadSummaryDto>> ListThreadsByPathAsync(
         string projectPath,
         CancellationToken cancellationToken = default)
@@ -104,6 +157,7 @@ public sealed class ThreadCatalogService
         var logs = await app.SessionLogStore.LoadProjectLogsAsync(projectPath, cancellationToken);
         return logs
             .Select(log => DesktopContractMapper.MapThreadSummary(projectId, log))
+            .Where(thread => !_threadStateStore.IsArchived(projectId, thread.Id))
             .OrderByDescending(thread => thread.LastUpdatedAt)
             .ToArray();
     }

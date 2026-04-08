@@ -9,10 +9,10 @@ export interface Project {
   id: string;
   name: string;
   path: string;
-  branch: string;
+  branch?: string | null;
   activeThreadCount: number;
   lastUpdated: string;
-  description: string;
+  description?: string;
 }
 
 export interface Thread {
@@ -31,7 +31,7 @@ export interface Thread {
 
 export interface ToolProgressEvent {
   id: string;
-  type: 'reading' | 'planning' | 'editing' | 'reviewing' | 'finalizing' | 'searching' | 'testing';
+  type: 'reading' | 'planning' | 'editing' | 'reviewing' | 'finalizing' | 'searching' | 'testing' | 'running' | 'waiting' | 'tool';
   label: string;
   detail?: string;
   timestamp: string;
@@ -97,12 +97,30 @@ export interface DiagnosticsRecord {
   configPath: string;
   provider: string;
   model: string;
+  baseUrl: string;
+  transport: string;
   environment: string;
   warnings: string[];
   errors: string[];
   uptime: string;
   memoryUsage: string;
   threadId: string;
+  debugLogPath: string;
+  telemetryEventsPath: string;
+  metricsPath: string;
+  crashPath: string;
+  tracePath: string;
+  startupProfilePath: string;
+}
+
+export interface ProviderOption {
+  id: string;
+  displayName: string;
+  defaultModel: string;
+  models: string[];
+  baseUrl: string;
+  requiresApiKey: boolean;
+  description: string;
 }
 
 export interface Automation {
@@ -126,6 +144,7 @@ export interface InboxItem {
   projectId: string;
   threadId?: string;
   automationId?: string;
+  approvalId?: string;
 }
 
 export interface SettingsState {
@@ -133,6 +152,15 @@ export interface SettingsState {
   density: 'compact' | 'comfortable' | 'spacious';
   defaultProvider: string;
   defaultModel: string;
+  fallbackModel?: string | null;
+  permissionMode?: string;
+  providerBaseUrl?: string;
+  providerTransport?: string;
+  configPath?: string;
+  settingsIssues: string[];
+  providerValidationWarnings: string[];
+  providerValidationErrors: string[];
+  availableProviders: ProviderOption[];
   showDiagnostics: boolean;
   streamingSpeed: 'slow' | 'normal' | 'fast';
   compactMode: boolean;
@@ -155,9 +183,20 @@ export interface UIState {
 
 export interface RunState {
   activeRunId: string | null;
+  activeThreadId: string | null;
   isRunning: boolean;
   isStreaming: boolean;
   pendingApproval: boolean;
   progressLabel: string;
   changedFilesCount: number;
+  toolProgress: ToolProgressEvent[];
+  errorMessage?: string | null;
+}
+
+export interface ConnectionState {
+  isConnected: boolean;
+  isBootstrapping: boolean;
+  lastEventAt: string | null;
+  errorMessage: string | null;
+  statusLabel: string;
 }

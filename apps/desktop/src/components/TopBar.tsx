@@ -1,10 +1,11 @@
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
-import { Search, Settings, Bell, Command, ChevronDown, Zap } from 'lucide-react';
+import { Search, Settings, Bell, ChevronDown, Zap } from 'lucide-react';
 
 export const TopBar = () => {
   const {
-    selectedProjectId, projects, inboxItems, run,
+    selectedProjectId, projects, inboxItems, run, connection,
+    openProjectPicker,
     toggleSettings, toggleCommandPalette, setActiveView, ui
   } = useAppStore();
   const project = projects.find(p => p.id === selectedProjectId);
@@ -18,15 +19,27 @@ export const TopBar = () => {
           <Zap className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">ClawSharp</span>
         </div>
-        {project && (
+        {project ? (
           <>
             <span className="text-muted-foreground">/</span>
-            <button className="flex items-center gap-1 text-sm text-secondary-foreground hover:text-foreground transition-colors">
+            <button
+              onClick={() => void openProjectPicker()}
+              className="flex items-center gap-1 text-sm text-secondary-foreground hover:text-foreground transition-colors"
+            >
               {project.name}
               <ChevronDown className="h-3 w-3" />
             </button>
-            <span className="text-xs text-muted-foreground font-mono">{project.branch}</span>
+            {project.branch && (
+              <span className="text-xs text-muted-foreground font-mono">{project.branch}</span>
+            )}
           </>
+        ) : (
+          <button
+            onClick={() => void openProjectPicker()}
+            className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+          >
+            Open Project
+          </button>
         )}
       </div>
 
@@ -49,7 +62,7 @@ export const TopBar = () => {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground font-mono mr-2">anthropic / claude-4-sonnet</span>
+        <span className="text-xs text-muted-foreground font-mono mr-2">{connection.statusLabel}</span>
 
         <button
           onClick={() => setActiveView('inbox')}

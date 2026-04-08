@@ -9,6 +9,7 @@ public sealed class AgentHostStdioServer
     private readonly TextReader _input;
     private readonly TextWriter _output;
     private readonly AgentHostCommandRouter _commandRouter;
+    private readonly AgentHostEventDispatcher _eventDispatcher;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly Lock _requestLock = new();
     private readonly HashSet<Task> _inflightRequests = [];
@@ -16,11 +17,14 @@ public sealed class AgentHostStdioServer
     public AgentHostStdioServer(
         TextReader input,
         TextWriter output,
-        AgentHostCommandRouter commandRouter)
+        AgentHostCommandRouter commandRouter,
+        AgentHostEventDispatcher eventDispatcher)
     {
         _input = input;
         _output = output;
         _commandRouter = commandRouter;
+        _eventDispatcher = eventDispatcher;
+        _eventDispatcher.SetPublisher(WriteEventAsync);
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)

@@ -1,13 +1,19 @@
+import { useMemo } from 'react';
 import { useAppStore } from '@/store';
-import { mockDiffs } from '@/mocks/diffs';
 import { cn } from '@/lib/utils';
-import { FileCode, FilePlus, FileX, FileDiff, Copy, ExternalLink, Undo2 } from 'lucide-react';
+import { FileCode, FilePlus, FileX, FileDiff, Copy, ExternalLink, FolderOpen } from 'lucide-react';
 
 export const ReviewPanel = () => {
-  const { selectedThreadId, changedFiles, ui, selectChangedFile } = useAppStore();
+  const { selectedProjectId, selectedThreadId, projects, changedFiles, diffs, ui, selectChangedFile, openExternalEditor, settings } = useAppStore();
   const files = changedFiles[selectedThreadId] || [];
   const selectedFile = ui.selectedChangedFile;
-  const diff = selectedFile ? mockDiffs[selectedFile] : null;
+  const diff = selectedFile ? diffs[selectedFile] : null;
+  const absolutePath = useMemo(() => {
+    if (!selectedFile || !selectedProjectId) return null;
+    const project = projects.find((item) => item.id === selectedProjectId);
+    if (!project) return null;
+    return `${project.path}/${selectedFile}`.replace(/\/+/g, '/');
+  }, [projects, selectedFile, selectedProjectId]);
 
   if (files.length === 0) {
     return (
@@ -32,6 +38,13 @@ export const ReviewPanel = () => {
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Review · {files.length} files
         </span>
+        <button
+          onClick={() => void openExternalEditor({ kind: 'project', projectId: selectedProjectId, editorCommand: settings.editorPath })}
+          className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          title="Open project in editor"
+        >
+          <FolderOpen className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {!diff ? (
@@ -42,7 +55,7 @@ export const ReviewPanel = () => {
             return (
               <button
                 key={f.path}
-                onClick={() => selectChangedFile(f.path)}
+                onClick={() => { void selectChangedFile(f.path); }}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50 transition-colors border-b border-border/50',
                   selectedFile === f.path && 'bg-accent'
@@ -69,18 +82,31 @@ export const ReviewPanel = () => {
         /* Diff view */
         <div className="flex-1 overflow-y-auto">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
-            <button onClick={() => selectChangedFile(null)} className="text-xs text-primary hover:underline">
+            <button onClick={() => { void selectChangedFile(null); }} className="text-xs text-primary hover:underline">
               ← All files
             </button>
             <div className="flex items-center gap-1">
-              <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Copy path">
+              <button
+                onClick={() => {
+                  if (selectedFile) {
+                    void navigator.clipboard.writeText(selectedFile);
+                  }
+                }}
+                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Copy path"
+              >
                 <Copy className="h-3 w-3" />
               </button>
-              <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Open in editor">
+              <button
+                onClick={() => {
+                  if (absolutePath) {
+                    void openExternalEditor({ kind: 'file', path: absolutePath, editorCommand: settings.editorPath });
+                  }
+                }}
+                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Open in editor"
+              >
                 <ExternalLink className="h-3 w-3" />
-              </button>
-              <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Revert">
-                <Undo2 className="h-3 w-3" />
               </button>
             </div>
           </div>

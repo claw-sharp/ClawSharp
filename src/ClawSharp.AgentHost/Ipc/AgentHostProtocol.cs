@@ -21,7 +21,22 @@ public static class AgentHostProtocol
         "listRecentProjects",
         "listThreads",
         "createThread",
-        "getThread"
+        "getThread",
+        "renameThread",
+        "archiveThread",
+        "startRun",
+        "cancelRun",
+        "retryRun",
+        "listChangedFiles",
+        "getDiff",
+        "openExternalEditor",
+        "listDiagnostics",
+        "getSettings",
+        "updateSettings",
+        "listProviders",
+        "validateProviderConfig",
+        "listPendingApprovals",
+        "resolveApproval"
     ];
 }
 

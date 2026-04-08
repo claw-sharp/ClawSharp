@@ -11,9 +11,13 @@ import { SettingsDialog } from '@/features/settings/SettingsDialog';
 import { CommandPalette } from '@/components/CommandPalette';
 
 export const AppShell = () => {
-  const { ui, toggleLeftSidebar, toggleBottomDrawer, toggleCommandPalette } = useAppStore();
+  const { ui, initialize, toggleLeftSidebar, toggleBottomDrawer, toggleCommandPalette } = useAppStore();
 
   // Keyboard shortcuts
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) {

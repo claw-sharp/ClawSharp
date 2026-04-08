@@ -3,17 +3,18 @@ import { useAppStore } from '@/store';
 import { StatusBadge } from '@/components/StatusBadge';
 import { cn } from '@/lib/utils';
 import {
-  Send, Square, RotateCcw, Bot, User, FileCode,
-  CheckCircle2, Circle, Loader2, ChevronDown,
+  Send, Square, Bot, User, FileCode,
+  CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive,
 } from 'lucide-react';
 import type { Message, ToolProgressEvent } from '@/types';
 
 export const ThreadView = () => {
   const {
-    selectedThreadId, threads, messages, run,
-    sendMockPrompt, cancelMockRun,
+    selectedProjectId, selectedThreadId, projects, threads, messages, run, connection,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread,
   } = useAppStore();
 
+  const project = projects.find((item) => item.id === selectedProjectId);
   const thread = threads.find(t => t.id === selectedThreadId);
   const threadMessages = messages[selectedThreadId] || [];
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -24,12 +25,37 @@ export const ThreadView = () => {
     }
   }, [threadMessages.length, run.isStreaming]);
 
+  if (!project) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-muted-foreground">
+        <div className="text-center space-y-3 max-w-sm px-6">
+          <Bot className="h-8 w-8 mx-auto opacity-40" />
+          <p className="text-sm text-foreground">Open a local repository to start using the desktop runtime.</p>
+          <p className="text-xs text-muted-foreground">{connection.errorMessage ?? 'AgentHost is connected, but no project is selected yet.'}</p>
+          <button
+            onClick={() => void openProjectPicker()}
+            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Open Project
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3 max-w-sm px-6">
           <Bot className="h-8 w-8 mx-auto opacity-40" />
-          <p className="text-sm">Select a thread to get started</p>
+          <p className="text-sm text-foreground">No thread selected for {project.name}.</p>
+          <p className="text-xs text-muted-foreground">Create a thread to load persisted transcript history for this project.</p>
+          <button
+            onClick={() => void createThread()}
+            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            New Thread
+          </button>
         </div>
       </div>
     );
@@ -46,6 +72,26 @@ export const ThreadView = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!run.isRunning && threadMessages.some((message) => message.role === 'user') && (
+            <button
+              onClick={() => void retryThread(thread.id)}
+              className="rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+            >
+              <span className="inline-flex items-center gap-1">
+                <RotateCcw className="h-3 w-3" /> Retry
+              </span>
+            </button>
+          )}
+          {!run.isRunning && (
+            <button
+              onClick={() => void archiveThread(thread.id)}
+              className="rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+            >
+              <span className="inline-flex items-center gap-1">
+                <Archive className="h-3 w-3" /> Archive
+              </span>
+            </button>
+          )}
           <StatusBadge status={thread.status} />
           <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
             {thread.model}
@@ -76,10 +122,10 @@ export const ThreadView = () => {
 
       {/* Composer */}
       <PromptComposer
-        threadId={selectedThreadId}
+        threadId={thread.id}
         isRunning={run.isRunning}
-        onSend={sendMockPrompt}
-        onCancel={cancelMockRun}
+        onSend={sendPrompt}
+        onCancel={cancelRun}
       />
     </div>
   );
@@ -162,22 +208,26 @@ const PromptComposer = ({
 }: {
   threadId: string;
   isRunning: boolean;
-  onSend: (threadId: string, content: string) => void;
-  onCancel: () => void;
+  onSend: (threadId: string, prompt: string) => Promise<void>;
+  onCancel: () => Promise<void>;
 }) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = () => {
-    if (!value.trim() || isRunning) return;
-    onSend(threadId, value.trim());
+  const submit = () => {
+    const prompt = value.trim();
+    if (!prompt || isRunning) {
+      return;
+    }
+
     setValue('');
+    void onSend(threadId, prompt);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      submit();
     }
   };
 
@@ -189,30 +239,35 @@ const PromptComposer = ({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a prompt..."
+          placeholder={isRunning ? 'ClawSharp is working…' : 'Ask ClawSharp to work on this repository.'}
           rows={1}
           className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-h-[24px] max-h-[120px]"
           disabled={isRunning}
         />
-        {isRunning ? (
-          <button
-            onClick={onCancel}
-            className="flex items-center justify-center rounded-md bg-destructive p-1.5 text-destructive-foreground hover:bg-destructive/90 transition-colors"
-          >
-            <Square className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={!value.trim()}
-            className="flex items-center justify-center rounded-md bg-primary p-1.5 text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <Send className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button
+          disabled={!isRunning && value.trim().length === 0}
+          onClick={() => {
+            if (isRunning) {
+              void onCancel();
+              return;
+            }
+
+            submit();
+          }}
+          className={cn(
+            'flex items-center justify-center rounded-md p-1.5 text-primary-foreground transition-colors',
+            isRunning
+              ? 'bg-status-running hover:bg-status-running/80'
+              : value.trim().length > 0
+                ? 'bg-primary hover:bg-primary/90'
+                : 'bg-primary/40 cursor-not-allowed',
+          )}
+        >
+          {isRunning ? <Square className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+        </button>
       </div>
       <p className="text-[10px] text-muted-foreground mt-1.5">
-        Press Enter to send · Shift+Enter for new line · {isRunning ? 'Esc to cancel' : '⌘K for commands'}
+        Shift+Enter for newline · {isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}
       </p>
     </div>
   );

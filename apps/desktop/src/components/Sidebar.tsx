@@ -3,14 +3,14 @@ import { useAppStore } from '@/store';
 import type { Thread } from '@/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
-  FolderGit2, ChevronRight, Pin, Plus, Bot,
+  FolderGit2, Pin, Plus, Bot,
   Inbox, CalendarClock, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 
 export const Sidebar = () => {
   const {
     projects, threads, selectedProjectId, selectedThreadId,
-    selectProject, selectThread, ui, toggleLeftSidebar, setActiveView,
+    selectProject, selectThread, createThread, openProjectPicker, ui, toggleLeftSidebar, setActiveView,
   } = useAppStore();
 
   const projectThreads = threads.filter(t => t.projectId === selectedProjectId);
@@ -26,7 +26,7 @@ export const Sidebar = () => {
         {projects.map(p => (
           <button
             key={p.id}
-            onClick={() => selectProject(p.id)}
+            onClick={() => void selectProject(p.id)}
             className={cn(
               'flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold transition-colors',
               p.id === selectedProjectId
@@ -57,7 +57,7 @@ export const Sidebar = () => {
         {projects.map(p => (
           <button
             key={p.id}
-            onClick={() => selectProject(p.id)}
+            onClick={() => void selectProject(p.id)}
             className={cn(
               'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
               p.id === selectedProjectId
@@ -101,7 +101,10 @@ export const Sidebar = () => {
       {/* Thread list */}
       <div className="flex items-center justify-between px-3 py-2 border-t border-border mt-1">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Threads</span>
-        <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+        <button
+          onClick={() => void (selectedProjectId ? createThread() : openProjectPicker())}
+          className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        >
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -126,13 +129,13 @@ export const Sidebar = () => {
 const ThreadItem = ({ thread, selected, onSelect }: {
   thread: Thread;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string) => Promise<void>;
 }) => {
   const store = useAppStore();
   return (
     <button
       onClick={() => {
-        onSelect(thread.id);
+        void onSelect(thread.id);
         store.setActiveView('threads');
       }}
       className={cn(

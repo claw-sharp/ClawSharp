@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store';
 import { cn } from '@/lib/utils';
-import { Search, FolderGit2, Bot, Settings, Inbox, CalendarClock } from 'lucide-react';
+import { Search, FolderGit2, Bot, Settings, Inbox, CalendarClock, FolderOpen, RotateCcw, Archive } from 'lucide-react';
 
 export const CommandPalette = () => {
-  const { ui, toggleCommandPalette, projects, threads, selectProject, selectThread, setActiveView, toggleSettings } = useAppStore();
+  const {
+    ui, toggleCommandPalette, projects, threads, selectedThreadId, selectProject, selectThread, openProjectPicker, setActiveView, toggleSettings, retryThread, archiveThread,
+  } = useAppStore();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,8 +22,9 @@ export const CommandPalette = () => {
   if (!ui.commandPaletteOpen) return null;
 
   const items = [
-    ...projects.map(p => ({ id: p.id, label: p.name, type: 'project' as const, icon: FolderGit2, action: () => { selectProject(p.id); setActiveView('threads'); } })),
-    ...threads.map(t => ({ id: t.id, label: t.title, type: 'thread' as const, icon: Bot, action: () => { selectThread(t.id); setActiveView('threads'); } })),
+    { id: 'open-project', label: 'Open Project...', type: 'action' as const, icon: FolderOpen, action: () => void openProjectPicker() },
+    ...projects.map(p => ({ id: p.id, label: p.name, type: 'project' as const, icon: FolderGit2, action: () => { void selectProject(p.id); setActiveView('threads'); } })),
+    ...threads.map(t => ({ id: t.id, label: t.title, type: 'thread' as const, icon: Bot, action: () => { void selectThread(t.id); setActiveView('threads'); } })),
     { id: 'inbox', label: 'Open Inbox', type: 'action' as const, icon: Inbox, action: () => setActiveView('inbox') },
     { id: 'automations', label: 'Open Automations', type: 'action' as const, icon: CalendarClock, action: () => setActiveView('automations') },
     { id: 'settings', label: 'Open Settings', type: 'action' as const, icon: Settings, action: () => toggleSettings() },
@@ -30,6 +33,15 @@ export const CommandPalette = () => {
   const filtered = query
     ? items.filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
     : items;
+
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+
+  if (selectedThread) {
+    filtered.unshift(
+      { id: 'retry-current', label: `Retry ${selectedThread.title}`, type: 'action' as const, icon: RotateCcw, action: () => { void retryThread(selectedThread.id); } },
+      { id: 'archive-current', label: `Archive ${selectedThread.title}`, type: 'action' as const, icon: Archive, action: () => { void archiveThread(selectedThread.id); } },
+    );
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, filtered.length - 1)); }

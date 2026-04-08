@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 export const InboxPanel = () => {
-  const { inboxItems, markInboxItemRead, selectThread, setActiveView } = useAppStore();
+  const { inboxItems, markInboxItemRead, selectThread, setActiveView, resolveApproval } = useAppStore();
 
   const typeIcon = (type: string) => {
     switch (type) {
@@ -65,6 +65,28 @@ export const InboxPanel = () => {
                   </span>
                 )}
               </div>
+              {item.approvalId && (
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void resolveApproval(item.approvalId!, 'approved');
+                    }}
+                    className="rounded bg-status-completed/15 px-2 py-1 text-[10px] font-medium text-status-completed hover:bg-status-completed/20"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void resolveApproval(item.approvalId!, 'rejected');
+                    }}
+                    className="rounded bg-status-failed/15 px-2 py-1 text-[10px] font-medium text-status-failed hover:bg-status-failed/20"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
