@@ -23,6 +23,13 @@ public sealed class ThreadCatalogService
         _threadStateStore = threadStateStore;
     }
 
+    public ThreadCatalogService(
+        WorkspaceApplicationRegistry applicationRegistry,
+        RecentProjectStore recentProjectStore)
+        : this(applicationRegistry, recentProjectStore, new ThreadStateStore())
+    {
+    }
+
     public async Task<ListThreadsResponse> ListThreadsAsync(
         ListThreadsRequest request,
         CancellationToken cancellationToken = default)

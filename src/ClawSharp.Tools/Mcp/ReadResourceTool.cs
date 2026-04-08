@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Reflection;
 using ClawSharp.Core;
 
 namespace ClawSharp.Tools.Mcp;
@@ -217,7 +218,63 @@ public sealed class ReadMcpResourceTool : BaseTool
 
     private static bool ShouldRetry(Exception exception, ScopedMcpServerConfig config)
     {
-        return McpReconnectClassifier.IsSessionExpiredError(exception) ||
-               McpReconnectClassifier.IsConnectionClosedOnHttp(exception, config);
+        return IsSessionExpiredError(exception) ||
+               IsConnectionClosedOnHttp(exception, config);
+    }
+
+    private static bool IsSessionExpiredError(Exception error)
+    {
+        var code = TryGetErrorCode(error);
+        if (code != 404)
+        {
+            return false;
+        }
+
+        return error.Message.Contains("\"code\":-32001", StringComparison.Ordinal) ||
+               error.Message.Contains("\"code\": -32001", StringComparison.Ordinal);
+    }
+
+    private static bool IsConnectionClosedOnHttp(Exception error, ScopedMcpServerConfig config)
+    {
+        if (config.Type is not "http" and not "claudeai-proxy")
+        {
+            return false;
+        }
+
+        var code = TryGetErrorCode(error);
+        return code == -32000 &&
+               error.Message.Contains("Connection closed", StringComparison.Ordinal);
+    }
+
+    private static int? TryGetErrorCode(Exception error)
+    {
+        if (error.Data.Contains("code"))
+        {
+            var value = error.Data["code"];
+            switch (value)
+            {
+                case int intValue:
+                    return intValue;
+                case long longValue when longValue is >= int.MinValue and <= int.MaxValue:
+                    return (int)longValue;
+                case string stringValue when int.TryParse(stringValue, out var parsed):
+                    return parsed;
+            }
+        }
+
+        var property = error.GetType().GetProperty("Code", BindingFlags.Instance | BindingFlags.Public);
+        if (property is null)
+        {
+            return null;
+        }
+
+        var propertyValue = property.GetValue(error);
+        return propertyValue switch
+        {
+            int intValue => intValue,
+            long longValue when longValue is >= int.MinValue and <= int.MaxValue => (int)longValue,
+            string stringValue when int.TryParse(stringValue, out var parsed) => parsed,
+            _ => null
+        };
     }
 }

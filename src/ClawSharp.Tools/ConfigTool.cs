@@ -118,7 +118,6 @@ public sealed class ConfigTool : BaseTool
         return setting switch
         {
             "Runtime.Model" => true,
-            "Runtime.MaxIterations" => true,
             "Permissions.DefaultMode" => true,
             "ClaudeApiKey" => true,
             _ => false
@@ -130,8 +129,7 @@ public sealed class ConfigTool : BaseTool
         return setting switch
         {
             "Runtime.Model" => settings.Runtime.Model,
-            "Runtime.MaxIterations" => settings.Runtime.MaxIterations.ToString(),
-            "Permissions.DefaultMode" => settings.Permissions.DefaultMode.ToString(),
+            "Permissions.DefaultMode" => settings.Permissions.DefaultMode?.ToString(),
             "ClaudeApiKey" => settings.ClaudeApiKey != null ? "****" : null,
             _ => null
         };
@@ -139,28 +137,80 @@ public sealed class ConfigTool : BaseTool
 
     private static ClawSharpSettings ApplySetting(ClawSharpSettings settings, string setting, string value)
     {
-        // ClawSharpSettings is a sealed class with init properties, so we can use init or just mutate if they aren't immutable records.
-        // Actually they are classes with init properties.
-        
         switch (setting)
         {
             case "Runtime.Model":
-                return settings with { Runtime = settings.Runtime with { Model = value } };
-            case "Runtime.MaxIterations":
-                if (int.TryParse(value, out var iter))
-                {
-                    return settings with { Runtime = settings.Runtime with { MaxIterations = iter } };
-                }
-                throw new ArgumentException("Value must be an integer.");
+                return CloneSettings(settings, CloneRuntimeSettings(settings.Runtime, model: value));
             case "Permissions.DefaultMode":
-                // Assuming an enum or string. Let's check ClawSharpSettings.cs further if needed.
-                // For now, just a placeholder.
-                return settings; 
+                if (!Enum.TryParse<PermissionMode>(value, ignoreCase: true, out var mode))
+                {
+                    throw new ArgumentException("Value must be a valid permission mode.");
+                }
+
+                return CloneSettings(settings, settings.Runtime, permissionDefaultMode: mode);
             case "ClaudeApiKey":
-                return settings with { ClaudeApiKey = value };
+                return CloneSettings(settings, settings.Runtime, claudeApiKeyOverride: value);
             default:
                 throw new ArgumentException($"Unsupported setting: {setting}");
         }
+    }
+
+    private static RuntimeSettings CloneRuntimeSettings(
+        RuntimeSettings source,
+        string? model = null)
+    {
+        return new RuntimeSettings
+        {
+            PermissionMode = source.PermissionMode,
+            Model = model ?? source.Model,
+            FallbackModel = source.FallbackModel,
+            EnableTelemetry = source.EnableTelemetry,
+            FileCheckpointingEnabled = source.FileCheckpointingEnabled,
+            AutoMemoryEnabled = source.AutoMemoryEnabled,
+            AutoMemoryDirectory = source.AutoMemoryDirectory
+        };
+    }
+
+    private static ClawSharpSettings CloneSettings(
+        ClawSharpSettings source,
+        RuntimeSettings runtime,
+        string? claudeApiKeyOverride = null,
+        PermissionMode? permissionDefaultMode = null)
+    {
+        return new ClawSharpSettings
+        {
+            Runtime = runtime,
+            Terminal = source.Terminal,
+            Sandbox = source.Sandbox,
+            ClaudeApiKey = claudeApiKeyOverride ?? source.ClaudeApiKey,
+            SkipAutoPermissionPrompt = source.SkipAutoPermissionPrompt,
+            UseAutoModeDuringPlan = source.UseAutoModeDuringPlan,
+            ApiKeyHelper = source.ApiKeyHelper,
+            AwsCredentialExport = source.AwsCredentialExport,
+            AwsAuthRefresh = source.AwsAuthRefresh,
+            Agent = source.Agent,
+            Attribution = source.Attribution,
+            Permissions = new PermissionSettings
+            {
+                Allow = source.Permissions.Allow,
+                Deny = source.Permissions.Deny,
+                Ask = source.Permissions.Ask,
+                DefaultMode = permissionDefaultMode ?? source.Permissions.DefaultMode,
+                DisableBypassPermissionsMode = source.Permissions.DisableBypassPermissionsMode,
+                DisableAutoMode = source.Permissions.DisableAutoMode,
+                AdditionalDirectories = source.Permissions.AdditionalDirectories
+            },
+            AllowManagedPermissionRulesOnly = source.AllowManagedPermissionRulesOnly,
+            Hooks = source.Hooks,
+            DisableAllHooks = source.DisableAllHooks,
+            AllowManagedHooksOnly = source.AllowManagedHooksOnly,
+            ForceLoginOrgUUID = source.ForceLoginOrgUUID,
+            OtelHeadersHelper = source.OtelHeadersHelper,
+            EnabledPlugins = source.EnabledPlugins,
+            PluginConfigs = source.PluginConfigs,
+            AgentModels = source.AgentModels,
+            AgentRouting = source.AgentRouting
+        };
     }
 
     private static bool TryParseArguments(string arguments, out string setting, out string? value)

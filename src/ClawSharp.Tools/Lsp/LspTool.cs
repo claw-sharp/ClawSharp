@@ -403,11 +403,13 @@ internal sealed class LspTool : BaseTool
     {
         if (symbol is INamedTypeSymbol namedTypeSymbol)
         {
-            return await SymbolFinder.FindImplementationsAsync(
+            return (await SymbolFinder.FindImplementationsAsync(
                     namedTypeSymbol,
                     solution,
                     cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+                .ConfigureAwait(false))
+                .Cast<ISymbol>()
+                .ToArray();
         }
 
         if (symbol.ContainingType is not INamedTypeSymbol containingType ||

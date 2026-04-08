@@ -29,6 +29,53 @@ public sealed record ToolExecutionContext(
     IReadOnlyList<ToolDescriptor>? AvailableTools = null,
     ToolRegistry? ToolRegistry = null)
 {
+    public ToolExecutionContext(
+        string Arguments,
+        string WorkspaceRoot,
+        ConversationSession Session,
+        IClawSharpAppStateStore AppStateStore,
+        TaskRegistry Tasks,
+        ITaskAppStateStore TaskAppState,
+        ClawSharpSettings Settings,
+        FileStateCache ReadFileState,
+        ToolPermissionContext ToolPermissionContext,
+        IReadOnlyList<AgentDefinition> AgentDefinitions,
+        IFileUpdateNotifier FileUpdateNotifier,
+        IPermissionPrompter PermissionPrompter,
+        Action<ToolProgressUpdate>? OnProgress = null,
+        Action<ChatMessage>? OnMessage = null,
+        string? QuerySource = null,
+        string? AgentId = null,
+        IReadOnlyList<string>? CurrentSystemPrompt = null,
+        IReadOnlyList<ToolDescriptor>? AvailableTools = null,
+        ToolRegistry? ToolRegistry = null)
+        : this(
+            Arguments,
+            WorkspaceRoot,
+            Session,
+            AppStateStore,
+            Tasks,
+            TaskAppState,
+            Settings,
+            ReadFileState,
+            ToolPermissionContext,
+            AgentDefinitions,
+            FileUpdateNotifier,
+            PermissionPrompter,
+            new ClawSharp.Core.Worktree.NullWorktreeService(),
+            new ClawSharp.Core.McpResourceCatalog(),
+            null,
+            null,
+            OnProgress,
+            OnMessage,
+            QuerySource,
+            AgentId,
+            CurrentSystemPrompt,
+            AvailableTools,
+            ToolRegistry)
+    {
+    }
+
     public void ReportProgress(string toolUseId, JsonObject data)
     {
         OnProgress?.Invoke(new ToolProgressUpdate(toolUseId, data));

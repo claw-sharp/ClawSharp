@@ -5,6 +5,14 @@ namespace ClawSharp.Tools;
 internal static class ToolJsonSchemaFactory
 {
     public static JsonObject StrictObject(
+        IEnumerable<(string Name, JsonObject Schema)> properties,
+        IEnumerable<string>? required = null,
+        string? description = null)
+    {
+        return StrictObject(properties.Select(static property => (property.Name, (JsonNode)property.Schema)), required, description);
+    }
+
+    public static JsonObject StrictObject(
         IEnumerable<(string Name, JsonNode Schema)> properties,
         IEnumerable<string>? required = null,
         string? description = null)
@@ -45,6 +53,14 @@ internal static class ToolJsonSchemaFactory
     }
 
     public static JsonObject Object(
+        IEnumerable<(string Name, JsonObject Schema)>? properties = null,
+        IEnumerable<string>? required = null,
+        string? description = null)
+    {
+        return StrictObject(properties ?? [], required, description);
+    }
+
+    public static JsonObject Object(
         IEnumerable<(string Name, JsonNode Schema)>? properties = null,
         IEnumerable<string>? required = null,
         string? description = null)
@@ -54,7 +70,7 @@ internal static class ToolJsonSchemaFactory
 
     public static JsonObject Object(bool Required, string? description = null)
     {
-        return StrictObject([], null, description);
+        return StrictObject(System.Array.Empty<(string Name, JsonNode Schema)>(), null, description);
     }
 
     public static JsonObject String(string? description = null, bool? Required = null)
@@ -151,6 +167,16 @@ internal static class ToolJsonSchemaFactory
         return result;
     }
 
+    public static JsonObject Array(JsonNode items, string? description)
+    {
+        return Array(items, minItems: null, maxItems: null, description: description);
+    }
+
+    public static JsonObject Array(JsonNode items, string? description, bool? Required)
+    {
+        return Array(items, minItems: null, maxItems: null, description: description, Required: Required);
+    }
+
     public static JsonObject StringEnum(IEnumerable<string> values, string? description = null, string? defaultValue = null, bool? Required = null)
     {
         var result = Primitive("string", description);
@@ -168,6 +194,11 @@ internal static class ToolJsonSchemaFactory
         }
 
         return result;
+    }
+
+    public static JsonObject Enum(IEnumerable<string> values, string? description = null, string? defaultValue = null, bool? Required = null)
+    {
+        return StringEnum(values, description, defaultValue, Required);
     }
 
     public static JsonObject Nullable(JsonNode schema, string? description = null, bool? Required = null)

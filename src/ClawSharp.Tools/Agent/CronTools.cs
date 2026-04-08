@@ -176,7 +176,7 @@ internal sealed class CronListTool : BaseTool
                 "List scheduled prompt definitions for the current workspace",
                 SearchHint: "list active cron jobs",
                 ShouldDefer: true,
-                InputSchema: ToolJsonSchemaFactory.StrictObject([], required: []),
+                InputSchema: ToolJsonSchemaFactory.StrictObject(Array.Empty<(string Name, JsonNode Schema)>(), required: []),
                 OutputSchema: CronToolSchemas.ListOutputSchema,
                 Strict: true))
     {

@@ -284,7 +284,7 @@ internal sealed class TaskListTool : BaseTool
                 "TaskList",
                 "List all tasks on the board",
                 Parameters: [],
-                InputSchema: ToolJsonSchemaFactory.StrictObject([], []),
+                InputSchema: ToolJsonSchemaFactory.StrictObject(Array.Empty<(string Name, JsonNode Schema)>(), []),
                 OutputSchema: ToolJsonSchemaFactory.StrictObject(
                     [("tasks", ToolJsonSchemaFactory.Array(TaskToolSchemas.TaskInfoSchema))], 
                     ["tasks"]),

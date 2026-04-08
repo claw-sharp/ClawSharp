@@ -34,48 +34,63 @@ internal sealed class WebBrowserTool : BaseTool
                input.Action is WebBrowserAction.Info or WebBrowserAction.Console;
     }
 
-    public override async Task<ToolExecutionResult> ValidateAsync(ToolExecutionContext context, CancellationToken cancellationToken = default)
+    public override Task<ToolValidationResult> ValidateAsync(ToolExecutionContext context, CancellationToken cancellationToken = default)
     {
         if (!WebBrowserToolInputParser.TryParse(context.Arguments, out var input, out var errorMessage) || input is null)
         {
-            return ToolValidationResult.Invalid(errorMessage ?? "Invalid WebBrowser input.");
+            return Task.FromResult(ToolValidationResult.Invalid(errorMessage ?? "Invalid WebBrowser input."));
         }
 
         if ((input.Action is WebBrowserAction.Open or WebBrowserAction.Navigate) &&
             string.IsNullOrWhiteSpace(input.Url))
         {
-            return ToolValidationResult.Invalid("'url' is required for open and navigate.");
+            return Task.FromResult(ToolValidationResult.Invalid("'url' is required for open and navigate."));
         }
 
         if ((input.Action is WebBrowserAction.Click or WebBrowserAction.Type) &&
             string.IsNullOrWhiteSpace(input.Selector))
         {
-            return ToolValidationResult.Invalid("'selector' is required for click and type.");
+            return Task.FromResult(ToolValidationResult.Invalid("'selector' is required for click and type."));
         }
 
         if (input.Action is WebBrowserAction.Type && input.Text is null)
         {
-            return ToolValidationResult.Invalid("'text' is required for type.");
+            return Task.FromResult(ToolValidationResult.Invalid("'text' is required for type."));
         }
 
         if (input.Action is WebBrowserAction.Evaluate && string.IsNullOrWhiteSpace(input.Script))
         {
-            return ToolValidationResult.Invalid("'script' is required for evaluate.");
+            return Task.FromResult(ToolValidationResult.Invalid("'script' is required for evaluate."));
         }
 
         if (input.Url is not null)
         {
             try
             {
-                ClawSharp.Infrastructure.BrowserLauncher.ValidateUrl(input.Url);
+                ValidateUrl(input.Url);
             }
             catch (Exception ex)
             {
-                return ToolValidationResult.Invalid(ex.Message);
+                return Task.FromResult(ToolValidationResult.Invalid(ex.Message));
             }
         }
 
-        return ToolValidationResult.Valid();
+        return Task.FromResult(ToolValidationResult.Valid());
+    }
+
+    private static void ValidateUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+        {
+            throw new InvalidOperationException($"Invalid URL format: {url}");
+        }
+
+        if (!string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Invalid URL protocol: must use http:// or https://, got {parsed.Scheme}:");
+        }
     }
 
     public override async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, CancellationToken cancellationToken = default)

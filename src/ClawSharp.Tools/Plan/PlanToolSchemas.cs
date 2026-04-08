@@ -5,7 +5,7 @@ namespace ClawSharp.Tools.Plan;
 internal static class PlanToolSchemas
 {
     public static JsonObject EnterInputSchema =>
-        ToolJsonSchemaFactory.StrictObject([], required: []);
+        ToolJsonSchemaFactory.StrictObject(Array.Empty<(string Name, JsonNode Schema)>(), required: []);
 
     public static JsonObject EnterOutputSchema =>
         ToolJsonSchemaFactory.StrictObject(
@@ -29,7 +29,7 @@ internal static class PlanToolSchemas
             required: ["message"]);
 
     public static JsonObject VerifyInputSchema =>
-        ToolJsonSchemaFactory.StrictObject([], required: []);
+        ToolJsonSchemaFactory.StrictObject(Array.Empty<(string Name, JsonNode Schema)>(), required: []);
 
     public static JsonObject VerifyOutputSchema =>
         ToolJsonSchemaFactory.StrictObject(

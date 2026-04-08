@@ -258,6 +258,36 @@ public sealed class TaskRegistry : ITaskAppStateStore
         return task;
     }
 
+    public Task<LocalAgentTask> CreateLocalAgentForSessionAsync(
+        string sessionId,
+        string description,
+        string prompt,
+        string agentType,
+        TaskStatus status = TaskStatus.Pending,
+        string? model = null,
+        bool isBackgrounded = true,
+        string? worktreePath = null,
+        string? worktreeBranch = null,
+        string? toolUseId = null,
+        CancellationTokenSource? cancellationSource = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateLocalAgentForSessionAsync(
+            sessionId,
+            description,
+            taskId: null,
+            prompt,
+            agentType,
+            status,
+            model,
+            isBackgrounded,
+            worktreePath,
+            worktreeBranch,
+            toolUseId,
+            cancellationSource,
+            cancellationToken);
+    }
+
     public async Task<LocalAgentTask> CreateMainSessionTaskForSessionAsync(
         string sessionId,
         string description,
@@ -319,6 +349,34 @@ public sealed class TaskRegistry : ITaskAppStateStore
             status,
             model,
             isBackgrounded: false,
+            worktreePath,
+            worktreeBranch,
+            toolUseId,
+            cancellationSource,
+            cancellationToken);
+    }
+
+    public Task<LocalAgentTask> CreateForegroundLocalAgentForSessionAsync(
+        string sessionId,
+        string description,
+        string prompt,
+        string agentType,
+        TaskStatus status = TaskStatus.Running,
+        string? model = null,
+        string? worktreePath = null,
+        string? worktreeBranch = null,
+        string? toolUseId = null,
+        CancellationTokenSource? cancellationSource = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateForegroundLocalAgentForSessionAsync(
+            sessionId,
+            description,
+            taskId: null,
+            prompt,
+            agentType,
+            status,
+            model,
             worktreePath,
             worktreeBranch,
             toolUseId,
