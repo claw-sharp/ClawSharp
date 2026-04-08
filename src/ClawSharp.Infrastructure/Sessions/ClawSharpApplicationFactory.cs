@@ -134,7 +134,11 @@ public static class ClawSharpApplicationFactory
             appStateStore,
             permissionPrompter,
             agentExecutionService,
-            nativeWebSearchService: nativeWebSearchService);
+            nativeWebSearchService: nativeWebSearchService,
+            worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(), 
+            mcpResources: mcpResourceCatalog,
+            mcpLifecycle: mcpLifecycleManager,
+            settingsStore: settingsStore);
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
@@ -203,6 +207,7 @@ public static class ClawSharpApplicationFactory
             queryEngine,
             appStateStore,
             transcriptStore);
+        var cronSchedulerService = new CronSchedulerService(workspaceRoot);
         var terminalShell = new TerminalShell(
             queryEngine,
             queuedTaskNotificationDrainer,
@@ -219,7 +224,8 @@ public static class ClawSharpApplicationFactory
             readFileState: readFileState,
             toolRegistry: tools,
             modelTurnContextProvider: modelTurnContextProvider,
-            localMainSessionTaskService: localMainSessionTaskService);
+            localMainSessionTaskService: localMainSessionTaskService,
+            cronSchedulerService: cronSchedulerService);
 
         var application = new ClawSharpApplication(
             sessionFactory,

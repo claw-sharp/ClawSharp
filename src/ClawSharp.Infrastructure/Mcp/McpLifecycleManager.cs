@@ -4,7 +4,7 @@ using ClawSharp.Core;
 
 namespace ClawSharp.Infrastructure;
 
-public sealed class McpLifecycleManager
+public sealed class McpLifecycleManager : IMcpLifecycleManager
 {
     private readonly IMcpClientConnector _connector;
     private readonly McpAuthStateService? _authStateService;

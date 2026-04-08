@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
 using ClawSharp.Tools;
+using ClawSharp.Tools.Mcp;
 
 namespace ClawSharp.Infrastructure;
 
@@ -22,6 +23,11 @@ public sealed class McpToolRegistrationService
         McpServerConnection connection,
         CancellationToken cancellationToken = default)
     {
+        if (connection is NeedsAuthMcpServerConnection needsAuth)
+        {
+            return [new McpAuthTool(needsAuth.Name, needsAuth.Config)];
+        }
+
         if (connection is not ConnectedMcpServerConnection connected)
         {
             return [];
