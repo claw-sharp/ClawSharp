@@ -14,4 +14,8 @@
     <RootNamespace>ClawSharp.AgentHost</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="18.4.0" PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>

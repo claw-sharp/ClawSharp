@@ -15,6 +15,10 @@
     <PackageReference Include="ReverseMarkdown" Version="5.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="18.4.0" PrivateAssets="all" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
