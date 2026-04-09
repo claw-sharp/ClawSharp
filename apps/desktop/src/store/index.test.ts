@@ -196,6 +196,79 @@ describe('useAppStore', () => {
     expect(mockClient.getSettings).toHaveBeenCalledTimes(1);
   });
 
+  it('loads the thread even when ancillary thread requests fail', async () => {
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [],
+    });
+    mockClient.getThread.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 1,
+          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [
+          {
+            id: 'msg-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'Hello',
+            timestamp: '2026-04-08T10:01:00.000Z',
+          },
+        ],
+      },
+    });
+    mockClient.listChangedFiles.mockRejectedValue('fatal: not a git repository');
+    mockClient.listDiagnostics.mockRejectedValue(new Error('diagnostics unavailable'));
+    mockClient.listPendingApprovals.mockRejectedValue({ message: 'approval store unavailable' });
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+    });
+
+    await useAppStore.getState().selectThread('thread-1');
+
+    const state = useAppStore.getState();
+    expect(state.selectedThreadId).toBe('thread-1');
+    expect(state.messages['thread-1'][0]?.content).toBe('Hello');
+    expect(state.changedFiles['thread-1']).toEqual([]);
+    expect(state.connection.errorMessage).toBeNull();
+  });
+
   it('sends a real prompt request through the store and marks the run active', async () => {
     mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
     mockClient.listRecentProjects.mockResolvedValue({
