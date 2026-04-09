@@ -408,11 +408,55 @@ end
   );
 }
 
+function generateScoopManifest(options) {
+  const version = normalizeVersion(requireOption(options, "version"));
+  const tag = options.tag ?? `desktop-v${version}`;
+  const owner = options.owner ?? "claw-sharp";
+  const repo = options.repo ?? "ClawSharp";
+  const assetsRoot = resolveRepoPath(requireOption(options, "assets-root"));
+  const outputPath = resolveRepoPath(options.output ?? "artifacts/desktop/scoop/clawsharp.json");
+  const installerFile = fs.readdirSync(assetsRoot).find((fileName) => /_windows_x64_setup\.exe$/.test(fileName));
+  if (!installerFile) {
+    throw new Error(`Could not find a Windows x64 NSIS installer under ${assetsRoot}`);
+  }
+
+  const installerPath = path.join(assetsRoot, installerFile);
+  const installerUrl = buildReleaseUrl(owner, repo, tag, installerFile);
+  const installerHash = sha256(installerPath);
+
+  const manifest = {
+    version,
+    description: "ClawSharp desktop app",
+    homepage: `https://github.com/${owner}/${repo}`,
+    license: "MIT",
+    architecture: {
+      "64bit": {
+        url: installerUrl,
+        hash: installerHash,
+      },
+    },
+    installer: {
+      script: 'Start-Process -FilePath "$dir\\$fname" -ArgumentList "/S" -Wait',
+    },
+    checkver: "github",
+    autoupdate: {
+      architecture: {
+        "64bit": {
+          url: `https://github.com/${owner}/${repo}/releases/download/${tag}/ClawSharp_$version_windows_x64_setup.exe`,
+        },
+      },
+    },
+  };
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  writeJson(outputPath, manifest);
+}
+
 function main() {
   const { positional, options } = parseArgs(process.argv.slice(2));
   const command = positional[0];
   if (!command) {
-    throw new Error("Missing command. Expected one of: get-version, validate-version, write-tauri-release-config, stage-desktop-release-assets, prepare-updater-metadata, generate-winget-manifests, generate-homebrew-cask");
+    throw new Error("Missing command. Expected one of: get-version, validate-version, write-tauri-release-config, stage-desktop-release-assets, prepare-updater-metadata, generate-winget-manifests, generate-homebrew-cask, generate-scoop-manifest");
   }
 
   switch (command) {
@@ -436,6 +480,9 @@ function main() {
       break;
     case "generate-homebrew-cask":
       generateHomebrewCask(options);
+      break;
+    case "generate-scoop-manifest":
+      generateScoopManifest(options);
       break;
     default:
       throw new Error(`Unsupported command '${command}'`);
