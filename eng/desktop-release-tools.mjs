@@ -165,7 +165,7 @@ function stageDesktopReleaseAssets(options) {
   const arch = requireOption(options, "arch");
   const files = fs.readdirSync(bundleRoot, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
-    .map((entry) => path.join(entry.path, entry.name));
+    .map((entry) => path.join(entry.parentPath ?? entry.path ?? bundleRoot, entry.name));
 
   const mappings = [];
   if (platform === "windows") {
