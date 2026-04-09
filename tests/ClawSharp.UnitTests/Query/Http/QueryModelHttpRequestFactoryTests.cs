@@ -279,10 +279,46 @@ public sealed class QueryModelHttpRequestFactoryTests
         var parameters = openAiBody["tools"]![0]!["function"]!["parameters"]!.AsObject();
         var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
 
-        Assert.Equal(["questions", "answers", "annotations", "metadata"], required);
-        Assert.True(parameters["properties"]!["answers"]!["anyOf"] is JsonArray);
-        Assert.True(parameters["properties"]!["annotations"]!["anyOf"] is JsonArray);
+        Assert.Equal(["questions", "metadata"], required);
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("answers"));
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("annotations"));
         Assert.True(parameters["properties"]!["metadata"]!["anyOf"] is JsonArray);
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Shapes_AskUserQuestion_For_Codex_Without_Runtime_Injected_Fields()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var askUserQuestion = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "AskUserQuestion", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-askuserquestion-codex",
+                "codexplan",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(askUserQuestion.Name, askUserQuestion.Description, askUserQuestion.InputSchema, Strict: askUserQuestion.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal(["questions", "metadata"], required);
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("answers"));
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("annotations"));
+        Assert.Equal(false, parameters["additionalProperties"]?.GetValue<bool>());
     }
 
     [Fact]

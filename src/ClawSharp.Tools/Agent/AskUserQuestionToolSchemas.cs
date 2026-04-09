@@ -41,13 +41,6 @@ internal static class AskUserQuestionToolSchemas
         new[]
         {
             ("questions", (JsonNode)ToolJsonSchemaFactory.Array(QuestionSchema.DeepClone(), minItems: 1, maxItems: 4, description: "Questions to ask the user (1-4 questions)")),
-            ("answers", (JsonNode)new JsonObject
-            {
-                ["type"] = "object",
-                ["additionalProperties"] = ToolJsonSchemaFactory.String(),
-                ["description"] = "User answers collected by the permission component"
-            }),
-            ("annotations", (JsonNode)AnnotationsSchema.DeepClone()),
             ("metadata", (JsonNode)ToolJsonSchemaFactory.Object(
                 new[]
                 {
