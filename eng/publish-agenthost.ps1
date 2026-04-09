@@ -20,7 +20,19 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $projectFullPath = (Resolve-Path (Join-Path $repoRoot $ProjectPath)).Path
 $resolvedOutputRoot = Join-Path $repoRoot $OutputRoot
 
+function Get-AgentHostExecutableName([string]$RuntimeIdentifier) {
+    if ($RuntimeIdentifier.StartsWith("win-")) {
+        return "clawsharp-agenthost.exe"
+    }
+
+    return "clawsharp-agenthost"
+}
+
 foreach ($rid in $RuntimeIdentifiers) {
+    if ([string]::IsNullOrWhiteSpace($rid)) {
+        continue
+    }
+
     $publishDir = Join-Path $resolvedOutputRoot $rid
     if (Test-Path $publishDir) {
         Remove-Item -LiteralPath $publishDir -Recurse -Force
@@ -43,5 +55,10 @@ foreach ($rid in $RuntimeIdentifiers) {
 
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed for RID '$rid'."
+    }
+
+    $expectedExecutable = Join-Path $publishDir (Get-AgentHostExecutableName -RuntimeIdentifier $rid)
+    if (-not (Test-Path $expectedExecutable)) {
+        throw "Expected AgentHost executable missing after publish: $expectedExecutable"
     }
 }

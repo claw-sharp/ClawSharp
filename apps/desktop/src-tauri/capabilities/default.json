@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default capability for the ClawSharp desktop window.",
   "windows": ["main"],
-  "permissions": ["core:default", "log:default", "dialog:allow-open"]
+  "permissions": ["core:default", "log:default", "dialog:allow-open", "updater:default"]
 }
