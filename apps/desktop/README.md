@@ -10,6 +10,8 @@ This app packages the React UI as a Tauri desktop application.
 - `npm run build:web` builds the frontend assets only.
 - `npm run build` builds the desktop app bundle through Tauri.
 
+Release engineering notes live in [docs/desktop/release.md](/Users/hadoan/Documents/GitHub/ClawSharp/docs/desktop/release.md).
+
 ## Requirements
 
 - Node.js and npm for the frontend toolchain

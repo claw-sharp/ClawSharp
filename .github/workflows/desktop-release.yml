@@ -1,0 +1,277 @@
+name: desktop-release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+env:
+  DESKTOP_APP_PATH: apps/desktop
+  DESKTOP_RELEASE_ROOT: artifacts/desktop/release
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve desktop release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = ""
+          }
+
+          $version = (& ./eng/get-desktop-version.ps1 -Tag $tag).Trim()
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = "desktop-v$version"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Install desktop dependencies
+        run: npm ci --prefix ${{ env.DESKTOP_APP_PATH }}
+
+      - name: Restore AgentHost
+        run: dotnet restore src/ClawSharp.AgentHost/ClawSharp.AgentHost.csproj
+
+      - name: Build frontend
+        run: npm run --prefix ${{ env.DESKTOP_APP_PATH }} build:web
+
+      - name: Run desktop tests
+        run: npm run --prefix ${{ env.DESKTOP_APP_PATH }} test
+
+      - name: Verify sidecar publish pipeline
+        shell: pwsh
+        run: |
+          ./eng/publish-agenthost.ps1 -RuntimeIdentifiers linux-x64
+          ./eng/copy-agenthost-to-tauri.ps1 -RuntimeIdentifiers linux-x64
+          ./eng/validate-release-assets.ps1 -RuntimeIdentifiers linux-x64
+
+      - name: Verify release config generation
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) {
+            throw "TAURI_UPDATER_PUBLIC_KEY is required for desktop releases."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY is required for desktop releases."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is required for desktop releases."
+          }
+
+          ./eng/write-tauri-release-config.ps1 -Tag "${{ steps.meta.outputs.tag }}"
+
+  build-release-assets:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            runtime_id: win-x64
+            platform: windows
+            arch: x64
+          - runner: macos-14
+            rust_target: aarch64-apple-darwin
+            runtime_id: osx-arm64
+            platform: darwin
+            arch: aarch64
+          - runner: macos-13
+            rust_target: x86_64-apple-darwin
+            runtime_id: osx-x64
+            platform: darwin
+            arch: x86_64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust build outputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/desktop/src-tauri -> target
+
+      - name: Install desktop dependencies
+        run: npm ci --prefix ${{ env.DESKTOP_APP_PATH }}
+
+      - name: Prepare release config
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        shell: pwsh
+        run: |
+          ./eng/write-tauri-release-config.ps1 `
+            -Tag "${{ needs.validate.outputs.tag }}" `
+            -Owner "${{ github.repository_owner }}" `
+            -Repo "${{ github.event.repository.name }}"
+
+      - name: Publish AgentHost sidecar
+        shell: pwsh
+        run: ./eng/publish-agenthost.ps1 -RuntimeIdentifiers ${{ matrix.runtime_id }}
+
+      - name: Copy sidecar into Tauri binaries
+        shell: pwsh
+        run: ./eng/copy-agenthost-to-tauri.ps1 -RuntimeIdentifiers ${{ matrix.runtime_id }}
+
+      - name: Validate sidecar layout
+        shell: pwsh
+        run: ./eng/validate-release-assets.ps1 -RuntimeIdentifiers ${{ matrix.runtime_id }}
+
+      - name: Build Tauri release bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run --prefix ${{ env.DESKTOP_APP_PATH }} build -- --config src-tauri/tauri.release.conf.json --target ${{ matrix.rust_target }}
+
+      - name: Stage desktop release assets
+        shell: pwsh
+        run: |
+          $bundleRoot = Join-Path "${{ env.DESKTOP_APP_PATH }}/src-tauri/target" "${{ matrix.rust_target }}/release/bundle"
+          $outputRoot = Join-Path "${{ env.DESKTOP_RELEASE_ROOT }}" "${{ matrix.platform }}-${{ matrix.arch }}"
+          ./eng/stage-desktop-release-assets.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -BundleRoot $bundleRoot `
+            -OutputRoot $outputRoot `
+            -Platform "${{ matrix.platform }}" `
+            -Arch "${{ matrix.arch }}"
+
+      - name: Upload staged release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.DESKTOP_RELEASE_ROOT }}/${{ matrix.platform }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - validate
+      - build-release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download staged release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: ${{ env.DESKTOP_RELEASE_ROOT }}
+          merge-multiple: true
+
+      - name: Prepare updater metadata
+        shell: pwsh
+        run: |
+          ./eng/prepare-updater-metadata.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -AssetsRoot "${{ env.DESKTOP_RELEASE_ROOT }}" `
+            -Output "${{ env.DESKTOP_RELEASE_ROOT }}/latest.json" `
+            -Owner "${{ github.repository_owner }}" `
+            -Repo "${{ github.event.repository.name }}" `
+            -Tag "${{ needs.validate.outputs.tag }}" `
+            -Notes "ClawSharp desktop release ${{ needs.validate.outputs.version }}"
+
+      - name: Write release checksums
+        shell: pwsh
+        run: ./eng/write-checksums.ps1 -ArtifactsRoot ${{ env.DESKTOP_RELEASE_ROOT }} -OutputPath ${{ env.DESKTOP_RELEASE_ROOT }}/SHA256SUMS
+
+      - name: Generate WinGet manifests
+        shell: pwsh
+        run: |
+          ./eng/generate-winget-manifests.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -AssetsRoot "${{ env.DESKTOP_RELEASE_ROOT }}" `
+            -Owner "${{ github.repository_owner }}" `
+            -Repo "${{ github.event.repository.name }}" `
+            -Tag "${{ needs.validate.outputs.tag }}"
+
+      - name: Generate Homebrew cask
+        shell: pwsh
+        run: |
+          ./eng/generate-homebrew-cask.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -AssetsRoot "${{ env.DESKTOP_RELEASE_ROOT }}" `
+            -Owner "${{ github.repository_owner }}" `
+            -Repo "${{ github.event.repository.name }}" `
+            -Tag "${{ needs.validate.outputs.tag }}"
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              "${DESKTOP_RELEASE_ROOT}"/* \
+              artifacts/desktop/winget/ClawSharp.ClawSharp/${{ needs.validate.outputs.version }}/* \
+              artifacts/desktop/homebrew/Casks/clawsharp.rb \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              "${DESKTOP_RELEASE_ROOT}"/* \
+              artifacts/desktop/winget/ClawSharp.ClawSharp/${{ needs.validate.outputs.version }}/* \
+              artifacts/desktop/homebrew/Casks/clawsharp.rb \
+              --title "ClawSharp Desktop v${{ needs.validate.outputs.version }}" \
+              --generate-notes
+          fi
