@@ -422,6 +422,7 @@ export interface RunToolResultEvent {
   threadId: string;
   toolUseId: string;
   toolName: string;
+  success: boolean;
   content: string;
   timestamp: string;
 }

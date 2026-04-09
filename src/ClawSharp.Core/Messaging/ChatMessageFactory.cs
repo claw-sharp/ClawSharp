@@ -101,7 +101,12 @@ public static class ChatMessageFactory
             DateTimeOffset.UtcNow);
     }
 
-    public static ChatMessage CreateToolResult(string toolUseId, string toolName, string content, JsonNode? structuredOutput = null)
+    public static ChatMessage CreateToolResult(
+        string toolUseId,
+        string toolName,
+        string content,
+        JsonNode? structuredOutput = null,
+        bool? success = null)
     {
         Dictionary<string, string> metadata = new()
         {
@@ -111,6 +116,11 @@ public static class ChatMessageFactory
         if (structuredOutput is not null)
         {
             metadata["structuredOutput"] = structuredOutput.ToJsonString();
+        }
+
+        if (success is not null)
+        {
+            metadata["success"] = success.Value ? bool.TrueString : bool.FalseString;
         }
 
         return new ChatMessage(

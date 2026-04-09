@@ -74,7 +74,8 @@ public sealed class ExplicitToolIterationRunner : IQueryIterationRunner
                                 update.Result.ToolCall.ToolUseId,
                                 update.Result.ToolCall.ToolName,
                                 update.Result.Output,
-                                update.Result.StructuredOutput)),
+                                update.Result.StructuredOutput,
+                                update.Result.Success)),
                         cancellationToken);
                 }
             }

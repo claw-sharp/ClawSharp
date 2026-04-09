@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Ipc;
+using ClawSharp.AgentHost.Mapping;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.Core;
@@ -47,6 +48,10 @@ public sealed class RunCoordinator
             throw new AgentHostException("invalid_request", "prompt is required.");
         }
 
+        AgentHostLog.Info(
+            "run:start-request",
+            $"projectId={request.ProjectId} threadId={request.ThreadId} promptLength={request.Prompt.Trim().Length}");
+
         var project = await _recentProjectStore.FindByIdAsync(request.ProjectId, cancellationToken);
         if (project is null)
         {
@@ -64,6 +69,10 @@ public sealed class RunCoordinator
                 $"Thread '{request.ThreadId}' was not found in project '{request.ProjectId}'.");
         }
 
+        AgentHostLog.Debug(
+            "run:start-session-resolved",
+            $"projectId={request.ProjectId} threadId={request.ThreadId} workspace={project.Path}");
+
         app.AppStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
 
         var runId = Guid.NewGuid().ToString("N");
@@ -77,6 +86,10 @@ public sealed class RunCoordinator
         _ = Task.Run(
             () => ExecuteRunAsync(runId, request.ProjectId, session, request.Prompt.Trim(), app, runCts),
             CancellationToken.None);
+
+        AgentHostLog.Info(
+            "run:start-accepted",
+            $"runId={runId} projectId={request.ProjectId} threadId={request.ThreadId}");
 
         return new StartRunResponse(runId, request.ThreadId, DateTimeOffset.UtcNow);
     }
@@ -196,6 +209,9 @@ public sealed class RunCoordinator
         var toolNamesByToolUseId = new Dictionary<string, string>(StringComparer.Ordinal);
         try
         {
+            AgentHostLog.Info(
+                "run:execute-start",
+                $"runId={runId} projectId={projectId} threadId={session.Id} promptLength={prompt.Length}");
             await _eventDispatcher.PublishAsync(
                 "RunStarted",
                 new RunStartedEvent(runId, session.Id, projectId, prompt, DateTimeOffset.UtcNow),
@@ -223,6 +239,10 @@ public sealed class RunCoordinator
                     token),
                 cancellationToken: runCts.Token);
 
+            AgentHostLog.Info(
+                "run:execute-complete",
+                $"runId={runId} threadId={session.Id} reason={execution.QueryResult.Terminal.Reason} error={execution.QueryResult.Terminal.ErrorMessage ?? "none"}");
+
             await _eventDispatcher.PublishAsync(
                 "RunCompleted",
                 new RunCompletedEvent(
@@ -235,6 +255,9 @@ public sealed class RunCoordinator
         }
         catch (OperationCanceledException)
         {
+            AgentHostLog.Warn(
+                "run:execute-cancelled",
+                $"runId={runId} threadId={session.Id}");
             await _eventDispatcher.PublishAsync(
                 "RunCompleted",
                 new RunCompletedEvent(
@@ -247,6 +270,9 @@ public sealed class RunCoordinator
         }
         catch (Exception error)
         {
+            AgentHostLog.Error(
+                "run:execute-failed",
+                $"runId={runId} threadId={session.Id} error={error.GetType().Name}: {error.Message}");
             await _eventDispatcher.PublishAsync(
                 "RunFailed",
                 new RunFailedEvent(runId, session.Id, error.Message, DateTimeOffset.UtcNow),
@@ -256,6 +282,9 @@ public sealed class RunCoordinator
         {
             _runs.TryRemove(runId, out _);
             runCts.Dispose();
+            AgentHostLog.Debug(
+                "run:execute-finished",
+                $"runId={runId} threadId={session.Id}");
         }
     }
 
@@ -266,6 +295,9 @@ public sealed class RunCoordinator
         QueryConsumerEvent consumerEvent,
         CancellationToken cancellationToken)
     {
+        AgentHostLog.Debug(
+            "run:consumer-event",
+            $"runId={runId} threadId={session.Id} eventType={consumerEvent.GetType().Name}");
         return consumerEvent switch
         {
             QueryMessageConsumerEvent messageEvent => HandleMessageAsync(runId, session, toolNamesByToolUseId, messageEvent.Message, cancellationToken),
@@ -281,6 +313,9 @@ public sealed class RunCoordinator
         ChatMessage message,
         CancellationToken cancellationToken)
     {
+        AgentHostLog.Debug(
+            "run:message",
+            $"runId={runId} threadId={session.Id} role={message.Role} blocks={message.ContentBlocks.Count} contentLength={message.Content.Length}");
         foreach (var block in message.ContentBlocks)
         {
             switch (block.Kind)
@@ -334,6 +369,7 @@ public sealed class RunCoordinator
                     var toolUseId = GetMetadata(block, "toolUseId") ?? Guid.NewGuid().ToString("N");
                     var toolName = block.Name
                                    ?? (toolNamesByToolUseId.TryGetValue(toolUseId, out var knownToolName) ? knownToolName : "tool");
+                    var success = bool.TryParse(GetMetadata(block, "success"), out var parsedSuccess) ? parsedSuccess : true;
                     _ = _eventDispatcher.PublishAsync(
                         "RunToolResult",
                         new RunToolResultEvent(
@@ -341,6 +377,7 @@ public sealed class RunCoordinator
                             session.Id,
                             toolUseId,
                             toolName,
+                            success,
                             block.Value,
                             message.Timestamp),
                         cancellationToken);
@@ -349,10 +386,7 @@ public sealed class RunCoordinator
             }
         }
 
-        var hasRenderableText = message.ContentBlocks.Any(static block =>
-            block.Kind == MessageContentKind.Text ||
-            block.Kind == MessageContentKind.ToolResult);
-        if (!hasRenderableText)
+        if (!DesktopContractMapper.ShouldSurfaceInDesktopThread(message))
         {
             return Task.CompletedTask;
         }
@@ -362,12 +396,7 @@ public sealed class RunCoordinator
             new RunMessageCompletedEvent(
                 runId,
                 session.Id,
-                new ThreadMessageDto(
-                    message.Id,
-                    session.Id,
-                    message.Role.ToString().ToLowerInvariant(),
-                    message.Content,
-                    message.Timestamp),
+                DesktopContractMapper.MapThreadMessage(session.Id, message),
                 message.Timestamp),
             cancellationToken);
     }

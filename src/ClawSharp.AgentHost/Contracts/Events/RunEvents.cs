@@ -35,6 +35,7 @@ public sealed record RunToolResultEvent(
     string ThreadId,
     string ToolUseId,
     string ToolName,
+    bool Success,
     string Content,
     DateTimeOffset Timestamp);
 

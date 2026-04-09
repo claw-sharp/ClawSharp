@@ -4,19 +4,24 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { cn } from '@/lib/utils';
 import {
   Send, Square, Bot, User, FileCode,
-  CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive,
+  CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
 } from 'lucide-react';
 import type { Message, ToolProgressEvent } from '@/types';
 
 export const ThreadView = () => {
   const {
-    selectedProjectId, selectedThreadId, projects, threads, messages, run, connection,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread,
+    selectedProjectId, selectedThreadId, projects, threads, messages, inboxItems, run, connection, settings,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
   const thread = threads.find(t => t.id === selectedThreadId);
   const threadMessages = messages[selectedThreadId] || [];
+  const pendingApprovals = thread
+    ? inboxItems.filter((item) => item.approvalId && item.threadId === thread.id)
+    : [];
+  const isBrowserPreview = settings.settingsIssues.some((issue) =>
+    issue.includes('Browser preview uses mock AgentHost data.'));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,6 +114,50 @@ export const ThreadView = () => {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {pendingApprovals.map((approval) => (
+          <div
+            key={approval.id}
+            className="rounded-lg border border-status-waiting/30 bg-status-waiting/10 px-3 py-3 text-sm text-foreground"
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-status-waiting/15 text-status-waiting">
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-status-waiting">Approval required</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{approval.summary}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => void resolveApproval(approval.approvalId!, 'approved')}
+                    className="rounded bg-status-completed/15 px-2.5 py-1.5 text-xs font-medium text-status-completed hover:bg-status-completed/20"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => void resolveApproval(approval.approvalId!, 'rejected')}
+                    className="rounded bg-status-failed/15 px-2.5 py-1.5 text-xs font-medium text-status-failed hover:bg-status-failed/20"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => setActiveView('inbox')}
+                    className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Inbox
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {isBrowserPreview && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Browser preview is using mock AgentHost data. Run <code>npm run dev</code> for the real desktop shell, or <code>npm run dev:codex</code> to force the Codex dev path.
+          </div>
+        )}
         {threadMessages.map(msg => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
@@ -124,6 +173,7 @@ export const ThreadView = () => {
       <PromptComposer
         threadId={thread.id}
         isRunning={run.isRunning}
+        isBrowserPreview={isBrowserPreview}
         onSend={sendPrompt}
         onCancel={cancelRun}
       />
@@ -203,11 +253,13 @@ const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
 const PromptComposer = ({
   threadId,
   isRunning,
+  isBrowserPreview,
   onSend,
   onCancel,
 }: {
   threadId: string;
   isRunning: boolean;
+  isBrowserPreview: boolean;
   onSend: (threadId: string, prompt: string) => Promise<void>;
   onCancel: () => Promise<void>;
 }) => {
@@ -216,7 +268,7 @@ const PromptComposer = ({
 
   const submit = () => {
     const prompt = value.trim();
-    if (!prompt || isRunning) {
+    if (!prompt || isRunning || isBrowserPreview) {
       return;
     }
 
@@ -239,13 +291,19 @@ const PromptComposer = ({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isRunning ? 'ClawSharp is working…' : 'Ask ClawSharp to work on this repository.'}
+          placeholder={
+            isBrowserPreview
+              ? 'Browser preview is mock-only. Start the Tauri desktop app to chat for real.'
+              : isRunning
+                ? 'ClawSharp is working…'
+                : 'Ask ClawSharp to work on this repository.'
+          }
           rows={1}
           className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-h-[24px] max-h-[120px]"
-          disabled={isRunning}
+          disabled={isRunning || isBrowserPreview}
         />
         <button
-          disabled={!isRunning && value.trim().length === 0}
+          disabled={isBrowserPreview || (!isRunning && value.trim().length === 0)}
           onClick={() => {
             if (isRunning) {
               void onCancel();
@@ -267,7 +325,9 @@ const PromptComposer = ({
         </button>
       </div>
       <p className="text-[10px] text-muted-foreground mt-1.5">
-        Shift+Enter for newline · {isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}
+        {isBrowserPreview
+          ? 'This browser preview is read-only. Use `npm run dev` or `npm run dev:codex` for the real desktop runtime.'
+          : `Shift+Enter for newline · ${isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}`}
       </p>
     </div>
   );

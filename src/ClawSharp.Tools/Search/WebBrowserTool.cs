@@ -13,8 +13,8 @@ internal sealed class WebBrowserTool : BaseTool
         : base(
             new ToolDescriptor(
                 ToolName,
-                "Browser automation for development tasks such as loading pages, clicking elements, typing text, evaluating JavaScript, reading console logs, and taking screenshots.",
-                SearchHint: "browser automation for dev servers, JS eval, console logs, and screenshots",
+                "Browser automation for development tasks such as loading http(s) pages or local file:// artifacts, clicking elements, typing text, evaluating JavaScript, reading console logs, and taking screenshots.",
+                SearchHint: "browser automation for dev servers or local file URLs, JS eval, console logs, and screenshots",
                 ShouldDefer: true,
                 InputSchema: WebBrowserToolSchemas.InputSchema,
                 OutputSchema: WebBrowserToolSchemas.OutputSchema,
@@ -85,11 +85,27 @@ internal sealed class WebBrowserTool : BaseTool
             throw new InvalidOperationException($"Invalid URL format: {url}");
         }
 
+        if (string.Equals(parsed.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
+        {
+            var localPath = parsed.LocalPath;
+            if (string.IsNullOrWhiteSpace(localPath) || !Path.IsPathRooted(localPath))
+            {
+                throw new InvalidOperationException("Local file URLs must resolve to an absolute path.");
+            }
+
+            if (!File.Exists(localPath))
+            {
+                throw new InvalidOperationException($"Local file does not exist: {localPath}");
+            }
+
+            return;
+        }
+
         if (!string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Invalid URL protocol: must use http:// or https://, got {parsed.Scheme}:");
+                $"Invalid URL protocol: must use http://, https://, or file://, got {parsed.Scheme}:");
         }
     }
 

@@ -60,13 +60,8 @@ public static class DesktopContractMapper
         DateTimeOffset lastUpdatedAt)
     {
         var messages = session.Messages
-            .Select(
-                message => new ThreadMessageDto(
-                    message.Id,
-                    session.Id,
-                    message.Role.ToString().ToLowerInvariant(),
-                    message.Content,
-                    message.Timestamp))
+            .Where(ShouldSurfaceInDesktopThread)
+            .Select(message => MapThreadMessage(session.Id, message))
             .ToArray();
 
         var thread = new ThreadSummaryDto(
@@ -85,6 +80,27 @@ public static class DesktopContractMapper
                 BaseCommit: null));
 
         return new ThreadDetailDto(thread, messages);
+    }
+
+    public static ThreadMessageDto MapThreadMessage(string threadId, ChatMessage message)
+    {
+        return new ThreadMessageDto(
+            message.Id,
+            threadId,
+            message.Role.ToString().ToLowerInvariant(),
+            message.Content,
+            message.Timestamp);
+    }
+
+    public static bool ShouldSurfaceInDesktopThread(ChatMessage message)
+    {
+        return message.Role switch
+        {
+            MessageRole.User => message.ContentBlocks.Any(static block => block.Kind == MessageContentKind.Text),
+            MessageRole.Assistant or MessageRole.System or MessageRole.Tool =>
+                message.ContentBlocks.Any(static block => block.Kind == MessageContentKind.Text),
+            _ => false
+        };
     }
 
     public static string CreateProjectId(string projectPath)

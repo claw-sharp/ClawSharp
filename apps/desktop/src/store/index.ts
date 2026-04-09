@@ -596,11 +596,37 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   resolveApproval: async (approvalId, decision) => {
     try {
+      const existingItem = get().inboxItems.find((item) => item.approvalId === approvalId);
+      const approvalThreadId = existingItem?.threadId ?? get().selectedThreadId ?? null;
       await agentHostClient.resolveApproval(approvalId, decision);
-      const selectedThreadId = get().selectedThreadId || null;
-      const approvalsResponse = await agentHostClient.listPendingApprovals(selectedThreadId);
+      const approvalsResponse = await agentHostClient.listPendingApprovals(approvalThreadId);
+      const hasPendingApprovals = approvalsResponse.approvals.length > 0;
       set((state) => ({
-        inboxItems: mapApprovalInboxItems(approvalsResponse.approvals, state.selectedProjectId, selectedThreadId),
+        inboxItems: mapApprovalInboxItems(approvalsResponse.approvals, state.selectedProjectId, approvalThreadId),
+        threads: approvalThreadId
+          ? state.threads.map((thread) =>
+              thread.id === approvalThreadId && thread.status === 'waiting_approval'
+                ? {
+                    ...thread,
+                    status: hasPendingApprovals
+                      ? 'waiting_approval'
+                      : state.run.activeThreadId === approvalThreadId && state.run.isRunning
+                        ? 'running'
+                        : 'idle',
+                  }
+                : thread)
+          : state.threads,
+        run: approvalThreadId && state.run.activeThreadId === approvalThreadId
+          ? {
+              ...state.run,
+              pendingApproval: hasPendingApprovals,
+              progressLabel: hasPendingApprovals
+                ? 'Waiting for approval...'
+                : decision === 'approved'
+                  ? 'Approval submitted...'
+                  : 'Approval rejected...',
+            }
+          : state.run,
       }));
     } catch (error) {
       set((state) => ({
@@ -1089,6 +1115,8 @@ function handleRunTextDelta(
         };
 
     return {
+      threads: state.threads.map((thread) =>
+        thread.id === payload.threadId ? { ...thread, status: 'running', lastUpdated: payload.timestamp } : thread),
       messages: {
         ...state.messages,
         [payload.threadId]: upsertMessage(currentMessages, nextMessage),
@@ -1135,6 +1163,8 @@ function handleRunToolProgress(
     const existing = currentMessages.find((message) => message.id === messageId);
 
     return {
+      threads: state.threads.map((thread) =>
+        thread.id === payload.threadId ? { ...thread, status: 'running', lastUpdated: payload.timestamp } : thread),
       messages: existing
         ? {
             ...state.messages,
@@ -1171,29 +1201,31 @@ function handleRunToolResult(
 ) {
   set((state) => {
     const progress = state.run.activeRunId === payload.runId
-      ? state.run.toolProgress.map((entry) =>
-          entry.id === payload.toolUseId
-            ? {
-                ...entry,
-                completed: true,
-                detail: payload.content,
-              }
-            : entry)
+      ? payload.success
+        ? state.run.toolProgress.map((entry) =>
+            entry.id === payload.toolUseId
+              ? {
+                  ...entry,
+                  completed: true,
+                  detail: payload.content,
+                }
+              : entry)
+        : state.run.toolProgress.filter((entry) => entry.id !== payload.toolUseId)
       : state.run.toolProgress;
     return {
       logs: appendLogEntry(state.logs, payload.threadId, {
         id: `run-tool-result-${payload.toolUseId}-${payload.timestamp}`,
         threadId: payload.threadId,
         timestamp: payload.timestamp,
-        level: 'info',
+        level: payload.success ? 'info' : 'warn',
         stage: payload.toolName,
-        message: `${payload.toolName} completed`,
+        message: payload.success ? `${payload.toolName} completed` : `${payload.toolName} failed`,
       }),
       run: state.run.activeRunId === payload.runId
         ? {
             ...state.run,
             toolProgress: progress,
-            progressLabel: `${payload.toolName} completed`,
+            progressLabel: payload.success ? `${payload.toolName} completed` : state.run.progressLabel,
           }
         : state.run,
     };
@@ -1315,6 +1347,10 @@ function handleApprovalRequested(
       inboxItems: state.inboxItems.some((item) => item.id === nextInboxItem.id)
         ? state.inboxItems
         : [nextInboxItem, ...state.inboxItems],
+      threads: threadId
+        ? state.threads.map((thread) =>
+            thread.id === threadId ? { ...thread, status: 'waiting_approval', lastUpdated: payload.createdAt } : thread)
+        : state.threads,
       run: {
         ...state.run,
         isRunning: true,

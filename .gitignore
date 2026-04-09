@@ -3,6 +3,7 @@ bin/
 obj/
 .vs/
 artifacts/
+.tmp/
 .env
 local/
 memory/
