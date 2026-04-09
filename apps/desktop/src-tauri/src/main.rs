@@ -96,13 +96,6 @@ async fn agent_host_request(
     }
 }
 
-#[tauri::command]
-fn pick_project_directory() -> Option<String> {
-    rfd::FileDialog::new()
-        .pick_folder()
-        .map(|path| path.to_string_lossy().into_owned())
-}
-
 impl AgentHostState {
     async fn send_request(
         &self,
@@ -389,8 +382,9 @@ fn current_rid_folder() -> &'static str {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(AgentHostState::default())
-        .invoke_handler(tauri::generate_handler![agent_host_request, pick_project_directory])
+        .invoke_handler(tauri::generate_handler![agent_host_request])
         .run(tauri::generate_context!())
         .expect("error while running ClawSharp desktop");
 }

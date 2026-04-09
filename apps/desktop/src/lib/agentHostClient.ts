@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   subscribeAgentHostEvents,
   subscribeAgentHostState,
@@ -116,7 +117,13 @@ class AgentHostClient {
   }
 
   async pickProjectDirectory(): Promise<string | null> {
-    return await invoke<string | null>('pick_project_directory');
+    const selection = await open({
+      directory: true,
+      multiple: false,
+      title: 'Open Project',
+    });
+
+    return typeof selection === 'string' ? selection : null;
   }
 
   async request<TCommand extends keyof AgentHostCommandMap>(

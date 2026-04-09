@@ -279,4 +279,15 @@ describe('useAppStore', () => {
     expect(state.run.activeRunId).toBe('run-1');
     expect(state.run.isRunning).toBe(true);
   });
+
+  it('preserves string startup failures during initialize', async () => {
+    mockClient.connect.mockRejectedValue('Failed to start AgentHost using dotnet: program not found');
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    const state = useAppStore.getState();
+    expect(state.connection.statusLabel).toBe('Connection failed');
+    expect(state.connection.errorMessage).toBe('Failed to start AgentHost using dotnet: program not found');
+  });
 });

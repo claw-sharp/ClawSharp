@@ -1,0 +1,32 @@
+{
+  "name": "ClawSharp",
+  "source": "assets/source/clawsharp-brand-guidelines.png",
+  "colors": {
+    "darkSurface": "#212121",
+    "primaryTeal": "#00E5FF",
+    "accentGray": "#CCCCCC"
+  },
+  "assets": {
+    "logos": {
+      "dark": "assets/logos/logo-dark.png",
+      "light": "assets/logos/logo-light.png",
+      "markDark": "assets/logos/mark-dark.png",
+      "markLight": "assets/logos/mark-light.png",
+      "wordmarkDark": "assets/logos/wordmark-dark.png",
+      "wordmarkLight": "assets/logos/wordmark-light.png"
+    },
+    "favicons": {
+      "dark512": "assets/favicons/favicon-dark-512.png",
+      "dark32": "assets/favicons/favicon-dark-32.png",
+      "light512": "assets/favicons/favicon-light-512.png",
+      "light32": "assets/favicons/favicon-light-32.png"
+    },
+    "branding": {
+      "websiteHeaderLight": "assets/branding/website-header-light.png",
+      "terminalUiDark": "assets/branding/terminal-ui-dark.png",
+      "mobileAppIcon": "assets/branding/mobile-app-icon.png",
+      "colorPaletteDarkSurface": "assets/branding/color-palette-dark-surface.png",
+      "colorPaletteTealGray": "assets/branding/color-palette-teal-gray.png"
+    }
+  }
+}

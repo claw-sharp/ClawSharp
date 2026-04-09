@@ -182,30 +182,44 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       await agentHostClient.connect();
-      const [recent, providers, settingsResponse] = await Promise.all([
+
+      const [recentResult, providersResult] = await Promise.allSettled([
         agentHostClient.listRecentProjects(),
         agentHostClient.listProviders(),
-        agentHostClient.getSettings(null),
       ]);
+      const recent = recentResult.status === 'fulfilled'
+        ? recentResult.value
+        : { projects: [] };
+      const providers = providersResult.status === 'fulfilled'
+        ? providersResult.value
+        : { providers: [] };
+      const mappedProviders = providers.providers.map(mapProviderOption);
+      const settingsResponse = recent.projects.length > 0
+        ? await agentHostClient.getSettings(recent.projects[0].id).catch(() => null)
+        : null;
       set((state) => ({
         connection: {
           ...state.connection,
           isConnected: true,
           isBootstrapping: false,
+          errorMessage: null,
           statusLabel: recent.projects.length > 0 ? 'Connected' : 'Connected · no project open',
         },
         projects: recent.projects.map(mapProject),
-        settings: mergeRuntimeSettings(
-          state.settings,
-          settingsResponse.settings,
-          providers.providers.map(mapProviderOption),
-        ),
+        settings: settingsResponse
+          ? mergeRuntimeSettings(state.settings, settingsResponse.settings, mappedProviders)
+          : {
+              ...state.settings,
+              availableProviders: mappedProviders,
+            },
       }));
 
-      const approvalsResponse = await agentHostClient.listPendingApprovals(null);
-      set((state) => ({
-        inboxItems: mapApprovalInboxItems(approvalsResponse.approvals, state.selectedProjectId, state.selectedThreadId),
-      }));
+      const approvalsResponse = await agentHostClient.listPendingApprovals(null).catch(() => null);
+      if (approvalsResponse) {
+        set((state) => ({
+          inboxItems: mapApprovalInboxItems(approvalsResponse.approvals, state.selectedProjectId, state.selectedThreadId),
+        }));
+      }
 
       if (recent.projects.length > 0) {
         await get().selectProject(recent.projects[0].id);
@@ -215,7 +229,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         connection: {
           ...state.connection,
           isBootstrapping: false,
-          errorMessage: error instanceof Error ? error.message : 'Failed to initialize desktop runtime.',
+          errorMessage: toErrorMessage(error, 'Failed to initialize desktop runtime.'),
           statusLabel: 'Connection failed',
         },
       }));
@@ -263,9 +277,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       };
     });
 
-    if (openedThreads.length > 0) {
-      await get().selectThread(openedThreads[0].id);
-    }
+    await get().selectProject(openedProject.id);
   },
 
   selectProject: async (id) => {
@@ -891,13 +903,17 @@ function handleAgentHostState(
   set: Parameters<typeof useAppStore.setState>[0],
   event: AgentHostStateEvent,
 ) {
-  set((state) => ({
-    connection: {
-      ...state.connection,
-      isConnected: event.status === 'started' ? true : state.connection.isConnected,
-      errorMessage: event.status === 'error' ? event.detail ?? 'AgentHost error' : state.connection.errorMessage,
-      statusLabel: formatStatusLabel(event.status),
-    },
+      set((state) => ({
+        connection: {
+          ...state.connection,
+          isConnected: event.status === 'started' ? true : state.connection.isConnected,
+          errorMessage: event.status === 'error'
+            ? event.detail ?? 'AgentHost error'
+            : event.status === 'started'
+              ? null
+              : state.connection.errorMessage,
+          statusLabel: formatStatusLabel(event.status),
+        },
     terminalOutput: event.detail
       ? {
           ...state.terminalOutput,
@@ -922,6 +938,7 @@ function handleAgentHostEvent(
         ...state.connection,
         isConnected: true,
         lastEventAt: event.timestamp,
+        errorMessage: null,
         statusLabel: `${payload.hostName} ${payload.hostVersion}`,
       },
     }));
@@ -1247,4 +1264,23 @@ function mapToolProgressType(stage: string, toolName: string): ToolProgressEvent
   if (normalizedTool.includes('test')) return 'testing';
   if (normalizedTool.includes('read')) return 'reading';
   return 'tool';
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = Reflect.get(error, 'message');
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return fallback;
 }
