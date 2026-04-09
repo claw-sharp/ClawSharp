@@ -24,7 +24,14 @@ public sealed class RecentProjectStore
         {
             var projects = await LoadCoreAsync(cancellationToken);
             projects.RemoveAll(item => string.Equals(item.ProjectId, project.Id, StringComparison.Ordinal));
-            projects.Add(new RecentProjectEntry(project.Id, project.Name, project.Path, project.LastOpenedAt));
+            projects.Add(new RecentProjectEntry(
+                project.Id,
+                project.Name,
+                project.Path,
+                project.LastOpenedAt,
+                project.LastUpdatedAt,
+                project.ThreadCount,
+                project.GitBranch));
             projects.Sort(static (left, right) => right.LastOpenedAt.CompareTo(left.LastOpenedAt));
             await SaveCoreAsync(projects, cancellationToken);
         }
@@ -95,4 +102,7 @@ public sealed record RecentProjectEntry(
     string ProjectId,
     string Name,
     string Path,
-    DateTimeOffset LastOpenedAt);
+    DateTimeOffset LastOpenedAt,
+    DateTimeOffset? LastUpdatedAt = null,
+    int ThreadCount = 0,
+    string? GitBranch = null);

@@ -23,6 +23,19 @@ public static class DesktopContractMapper
             GitBranch: null);
     }
 
+    public static ProjectSummaryDto MapRecentProject(Projects.RecentProjectEntry entry)
+    {
+        var normalizedPath = Path.GetFullPath(entry.Path);
+        return new ProjectSummaryDto(
+            Id: entry.ProjectId,
+            Name: string.IsNullOrWhiteSpace(entry.Name) ? GetProjectName(normalizedPath) : entry.Name,
+            Path: normalizedPath,
+            LastOpenedAt: entry.LastOpenedAt,
+            LastUpdatedAt: entry.LastUpdatedAt,
+            ThreadCount: entry.ThreadCount,
+            GitBranch: entry.GitBranch);
+    }
+
     public static ThreadSummaryDto MapThreadSummary(string projectId, SessionLog log)
     {
         return new ThreadSummaryDto(

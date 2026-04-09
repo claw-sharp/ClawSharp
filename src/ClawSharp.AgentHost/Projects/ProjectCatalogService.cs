@@ -32,14 +32,7 @@ public sealed class ProjectCatalogService
     public async Task<ListRecentProjectsResponse> ListRecentProjectsAsync(CancellationToken cancellationToken = default)
     {
         var entries = await _recentProjectStore.ListAsync(cancellationToken);
-        var projects = new List<ProjectSummaryDto>(entries.Count);
-        foreach (var entry in entries)
-        {
-            var threads = await _threadCatalogService.ListThreadsByPathAsync(entry.Path, cancellationToken);
-            projects.Add(DesktopContractMapper.MapProject(entry.Path, threads, entry.LastOpenedAt));
-        }
-
-        return new ListRecentProjectsResponse(projects);
+        return new ListRecentProjectsResponse(entries.Select(DesktopContractMapper.MapRecentProject).ToArray());
     }
 
     public async Task<string> ResolveProjectPathAsync(string projectId, CancellationToken cancellationToken = default)

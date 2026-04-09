@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { agentHostClient } from '@/lib/agentHostClient';
+import { logToDesktop } from '@/lib/desktopLogger';
 import type {
   AgentHostChangedFile,
   AgentHostDiagnostics,
@@ -193,25 +194,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const providers = providersResult.status === 'fulfilled'
         ? providersResult.value
         : { providers: [] };
+      const recentProjects = recent.projects.map(mapProject);
       const mappedProviders = providers.providers.map(mapProviderOption);
-      const settingsResponse = recent.projects.length > 0
-        ? await agentHostClient.getSettings(recent.projects[0].id).catch(() => null)
-        : null;
       set((state) => ({
         connection: {
           ...state.connection,
           isConnected: true,
           isBootstrapping: false,
           errorMessage: null,
-          statusLabel: recent.projects.length > 0 ? 'Connected' : 'Connected · no project open',
+          statusLabel: state.selectedProjectId || recentProjects.length > 0
+            ? 'Connected'
+            : 'Connected · no project open',
         },
-        projects: recent.projects.map(mapProject),
-        settings: settingsResponse
-          ? mergeRuntimeSettings(state.settings, settingsResponse.settings, mappedProviders)
-          : {
-              ...state.settings,
-              availableProviders: mappedProviders,
-            },
+        projects: mergeProjectLists(state.projects, recentProjects),
+        settings: {
+          ...state.settings,
+          availableProviders: mappedProviders,
+        },
       }));
 
       const approvalsResponse = await agentHostClient.listPendingApprovals(null).catch(() => null);
@@ -221,7 +220,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }));
       }
 
-      if (recent.projects.length > 0) {
+      if (!get().selectedProjectId && recent.projects.length > 0) {
         await get().selectProject(recent.projects[0].id);
       }
     } catch (error) {
@@ -436,6 +435,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       content: trimmedPrompt,
       timestamp: new Date().toISOString(),
     };
+    const promptLogContext = createPromptLogContext(trimmedPrompt);
+
+    void logToDesktop('info', '[desktop:chat:send-requested]', {
+      projectId,
+      threadId,
+      messageId: optimisticUserMessage.id,
+      ...promptLogContext,
+    });
 
     set((state) => ({
       messages: {
@@ -454,8 +461,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
     }));
 
+    void logToDesktop('debug', '[desktop:chat:send-optimistic-message]', {
+      projectId,
+      threadId,
+      messageId: optimisticUserMessage.id,
+      messageCount: (get().messages[threadId] ?? []).length,
+    });
+
     try {
       const response = await agentHostClient.startRun(projectId, threadId, trimmedPrompt);
+      void logToDesktop('info', '[desktop:chat:send-accepted]', {
+        projectId,
+        threadId,
+        messageId: optimisticUserMessage.id,
+        runId: response.runId,
+        acceptedAt: response.acceptedAt,
+      });
       set((state) => ({
         run: {
           ...state.run,
@@ -464,6 +485,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
         },
       }));
     } catch (error) {
+      void logToDesktop('error', '[desktop:chat:send-failed]', {
+        projectId,
+        threadId,
+        messageId: optimisticUserMessage.id,
+        ...promptLogContext,
+        error: toErrorMessage(error, 'Failed to start run.'),
+      });
       set((state) => ({
         run: {
           ...emptyRunState,
@@ -870,9 +898,35 @@ function mapTarget(worktree: AgentHostThreadWorktree): Thread['target'] {
   return 'local';
 }
 
+function createPromptLogContext(prompt: string): {
+  promptLength: number;
+  promptLines: number;
+  promptPreview: string;
+} {
+  const compactPrompt = prompt.replace(/\s+/g, ' ').trim();
+  return {
+    promptLength: prompt.length,
+    promptLines: prompt.split(/\r?\n/).length,
+    promptPreview: compactPrompt.length <= 160 ? compactPrompt : `${compactPrompt.slice(0, 157)}...`,
+  };
+}
+
 function upsertProject(projects: Project[], nextProject: Project): Project[] {
   const remaining = projects.filter((project) => project.id !== nextProject.id);
   return [nextProject, ...remaining];
+}
+
+function mergeProjectLists(currentProjects: Project[], incomingProjects: Project[]): Project[] {
+  const incomingById = new Map(incomingProjects.map((project) => [project.id, project]));
+  const mergedProjects = currentProjects.map((project) => incomingById.get(project.id) ?? project);
+
+  for (const project of incomingProjects) {
+    if (!mergedProjects.some((existing) => existing.id === project.id)) {
+      mergedProjects.push(project);
+    }
+  }
+
+  return mergedProjects;
 }
 
 function mergeThreads(currentThreads: Thread[], projectId: string, nextThreads: Thread[]): Thread[] {

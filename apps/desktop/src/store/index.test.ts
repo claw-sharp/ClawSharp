@@ -193,6 +193,7 @@ describe('useAppStore', () => {
     expect(state.projects[0]?.name).toBe('ClawSharp');
     expect(state.messages['thread-1'][0]?.content).toBe('Hello');
     expect(state.connection.isConnected).toBe(true);
+    expect(mockClient.getSettings).toHaveBeenCalledTimes(1);
   });
 
   it('sends a real prompt request through the store and marks the run active', async () => {
@@ -280,6 +281,71 @@ describe('useAppStore', () => {
     expect(state.run.isRunning).toBe(true);
   });
 
+  it('publishes recent projects before the first project finishes hydrating', async () => {
+    let resolveListThreads: ((value: {
+      project: {
+        id: string;
+        name: string;
+        path: string;
+        lastOpenedAt: string;
+        lastUpdatedAt: string;
+        threadCount: number;
+        gitBranch: string | null;
+      };
+      threads: never[];
+    }) => void) | undefined;
+
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+      ],
+    });
+    mockClient.listThreads.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveListThreads = resolve;
+        }),
+    );
+
+    const { useAppStore } = await import('@/store');
+    const initializePromise = useAppStore.getState().initialize();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let state = useAppStore.getState();
+    expect(state.projects.map((project) => project.id)).toEqual(['proj-1']);
+    expect(state.connection.isBootstrapping).toBe(false);
+    expect(state.selectedProjectId).toBe('');
+
+    resolveListThreads?.({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      threads: [],
+    });
+
+    await initializePromise;
+
+    state = useAppStore.getState();
+    expect(state.projects[0]?.id).toBe('proj-1');
+    expect(state.selectedProjectId).toBe('proj-1');
+  });
+
   it('preserves string startup failures during initialize', async () => {
     mockClient.connect.mockRejectedValue('Failed to start AgentHost using dotnet: program not found');
 
@@ -289,5 +355,89 @@ describe('useAppStore', () => {
     const state = useAppStore.getState();
     expect(state.connection.statusLabel).toBe('Connection failed');
     expect(state.connection.errorMessage).toBe('Failed to start AgentHost using dotnet: program not found');
+  });
+
+  it('does not overwrite a newly opened project when bootstrap recents resolve late', async () => {
+    let resolveRecentProjects: ((value: {
+      projects: Array<{
+        id: string;
+        name: string;
+        path: string;
+        lastOpenedAt: string;
+        lastUpdatedAt: string;
+        threadCount: number;
+        gitBranch: string | null;
+      }>;
+    }) => void) | undefined;
+
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRecentProjects = resolve;
+        }),
+    );
+    mockClient.openProject.mockResolvedValue({
+      project: {
+        id: 'proj-open',
+        name: 'Opened Project',
+        path: '/opened',
+        lastOpenedAt: '2026-04-08T10:02:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:02:00.000Z',
+        threadCount: 0,
+        gitBranch: 'main',
+      },
+      threads: [],
+    });
+    mockClient.listThreads.mockImplementation(async (projectId: string) => ({
+      project: projectId === 'proj-open'
+        ? {
+            id: 'proj-open',
+            name: 'Opened Project',
+            path: '/opened',
+            lastOpenedAt: '2026-04-08T10:02:00.000Z',
+            lastUpdatedAt: '2026-04-08T10:02:00.000Z',
+            threadCount: 0,
+            gitBranch: 'main',
+          }
+        : {
+            id: 'proj-recent',
+            name: 'Recent Project',
+            path: '/recent',
+            lastOpenedAt: '2026-04-08T10:00:00.000Z',
+            lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+            threadCount: 0,
+            gitBranch: 'main',
+          },
+      threads: [],
+    }));
+
+    const { useAppStore } = await import('@/store');
+    const initializePromise = useAppStore.getState().initialize();
+
+    await Promise.resolve();
+    await useAppStore.getState().openProjectPath('/opened');
+
+    resolveRecentProjects?.({
+      projects: [
+        {
+          id: 'proj-recent',
+          name: 'Recent Project',
+          path: '/recent',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 0,
+          gitBranch: 'main',
+        },
+      ],
+    });
+
+    await initializePromise;
+
+    const state = useAppStore.getState();
+    expect(state.selectedProjectId).toBe('proj-open');
+    expect(state.projects.map((project) => project.id)).toEqual(['proj-open', 'proj-recent']);
+    expect(mockClient.listThreads).toHaveBeenCalledWith('proj-open');
+    expect(mockClient.listThreads).not.toHaveBeenCalledWith('proj-recent');
   });
 });
