@@ -335,14 +335,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     try {
-      const [response, changedFilesResponse, diagnosticsResponse, approvalsResponse] = await Promise.all([
+      const [response, changedFilesResponse, diagnosticsResponse, approvalsResponse] = await Promise.allSettled([
         agentHostClient.getThread(projectId, id),
         agentHostClient.listChangedFiles(projectId, id),
         agentHostClient.listDiagnostics(projectId, id),
         agentHostClient.listPendingApprovals(id),
       ]);
-      const detail = response.thread;
-      const changedFiles = changedFilesResponse.files.map(mapChangedFile);
+
+      if (response.status !== 'fulfilled') {
+        throw response.reason;
+      }
+
+      const detail = response.value.thread;
+      const changedFiles = changedFilesResponse.status === 'fulfilled'
+        ? changedFilesResponse.value.files.map(mapChangedFile)
+        : [];
+      const diagnostics = diagnosticsResponse.status === 'fulfilled'
+        ? mapDiagnosticsRecord(diagnosticsResponse.value.diagnostics)
+        : null;
+      const inboxItems = approvalsResponse.status === 'fulfilled'
+        ? mapApprovalInboxItems(approvalsResponse.value.approvals, projectId, id)
+        : get().inboxItems;
+
+      if (changedFilesResponse.status !== 'fulfilled') {
+        void logToDesktop('warn', '[desktop:thread:changed-files-load-failed]', {
+          projectId,
+          threadId: id,
+          error: toErrorMessage(changedFilesResponse.reason, 'Failed to load changed files.'),
+        });
+      }
+
+      if (diagnosticsResponse.status !== 'fulfilled') {
+        void logToDesktop('warn', '[desktop:thread:diagnostics-load-failed]', {
+          projectId,
+          threadId: id,
+          error: toErrorMessage(diagnosticsResponse.reason, 'Failed to load diagnostics.'),
+        });
+      }
+
+      if (approvalsResponse.status !== 'fulfilled') {
+        void logToDesktop('warn', '[desktop:thread:approvals-load-failed]', {
+          projectId,
+          threadId: id,
+          error: toErrorMessage(approvalsResponse.reason, 'Failed to load approvals.'),
+        });
+      }
+
       set((state) => ({
         selectedThreadId: id,
         messages: {
@@ -360,11 +398,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...state.changedFiles,
           [id]: changedFiles,
         },
-        diagnostics: {
-          ...state.diagnostics,
-          [id]: mapDiagnosticsRecord(diagnosticsResponse.diagnostics),
-        },
-        inboxItems: mapApprovalInboxItems(approvalsResponse.approvals, projectId, id),
+        diagnostics: diagnostics
+          ? {
+              ...state.diagnostics,
+              [id]: diagnostics,
+            }
+          : state.diagnostics,
+        inboxItems,
         ui: { ...state.ui, activeView: 'threads', selectedChangedFile: null },
         connection: {
           ...state.connection,
@@ -375,7 +415,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set((state) => ({
         connection: {
           ...state.connection,
-          errorMessage: error instanceof Error ? error.message : 'Failed to load thread.',
+          errorMessage: toErrorMessage(error, 'Failed to load thread.'),
           statusLabel: 'Thread load failed',
         },
       }));
