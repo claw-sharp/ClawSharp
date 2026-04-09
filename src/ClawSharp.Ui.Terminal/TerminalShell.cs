@@ -1,6 +1,7 @@
 // TS parity status: queued task-notification drain is ported for the current REPL loop; full 1:1 parity still depends on the real REPL state model and queue processor.
 using ClawSharp.Core;
 using ClawSharp.Query;
+using ClawSharp.Runtime;
 using ClawSharp.Tools;
 using System.Text;
 using System.Threading;
@@ -21,6 +22,7 @@ public sealed class TerminalShell
     private readonly ITranscriptStore _transcriptStore;
     private readonly TranscriptMessageRenderer _transcriptMessageRenderer;
     private readonly TerminalFooterRenderer _terminalFooterRenderer;
+    private readonly ConversationTurnExecutor _turnExecutor;
     private readonly IClawSharpAppStateStore _appStateStore;
     private readonly PromptInputReader _promptInputReader;
     private readonly IInteractionService _interactionService;
@@ -69,6 +71,11 @@ public sealed class TerminalShell
         _transcriptStore = transcriptStore;
         _transcriptMessageRenderer = transcriptMessageRenderer ?? new TranscriptMessageRenderer();
         _terminalFooterRenderer = terminalFooterRenderer ?? new TerminalFooterRenderer();
+        _turnExecutor = new ConversationTurnExecutor(
+            queryEngine,
+            transcriptStore,
+            toolRegistry,
+            modelTurnContextProvider);
         _appStateStore = appStateStore ?? new ClawSharpAppStateStore(
             ClawSharpAppState.CreateDefault(
                 Directory.GetCurrentDirectory(),
@@ -406,18 +413,16 @@ public sealed class TerminalShell
         TextWriter output,
         CancellationToken cancellationToken)
     {
-        var streamedChunks = new StringBuilder();
         var renderedToolResultAny = false;
         var toolNamesByToolUseId = new Dictionary<string, string>(StringComparer.Ordinal);
         var progressMessagesByParentToolUseId = new Dictionary<string, List<ToolProgressUpdate>>(StringComparer.Ordinal);
         var renderedProgressByParentToolUseId = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var queryResult = await _queryEngine.RunTurnAsync(
+        var execution = await _turnExecutor.ExecuteAsync(
             session,
-            request,
+            request.UserInput,
             (chunk, _) =>
             {
-                streamedChunks.Append(chunk);
                 return Task.CompletedTask;
             },
             async (message, _) =>
@@ -463,30 +468,17 @@ public sealed class TerminalShell
                 renderedToolResultAny = true;
                 await output.WriteLineAsync(renderedResult.Content);
             },
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (renderedToolResultAny)
         {
             return;
         }
 
-        if (streamedChunks.Length > 0)
+        if (execution.FinalAssistantMessage is not null)
         {
             await WriteTranscriptMessageAsync(
-                new ChatMessage(
-                    Guid.NewGuid().ToString("N"),
-                    MessageRole.Assistant,
-                    [new MessageContentBlock(MessageContentKind.Text, streamedChunks.ToString())],
-                    DateTimeOffset.UtcNow),
-                output,
-                previousRole: null);
-            return;
-        }
-
-        if (queryResult.AssistantMessage is not null)
-        {
-            await WriteTranscriptMessageAsync(
-                queryResult.AssistantMessage,
+                execution.FinalAssistantMessage,
                 output,
                 previousRole: null);
         }

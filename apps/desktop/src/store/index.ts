@@ -1007,6 +1007,9 @@ function handleAgentHostEvent(
   }));
 
   switch (event.event) {
+    case 'ApprovalRequested':
+      handleApprovalRequested(set, event.payload as AgentHostApprovalRequest);
+      break;
     case 'RunStarted':
       handleRunStarted(set, event.payload as RunStartedEvent);
       break;
@@ -1103,6 +1106,7 @@ function handleRunTextDelta(
             ...state.run,
             isRunning: true,
             isStreaming: true,
+            pendingApproval: false,
           }
         : state.run,
     };
@@ -1154,6 +1158,7 @@ function handleRunToolProgress(
             isRunning: true,
             toolProgress: progress,
             progressLabel: payload.label,
+            pendingApproval: false,
           }
         : state.run,
     };
@@ -1285,6 +1290,50 @@ function handleRunFailed(
       statusLabel: 'Run failed',
     },
   }));
+}
+
+function handleApprovalRequested(
+  set: Parameters<typeof useAppStore.setState>[0],
+  payload: AgentHostApprovalRequest,
+) {
+  set((state) => {
+    const projectId = state.selectedProjectId;
+    const threadId = state.run.activeThreadId || state.selectedThreadId || undefined;
+    const nextInboxItem = {
+      id: `approval-${payload.id}`,
+      type: 'review' as const,
+      title: 'Approval required',
+      summary: payload.action,
+      timestamp: payload.createdAt,
+      read: false,
+      projectId,
+      threadId,
+      approvalId: payload.id,
+    };
+
+    return {
+      inboxItems: state.inboxItems.some((item) => item.id === nextInboxItem.id)
+        ? state.inboxItems
+        : [nextInboxItem, ...state.inboxItems],
+      run: {
+        ...state.run,
+        isRunning: true,
+        isStreaming: true,
+        pendingApproval: true,
+        progressLabel: 'Waiting for approval...',
+      },
+      logs: threadId
+        ? appendLogEntry(state.logs, threadId, {
+            id: `approval-${payload.id}`,
+            threadId,
+            timestamp: payload.createdAt,
+            level: 'warn',
+            stage: 'ApprovalRequested',
+            message: payload.action,
+          })
+        : state.logs,
+    };
+  });
 }
 
 function upsertMessage(messages: Message[], nextMessage: Message, replaceId?: string): Message[] {

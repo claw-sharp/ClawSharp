@@ -2,21 +2,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClawSharp.Core\ClawSharp.Core.csproj" />
-    <ProjectReference Include="..\ClawSharp.Infrastructure\ClawSharp.Infrastructure.csproj" />
     <ProjectReference Include="..\ClawSharp.Query\ClawSharp.Query.csproj" />
-    <ProjectReference Include="..\ClawSharp.Runtime\ClawSharp.Runtime.csproj" />
     <ProjectReference Include="..\ClawSharp.Tools\ClawSharp.Tools.csproj" />
-    <ProjectReference Include="..\ClawSharp.Tasks\ClawSharp.Tasks.csproj" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>clawsharp-agenthost</AssemblyName>
-    <RootNamespace>ClawSharp.AgentHost</RootNamespace>
-  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Tasks.Core" Version="18.4.0" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 
 </Project>

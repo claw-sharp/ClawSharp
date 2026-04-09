@@ -9,6 +9,7 @@ using ClawSharp.AgentHost.Runs;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.AgentHost.Sessions;
 using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 
 Console.InputEncoding = System.Text.Encoding.UTF8;
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -19,8 +20,10 @@ try
 {
     var runtimeState = new HostRuntimeState();
     var eventDispatcher = new AgentHostEventDispatcher();
+    var permissionPrompter = new AgentHostApprovalPermissionPrompter(eventDispatcher);
+    var factoryOptions = new ClawSharpApplicationFactoryOptions(permissionPrompter);
     var recentProjectStore = new RecentProjectStore();
-    var applicationRegistry = new WorkspaceApplicationRegistry();
+    var applicationRegistry = new WorkspaceApplicationRegistry(factoryOptions);
     var threadStateStore = new ThreadStateStore();
     var threadCatalog = new ThreadCatalogService(applicationRegistry, recentProjectStore, threadStateStore);
     var projectCatalog = new ProjectCatalogService(recentProjectStore, threadCatalog);

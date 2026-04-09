@@ -7,8 +7,14 @@ namespace ClawSharp.AgentHost.Services;
 
 public sealed class WorkspaceApplicationRegistry
 {
+    private readonly ClawSharpApplicationFactoryOptions? _factoryOptions;
     private readonly ConcurrentDictionary<string, Lazy<Task<ClawSharpApplication>>> _applications =
         new(StringComparer.Ordinal);
+
+    public WorkspaceApplicationRegistry(ClawSharpApplicationFactoryOptions? factoryOptions = null)
+    {
+        _factoryOptions = factoryOptions;
+    }
 
     public async Task<ClawSharpApplication> GetOrCreateAsync(
         string workspaceRoot,
@@ -22,8 +28,8 @@ public sealed class WorkspaceApplicationRegistry
 
         var lazy = _applications.GetOrAdd(
             normalizedWorkspaceRoot,
-            static path => new Lazy<Task<ClawSharpApplication>>(
-                () => ClawSharpApplicationFactory.CreateForWorkspaceAsync(path),
+            path => new Lazy<Task<ClawSharpApplication>>(
+                () => ClawSharpApplicationFactory.CreateForWorkspaceAsync(path, CancellationToken.None, _factoryOptions),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         var createdNewLazy = !cacheHit && ReferenceEquals(_applications[normalizedWorkspaceRoot], lazy);
 

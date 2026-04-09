@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ClawSharp.Core\ClawSharp.Core.csproj" />
     <ProjectReference Include="..\ClawSharp.Query\ClawSharp.Query.csproj" />
+    <ProjectReference Include="..\ClawSharp.Runtime\ClawSharp.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>

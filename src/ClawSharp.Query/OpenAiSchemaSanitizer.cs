@@ -123,6 +123,13 @@ internal static class OpenAiSchemaSanitizer
         return record;
     }
 
+    public static JsonObject EnforceOpenAiStrictSchema(JsonNode? schema)
+    {
+        var record = SanitizeForOpenAiCompat(schema);
+        EnforceOpenAiStrictSchemaCore(record);
+        return record;
+    }
+
     private static JsonNode? StripIncompatibleKeywords(JsonNode? node)
     {
         return node switch
@@ -388,5 +395,144 @@ internal static class OpenAiSchemaSanitizer
                schema["additionalProperties"]?.GetValue<bool?>() == false &&
                schema["properties"] is JsonObject properties &&
                properties.Count == 0;
+    }
+
+    private static void EnforceOpenAiStrictSchemaCore(JsonObject record)
+    {
+        if (string.Equals(record["type"]?.GetValue<string>(), "object", StringComparison.Ordinal))
+        {
+            var originalRequired = record["required"] is JsonArray requiredArray
+                ? new HashSet<string>(
+                    requiredArray
+                        .Select(static item => item?.GetValue<string>())
+                        .Where(static item => !string.IsNullOrWhiteSpace(item))
+                        .Cast<string>(),
+                    StringComparer.Ordinal)
+                : [];
+
+            if (record["properties"] is JsonObject properties)
+            {
+                var enforcedProperties = new JsonObject();
+                foreach (var pair in properties.ToList())
+                {
+                    if (pair.Value is null)
+                    {
+                        continue;
+                    }
+
+                    var propertySchema = SanitizeForOpenAiCompat(pair.Value);
+                    EnforceOpenAiStrictSchemaCore(propertySchema);
+
+                    if (!originalRequired.Contains(pair.Key))
+                    {
+                        propertySchema = EnsureNullable(propertySchema);
+                    }
+
+                    enforcedProperties[pair.Key] = propertySchema;
+                }
+
+                record["properties"] = enforcedProperties;
+                record["required"] = new JsonArray(
+                    enforcedProperties
+                        .Select(static pair => JsonValue.Create(pair.Key))
+                        .ToArray());
+            }
+            else
+            {
+                record["required"] = new JsonArray();
+            }
+        }
+
+        if (record["items"] is JsonArray itemArray)
+        {
+            var sanitizedItems = new JsonArray();
+            foreach (var item in itemArray)
+            {
+                if (SanitizeForOpenAiCompat(item) is JsonObject itemSchema)
+                {
+                    EnforceOpenAiStrictSchemaCore(itemSchema);
+                    sanitizedItems.Add(itemSchema);
+                }
+                else
+                {
+                    sanitizedItems.Add(item?.DeepClone());
+                }
+            }
+
+            record["items"] = sanitizedItems;
+        }
+        else if (record["items"] is JsonObject itemSchema)
+        {
+            EnforceOpenAiStrictSchemaCore(itemSchema);
+            record["items"] = itemSchema;
+        }
+
+        foreach (var key in new[] { "anyOf", "oneOf", "allOf" })
+        {
+            if (record[key] is not JsonArray alternatives)
+            {
+                continue;
+            }
+
+            var sanitizedAlternatives = new JsonArray();
+            foreach (var alternative in alternatives)
+            {
+                if (SanitizeForOpenAiCompat(alternative) is JsonObject alternativeSchema)
+                {
+                    EnforceOpenAiStrictSchemaCore(alternativeSchema);
+                    sanitizedAlternatives.Add(alternativeSchema);
+                }
+                else
+                {
+                    sanitizedAlternatives.Add(alternative?.DeepClone());
+                }
+            }
+
+            record[key] = sanitizedAlternatives;
+        }
+    }
+
+    private static JsonObject EnsureNullable(JsonObject schema)
+    {
+        if (AllowsNull(schema))
+        {
+            return schema;
+        }
+
+        return new JsonObject
+        {
+            ["anyOf"] = new JsonArray(
+                schema.DeepClone(),
+                new JsonObject
+                {
+                    ["type"] = "null"
+                })
+        };
+    }
+
+    private static bool AllowsNull(JsonObject schema)
+    {
+        var types = GetJsonSchemaTypes(schema);
+        if (types.Contains("null", StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        foreach (var key in new[] { "anyOf", "oneOf", "allOf" })
+        {
+            if (schema[key] is not JsonArray alternatives)
+            {
+                continue;
+            }
+
+            if (alternatives
+                .OfType<JsonObject>()
+                .Any(AllowsNull))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -648,7 +648,9 @@ public static class QueryModelHttpRequestFactory
         {
             ["name"] = tool.Name,
             ["description"] = tool.Description,
-            ["parameters"] = OpenAiSchemaSanitizer.SanitizeForOpenAiCompat(tool.InputSchema)
+            ["parameters"] = tool.Strict
+                ? OpenAiSchemaSanitizer.EnforceOpenAiStrictSchema(tool.InputSchema)
+                : OpenAiSchemaSanitizer.SanitizeForOpenAiCompat(tool.InputSchema)
         };
         var json = new JsonObject
         {

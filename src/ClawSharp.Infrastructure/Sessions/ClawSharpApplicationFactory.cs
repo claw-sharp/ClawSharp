@@ -14,9 +14,27 @@ public static class ClawSharpApplicationFactory
         return await CreateForWorkspaceAsync(Directory.GetCurrentDirectory(), cancellationToken);
     }
 
+    public static async Task<ClawSharpApplication> CreateDefaultAsync(
+        ClawSharpApplicationFactoryOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return await CreateForWorkspaceAsync(Directory.GetCurrentDirectory(), cancellationToken, options);
+    }
+
     public static async Task<ClawSharpApplication> CreateForWorkspaceAsync(
         string workspaceRoot,
         CancellationToken cancellationToken = default)
+    {
+        return await CreateForWorkspaceAsync(
+            workspaceRoot,
+            cancellationToken,
+            options: null);
+    }
+
+    public static async Task<ClawSharpApplication> CreateForWorkspaceAsync(
+        string workspaceRoot,
+        CancellationToken cancellationToken,
+        ClawSharpApplicationFactoryOptions? options)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         StartupProfiler.Checkpoint("create_default_application_start");
@@ -103,7 +121,7 @@ public static class ClawSharpApplicationFactory
             new EventSinkFileUpdateNotifier(eventSink),
             new DiagnosticTrackingFileUpdateNotifier(diagnosticTrackingService),
             new VscodeSdkFileUpdateNotifier(mcpConfigService, mcpLifecycleManager));
-        var permissionPrompter = new SpectrePermissionPrompter();
+        var permissionPrompter = options?.PermissionPrompter ?? new SpectrePermissionPrompter();
         var postSamplingHookRegistry = new PostSamplingHookRegistry();
         var modelConfigProvider = new EnvironmentQueryModelHttpClientConfigProvider(mcpSecureStorage);
         var authAccountStateProvider = new SecureStorageQueryAuthAccountStateProvider(mcpSecureStorage);
