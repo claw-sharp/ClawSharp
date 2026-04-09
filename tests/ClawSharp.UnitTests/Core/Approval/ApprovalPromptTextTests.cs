@@ -9,7 +9,7 @@ public sealed class ApprovalPromptTextTests
     {
         var message = ApprovalPromptText.CreateToolPermissionRequestMessage("Bash");
 
-        Assert.Equal("Claude requested permissions to use Bash, but you haven't granted it yet.", message);
+        Assert.Equal("ClawSharp to use Bash, but you haven't granted it yet.", message);
     }
 
     [Fact]
@@ -17,7 +17,7 @@ public sealed class ApprovalPromptTextTests
     {
         var message = ApprovalPromptText.CreateReadPermissionRequestMessage("/tmp/file.txt");
 
-        Assert.Equal("Claude requested permissions to read from /tmp/file.txt, but you haven't granted it yet.", message);
+        Assert.Equal("ClawSharp to read from /tmp/file.txt, but you haven't granted it yet.", message);
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public sealed class ApprovalPromptTextTests
     {
         var message = ApprovalPromptText.CreateWritePermissionRequestMessage("/tmp/file.txt");
 
-        Assert.Equal("Claude requested permissions to write to /tmp/file.txt, but you haven't granted it yet.", message);
+        Assert.Equal("ClawSharp to write to /tmp/file.txt, but you haven't granted it yet.", message);
     }
 
     [Theory]

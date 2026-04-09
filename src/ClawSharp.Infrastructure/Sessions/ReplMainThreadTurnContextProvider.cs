@@ -9,6 +9,8 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextProvider
 {
+    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(5);
+    private bool? _gitPresenceHint;
     private readonly string _workspaceRoot;
     private readonly ClawSharpSettings _settings;
     private readonly ToolRegistry? _toolRegistry;
@@ -34,9 +36,17 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     public async Task<QueryModelTurnContext> GetReplMainThreadContextAsync(CancellationToken cancellationToken = default)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] context-build-start workspace={_workspaceRoot}");
         var systemPrompt = await BuildSystemPromptAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] system-prompt-ready sections={systemPrompt.Count}");
         var userContext = await BuildUserContextAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] user-context-ready keys={userContext.Count}");
         var systemContext = await BuildSystemContextAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] system-context-ready keys={systemContext.Count}");
         return new QueryModelTurnContext(
             systemPrompt,
             userContext,
@@ -72,10 +82,20 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<IReadOnlyList<string>> BuildSystemPromptAsync(CancellationToken cancellationToken)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-start workspace={_workspaceRoot}");
         var enabledTools = new HashSet<string>(
             (_toolRegistry?.All ?? Array.Empty<ToolDescriptor>()).Select(static tool => tool.Name),
             StringComparer.Ordinal);
 
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-tools count={enabledTools.Count}");
+        var autoMemorySection = await BuildAutoMemorySectionAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-memory loaded={!string.IsNullOrWhiteSpace(autoMemorySection)}");
+        var envInfoSection = await ComputeSimpleEnvInfoAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-env ready");
         var sections = new List<string?>
         {
             GetSimpleIntroSection(),
@@ -84,8 +104,8 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             GetActionsSection(),
             GetUsingYourToolsSection(enabledTools),
             QueryRequestBuilder.SystemPromptDynamicBoundary,
-            await BuildAutoMemorySectionAsync(cancellationToken),
-            await ComputeSimpleEnvInfoAsync(cancellationToken),
+            autoMemorySection,
+            envInfoSection,
             GetSimpleToneAndStyleSection(),
             GetOutputEfficiencySection()
         };
@@ -98,22 +118,33 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<string?> BuildAutoMemorySectionAsync(CancellationToken cancellationToken)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] auto-memory-start workspace={_workspaceRoot}");
         var settings = _appStateStore?.GetState().Settings ?? _settings;
         if (_memoryStorageService is null || _startupEnvironment is null)
         {
+            ClawSharpTelemetry.LogDebug(
+                "[ReplMainThreadTurnContextProvider] auto-memory-skip reason=missing-services");
             return null;
         }
 
         if (!_memoryStorageService.IsEnabled(_startupEnvironment, settings.Runtime))
         {
+            ClawSharpTelemetry.LogDebug(
+                "[ReplMainThreadTurnContextProvider] auto-memory-skip reason=disabled");
             return null;
         }
 
-        return await _memoryStorageService.LoadMemoryPromptAsync(_workspaceRoot, cancellationToken);
+        var memoryPrompt = await _memoryStorageService.LoadMemoryPromptAsync(_workspaceRoot, cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] auto-memory-complete loaded={!string.IsNullOrWhiteSpace(memoryPrompt)}");
+        return memoryPrompt;
     }
 
     private async Task<string> ComputeSimpleEnvInfoAsync(CancellationToken cancellationToken)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] env-info-start workspace={_workspaceRoot}");
         var settings = _appStateStore?.GetState().Settings ?? _settings;
         var resolvedModel = MainLoopModelResolver.Resolve(settings.Runtime.Model);
         var modelDescription = $"You are powered by the model named {MainLoopModelResolver.RenderSetting(resolvedModel)}. The exact model ID is {resolvedModel}.";
@@ -141,6 +172,13 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<bool> IsGitRepositoryAsync(CancellationToken cancellationToken)
     {
+        if (!MayBeInsideGitRepository())
+        {
+            ClawSharpTelemetry.LogDebug(
+                $"[ReplMainThreadTurnContextProvider] git-presence-fast-skip workspace={_workspaceRoot}");
+            return false;
+        }
+
         var result = await RunProcessAsync(
             "git",
             "rev-parse --is-inside-work-tree",
@@ -151,8 +189,12 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 
     private async Task<string?> TryBuildGitStatusSnapshotAsync(CancellationToken cancellationToken)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] git-status-start workspace={_workspaceRoot}");
         if (!await IsGitRepositoryAsync(cancellationToken))
         {
+            ClawSharpTelemetry.LogDebug(
+                "[ReplMainThreadTurnContextProvider] git-status-skip reason=not-git");
             return null;
         }
 
@@ -373,6 +415,9 @@ Focus text output on:
         string arguments,
         CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] process-start file={fileName} args={arguments} workspace={_workspaceRoot}");
         var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
@@ -389,12 +434,73 @@ Focus text output on:
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(ProcessTimeout);
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            ClawSharpTelemetry.LogDebug(
+                $"[ReplMainThreadTurnContextProvider] process-timeout file={fileName} args={arguments} timeoutMs={(int)ProcessTimeout.TotalMilliseconds}",
+                DebugLogLevel.Warn);
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+
+            return new ProcessResult(
+                -1,
+                await stdoutTask,
+                await stderrTask);
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] process-complete file={fileName} args={arguments} exitCode={process.ExitCode} elapsedMs={stopwatch.ElapsedMilliseconds}");
 
         return new ProcessResult(
             process.ExitCode,
-            await stdoutTask,
-            await stderrTask);
+            stdout,
+            stderr);
+    }
+
+    private bool MayBeInsideGitRepository()
+    {
+        if (_gitPresenceHint.HasValue)
+        {
+            return _gitPresenceHint.Value;
+        }
+
+        try
+        {
+            var directory = new DirectoryInfo(_workspaceRoot);
+            while (directory is not null)
+            {
+                var dotGitPath = Path.Combine(directory.FullName, ".git");
+                if (Directory.Exists(dotGitPath) || File.Exists(dotGitPath))
+                {
+                    _gitPresenceHint = true;
+                    return true;
+                }
+
+                directory = directory.Parent;
+            }
+        }
+        catch
+        {
+        }
+
+        _gitPresenceHint = false;
+        return false;
     }
 
     private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);

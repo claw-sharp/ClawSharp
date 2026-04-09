@@ -322,6 +322,41 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Shapes_StructuredOutput_For_OpenAi_With_Explicit_Empty_Properties()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var structuredOutput = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "StructuredOutput", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-structuredoutput",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(structuredOutput.Name, structuredOutput.Description, structuredOutput.InputSchema, Strict: structuredOutput.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var openAiRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                "https://api.openai.test/v1",
+                ApiKey: "openai-key",
+                TransportKind: ModelTransportKind.OpenAiChatCompletions,
+                ProviderKind: ApiProviderKind.OpenAi),
+            request);
+
+        var openAiBody = JsonNode.Parse(await openAiRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = openAiBody["tools"]![0]!["function"]!["parameters"]!.AsObject();
+
+        Assert.Equal("object", parameters["type"]?.GetValue<string>());
+        Assert.NotNull(parameters["properties"]);
+        Assert.Empty(parameters["properties"]!.AsObject());
+        Assert.Equal(true, parameters["additionalProperties"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public void CreateRequestBody_Parses_Tool_Use_Input_And_Tool_Result_Structured_Output()
     {
         var body = QueryModelHttpRequestFactory.CreateRequestBody(CreateStreamingRequest());

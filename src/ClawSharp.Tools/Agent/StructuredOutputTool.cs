@@ -8,6 +8,7 @@ internal sealed class StructuredOutputTool : BaseTool
     private static readonly JsonObject StaticInputSchema = (JsonObject)JsonNode.Parse("""
         {
           "type": "object",
+          "properties": {},
           "additionalProperties": true
         }
         """)!;

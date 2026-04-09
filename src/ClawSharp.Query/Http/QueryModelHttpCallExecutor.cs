@@ -75,6 +75,8 @@ public sealed class QueryModelHttpCallExecutor : IQueryModelCallExecutor
                 clientConfig = _configProvider.GetConfig(request, state, session, settings);
                 accountState = _authAccountStateProvider.GetState(request, state, session, settings);
                 refreshClientConfig = false;
+                ClawSharpTelemetry.LogDebug(
+                    $"[QueryModelHttpCallExecutor] config sessionId={session.Id} provider={clientConfig.ProviderKind} transport={clientConfig.TransportKind} baseUrl={clientConfig.BaseUrl} model={currentStreamingRequest.Request.Model} apiKeyPresent={!string.IsNullOrWhiteSpace(clientConfig.ApiKey)} authTokenPresent={!string.IsNullOrWhiteSpace(clientConfig.AuthToken)}");
             }
 
             _streamUpdateParser.Reset();
@@ -87,6 +89,8 @@ public sealed class QueryModelHttpCallExecutor : IQueryModelCallExecutor
             QueryModelOverloadedException? overloadedException = null;
             QueryModelApiException? apiException = null;
             HttpRequestException? connectionException = null;
+            ClawSharpTelemetry.LogDebug(
+                $"[QueryModelHttpCallExecutor] stream-attempt sessionId={session.Id} retryAttempt={retryAttempt} persistentAttempt={persistentAttempt} model={currentStreamingRequest.Request.Model}");
             await using var payloads = _streamingClient.StreamAsync(
                 clientConfig,
                 currentStreamingRequest,
@@ -99,10 +103,14 @@ public sealed class QueryModelHttpCallExecutor : IQueryModelCallExecutor
                 {
                     if (!await payloads.MoveNextAsync())
                     {
+                        ClawSharpTelemetry.LogDebug(
+                            $"[QueryModelHttpCallExecutor] stream-complete sessionId={session.Id} retryAttempt={retryAttempt}");
                         break;
                     }
 
                     payload = payloads.Current;
+                    ClawSharpTelemetry.LogDebug(
+                        $"[QueryModelHttpCallExecutor] payload sessionId={session.Id} kind={payload?["type"]?.ToString() ?? "unknown"}");
                 }
                 catch (QueryModelOverloadedException exception)
                     when (ShouldHandleOverloadedRetry(querySource))
@@ -162,9 +170,28 @@ public sealed class QueryModelHttpCallExecutor : IQueryModelCallExecutor
                         retryAfterHeader: null);
                     break;
                 }
+                catch (Exception exception)
+                {
+                    ClawSharpTelemetry.LogDebug(
+                        $"[QueryModelHttpCallExecutor] stream-failed sessionId={session.Id} error={exception.GetType().Name}: {exception.Message}",
+                        DebugLogLevel.Error);
+                    throw;
+                }
 
                 foreach (var update in _streamUpdateParser.Parse(payload))
                 {
+                    if (update.RuntimeEvent is not null)
+                    {
+                        ClawSharpTelemetry.LogDebug(
+                            $"[QueryModelHttpCallExecutor] parsed-runtime-event sessionId={session.Id} type={update.RuntimeEvent.GetType().Name}");
+                    }
+
+                    if (update.AttemptResult is not null)
+                    {
+                        ClawSharpTelemetry.LogDebug(
+                            $"[QueryModelHttpCallExecutor] parsed-attempt-result sessionId={session.Id} outcome={update.AttemptResult.Outcome}");
+                    }
+
                     yield return update;
                 }
             }

@@ -31,14 +31,20 @@ public sealed class ConversationTurnExecutor
         Func<QueryConsumerEvent, CancellationToken, Task>? onEvent = null,
         CancellationToken cancellationToken = default)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[ConversationTurnExecutor] build-start sessionId={session.Id} promptLength={prompt.Length}");
         var turnRequest = await MainThreadTurnRequestBuilder.BuildAsync(
             session,
             prompt,
             _toolRegistry,
             _modelTurnContextProvider,
             cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ConversationTurnExecutor] build-complete sessionId={session.Id} querySource={turnRequest.ModelTurnContext?.QuerySource ?? "none"}");
 
         var finalAssistantMessage = default(ChatMessage?);
+        ClawSharpTelemetry.LogDebug(
+            $"[ConversationTurnExecutor] query-start sessionId={session.Id}");
         var queryResult = await _queryEngine.RunTurnAsync(
             session,
             turnRequest,
@@ -71,6 +77,8 @@ public sealed class ConversationTurnExecutor
                 }
             },
             cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ConversationTurnExecutor] query-complete sessionId={session.Id} terminal={queryResult.Terminal.Reason}");
 
         if (finalAssistantMessage is null)
         {

@@ -20,17 +20,24 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
         QueryModelHttpStreamingRequest request,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        ClawSharpTelemetry.LogDebug(
+            $"[QueryModelSseStreamingClient] request-start provider={config.ProviderKind} transport={config.TransportKind} baseUrl={config.BaseUrl} model={request.Request.Model}");
         using var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(config, request);
         using var response = await _httpClient.SendAsync(
             httpRequest,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[QueryModelSseStreamingClient] response-status status={(int)response.StatusCode} provider={config.ProviderKind} transport={config.TransportKind}");
 
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = response.Content is null
                 ? null
                 : await response.Content.ReadAsStringAsync(cancellationToken);
+            ClawSharpTelemetry.LogDebug(
+                $"[QueryModelSseStreamingClient] response-error status={(int)response.StatusCode} bodyLength={responseBody?.Length ?? 0}",
+                DebugLogLevel.Error);
             var responseHeaders = CreateHeaders(response);
             if (QueryModelOverloadedException.IsOverloaded(response.StatusCode, responseBody))
             {
@@ -51,6 +58,8 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 var normalizer = new OpenAiStreamNormalizer(request.Request.Model);
                 await foreach (var frame in ReadSseFramesAsync(reader, cancellationToken))
                 {
+                    ClawSharpTelemetry.LogDebug(
+                        $"[QueryModelSseStreamingClient] frame transport=openai event={frame.EventName ?? "message"} dataLength={frame.Data.Length}");
                     if (string.IsNullOrWhiteSpace(frame.Data) ||
                         string.Equals(frame.Data.Trim(), "[DONE]", StringComparison.Ordinal))
                     {
@@ -76,6 +85,8 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 var normalizer = new CodexStreamNormalizer(request.Request.Model);
                 await foreach (var frame in ReadSseFramesAsync(reader, cancellationToken))
                 {
+                    ClawSharpTelemetry.LogDebug(
+                        $"[QueryModelSseStreamingClient] frame transport=codex event={frame.EventName ?? "message"} dataLength={frame.Data.Length}");
                     foreach (var normalized in normalizer.Normalize(frame))
                     {
                         yield return normalized;
@@ -93,6 +104,8 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
             {
                 await foreach (var frame in ReadSseFramesAsync(reader, cancellationToken))
                 {
+                    ClawSharpTelemetry.LogDebug(
+                        $"[QueryModelSseStreamingClient] frame transport=anthropic event={frame.EventName ?? "message"} dataLength={frame.Data.Length}");
                     if (TryParsePayload(frame.Data, out var payload))
                     {
                         yield return payload;

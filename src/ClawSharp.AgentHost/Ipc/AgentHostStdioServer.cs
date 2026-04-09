@@ -115,9 +115,15 @@ public sealed class AgentHostStdioServer
 
     private async Task HandleRequestAsync(AgentHostRequestEnvelope request, CancellationToken cancellationToken)
     {
+        AgentHostLog.Debug(
+            "ipc:request",
+            $"requestId={request.RequestId} command={request.Command} payload={request.Payload?.GetRawText() ?? "null"}");
         try
         {
             var payload = await _commandRouter.ExecuteAsync(request, cancellationToken);
+            AgentHostLog.Debug(
+                "ipc:response-success",
+                $"requestId={request.RequestId} command={request.Command}");
             await WriteResponseAsync(
                 new AgentHostResponseEnvelope(
                     request.RequestId,
@@ -129,6 +135,9 @@ public sealed class AgentHostStdioServer
         }
         catch (AgentHostException error)
         {
+            AgentHostLog.Warn(
+                "ipc:response-agenthost-error",
+                $"requestId={request.RequestId} command={request.Command} code={error.Code} message={error.Message}");
             await WriteResponseAsync(
                 new AgentHostResponseEnvelope(
                     request.RequestId,
@@ -140,6 +149,9 @@ public sealed class AgentHostStdioServer
         }
         catch (OperationCanceledException)
         {
+            AgentHostLog.Warn(
+                "ipc:response-cancelled",
+                $"requestId={request.RequestId} command={request.Command}");
             await WriteResponseAsync(
                 new AgentHostResponseEnvelope(
                     request.RequestId,
@@ -151,6 +163,9 @@ public sealed class AgentHostStdioServer
         }
         catch (Exception error)
         {
+            AgentHostLog.Error(
+                "ipc:response-internal-error",
+                $"requestId={request.RequestId} command={request.Command} error={error.GetType().Name}: {error.Message}");
             await WriteResponseAsync(
                 new AgentHostResponseEnvelope(
                     request.RequestId,
@@ -170,6 +185,9 @@ public sealed class AgentHostStdioServer
 
     private async Task WriteEventAsync(AgentHostEventEnvelope agentEvent, CancellationToken cancellationToken)
     {
+        AgentHostLog.Debug(
+            "ipc:event",
+            $"event={agentEvent.Event} payload={JsonSerializer.Serialize(agentEvent.Payload, AgentHostProtocol.JsonOptions)}");
         var line = JsonSerializer.Serialize(agentEvent, AgentHostProtocol.JsonOptions);
         await WriteLineAsync(line, cancellationToken);
     }

@@ -39,6 +39,8 @@ public sealed class QueryLoopRunner : IQueryTurnRunner
     {
         try
         {
+            ClawSharpTelemetry.LogDebug(
+                $"[QueryLoopRunner] producer-start sessionId={session.Id}");
             var currentRequest = request;
             var currentState = QueryLoopStateFactory.CreateInitial(
                 session.Messages.ToArray(),
@@ -46,6 +48,8 @@ public sealed class QueryLoopRunner : IQueryTurnRunner
 
             while (true)
             {
+                ClawSharpTelemetry.LogDebug(
+                    $"[QueryLoopRunner] iteration-start sessionId={session.Id} turnCount={currentState.TurnCount} messageCount={currentState.Messages.Count}");
                 await writer.WriteAsync(new QueryRequestStartRuntimeEvent(), cancellationToken);
 
                 var iterationResult = await _iterationRunner.RunAsync(
@@ -55,6 +59,8 @@ public sealed class QueryLoopRunner : IQueryTurnRunner
                     settings,
                     (runtimeEvent, token) => writer.WriteAsync(runtimeEvent, token).AsTask(),
                     cancellationToken);
+                ClawSharpTelemetry.LogDebug(
+                    $"[QueryLoopRunner] iteration-result sessionId={session.Id} type={iterationResult.GetType().Name}");
 
                 switch (iterationResult)
                 {
@@ -100,6 +106,9 @@ public sealed class QueryLoopRunner : IQueryTurnRunner
         }
         catch (Exception exception)
         {
+            ClawSharpTelemetry.LogDebug(
+                $"[QueryLoopRunner] producer-failed sessionId={session.Id} error={exception.GetType().Name}: {exception.Message}",
+                DebugLogLevel.Error);
             writer.TryComplete(exception);
         }
     }

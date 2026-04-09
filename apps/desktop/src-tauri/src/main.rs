@@ -10,7 +10,7 @@ use log::{debug, error, info, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy, WEBVIEW_TARGET};
 use tokio::sync::oneshot;
 
 const AGENTHOST_EVENT: &str = "agenthost://event";
@@ -82,8 +82,20 @@ async fn agent_host_request(
     command: String,
     payload: Value,
 ) -> Result<Value, String> {
+    debug!(
+        target: "clawsharp_desktop::ipc",
+        "agent_host_request command={} payload={}",
+        command,
+        payload
+    );
     let response = state.send_request(&app, command, payload).await?;
     if response.success {
+        debug!(
+            target: "clawsharp_desktop::ipc",
+            "agent_host_request success command={} request_id={}",
+            response.command,
+            response.request_id
+        );
         Ok(response.payload.unwrap_or(Value::Null))
     } else {
         let error = response.error.unwrap_or(AgentHostErrorPayload {
@@ -91,6 +103,14 @@ async fn agent_host_request(
             message: "AgentHost request failed.".to_string(),
             details: None,
         });
+        warn!(
+            target: "clawsharp_desktop::ipc",
+            "agent_host_request failed command={} request_id={} code={} message={}",
+            response.command,
+            response.request_id,
+            error.code,
+            error.message
+        );
         Err(match error.details {
             Some(details) if !details.is_empty() => format!("{}: {}", error.message, details),
             _ => error.message,
@@ -132,9 +152,10 @@ impl AgentHostState {
 
         debug!(
             target: "clawsharp_desktop::agent_host",
-            "sending request {} ({})",
+            "sending request {} ({}) payload={}",
             envelope.request_id,
-            envelope.command
+            envelope.command,
+            envelope.payload
         );
 
         let line = serde_json::to_string(&envelope).map_err(|error| error.to_string())?;
@@ -195,6 +216,17 @@ impl AgentHostManager {
             "starting agent host using '{}' in {}",
             program.to_string_lossy(),
             working_directory.to_string_lossy()
+        );
+        debug!(
+            target: "clawsharp_desktop::agent_host",
+            "agent host env CLAUDE_CODE_USE_OPENAI_present={} OPENAI_MODEL={} OPENAI_BASE_URL={} CODEX_HOME={}",
+            std::env::var("CLAUDE_CODE_USE_OPENAI")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .is_some(),
+            std::env::var("OPENAI_MODEL").unwrap_or_default(),
+            std::env::var("OPENAI_BASE_URL").unwrap_or_default(),
+            std::env::var("CODEX_HOME").unwrap_or_default()
         );
         debug!(
             target: "clawsharp_desktop::agent_host",
@@ -300,6 +332,12 @@ fn spawn_stdout_reader(
 
             if value.get("event").is_some() {
                 if let Ok(agent_event) = serde_json::from_value::<AgentHostEventEnvelope>(value.clone()) {
+                    debug!(
+                        target: "clawsharp_desktop::agent_host",
+                        "forwarding event {} payload={}",
+                        agent_event.event,
+                        agent_event.payload
+                    );
                     let _ = app.emit(AGENTHOST_EVENT, agent_event);
                 }
                 continue;
@@ -309,9 +347,12 @@ fn spawn_stdout_reader(
                 if let Ok(response) = serde_json::from_value::<AgentHostResponseEnvelope>(value) {
                     debug!(
                         target: "clawsharp_desktop::agent_host",
-                        "received response {} ({})",
+                        "received response {} ({}) success={} payload_present={} error_present={}",
                         response.request_id,
-                        response.command
+                        response.command,
+                        response.success,
+                        response.payload.is_some(),
+                        response.error.is_some()
                     );
                     if let Ok(mut pending_requests) = pending.lock() {
                         if let Some(sender) = pending_requests.remove(&response.request_id) {
@@ -395,7 +436,6 @@ fn resolve_agent_host_launch(app: &AppHandle) -> Result<(PathBuf, Vec<String>, P
             PathBuf::from("dotnet"),
             vec![
                 "run".to_string(),
-                "--no-build".to_string(),
                 "--project".to_string(),
                 project_path.to_string_lossy().into_owned(),
                 "--".to_string(),
@@ -474,7 +514,13 @@ pub fn run() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(max_level)
-                .target(Target::new(TargetKind::Webview))
+                .targets([
+                    Target::new(TargetKind::Webview),
+                    Target::new(TargetKind::LogDir { file_name: Some("webview".into()) })
+                        .filter(|metadata| metadata.target().starts_with(WEBVIEW_TARGET)),
+                    Target::new(TargetKind::LogDir { file_name: Some("rust".into()) })
+                        .filter(|metadata| !metadata.target().starts_with(WEBVIEW_TARGET)),
+                ])
                 .rotation_strategy(RotationStrategy::KeepAll)
                 .timezone_strategy(TimezoneStrategy::UseLocal)
                 .build(),
@@ -483,6 +529,13 @@ pub fn run() {
         .manage(AgentHostState::default())
         .invoke_handler(tauri::generate_handler![agent_host_request])
         .setup(|app| {
+            if let Ok(log_dir) = app.path().app_log_dir() {
+                info!(
+                    target: "clawsharp_desktop::startup",
+                    "desktop log directory {}",
+                    log_dir.to_string_lossy()
+                );
+            }
             info!(
                 target: "clawsharp_desktop::startup",
                 "desktop shell ready for window {:?}",
