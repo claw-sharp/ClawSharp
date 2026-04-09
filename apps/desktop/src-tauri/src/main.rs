@@ -6,9 +6,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use log::{debug, error, info, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 use tokio::sync::oneshot;
 
 const AGENTHOST_EVENT: &str = "agenthost://event";
@@ -128,6 +130,13 @@ impl AgentHostState {
             payload,
         };
 
+        debug!(
+            target: "clawsharp_desktop::agent_host",
+            "sending request {} ({})",
+            envelope.request_id,
+            envelope.command
+        );
+
         let line = serde_json::to_string(&envelope).map_err(|error| error.to_string())?;
         {
             let mut writer = stdin
@@ -150,6 +159,10 @@ impl AgentHostManager {
             match process.child.try_wait() {
                 Ok(None) => return Ok(()),
                 Ok(Some(status)) => {
+                    warn!(
+                        target: "clawsharp_desktop::agent_host",
+                        "agent host exited with status {status}"
+                    );
                     self.process = None;
                     let _ = app.emit(
                         AGENTHOST_STATE_EVENT,
@@ -160,6 +173,10 @@ impl AgentHostManager {
                     );
                 }
                 Err(error) => {
+                    error!(
+                        target: "clawsharp_desktop::agent_host",
+                        "failed to inspect agent host process: {error}"
+                    );
                     self.process = None;
                     let _ = app.emit(
                         AGENTHOST_STATE_EVENT,
@@ -173,6 +190,17 @@ impl AgentHostManager {
         }
 
         let (program, arguments, working_directory) = resolve_agent_host_launch(app)?;
+        info!(
+            target: "clawsharp_desktop::agent_host",
+            "starting agent host using '{}' in {}",
+            program.to_string_lossy(),
+            working_directory.to_string_lossy()
+        );
+        debug!(
+            target: "clawsharp_desktop::agent_host",
+            "agent host args: {:?}",
+            arguments
+        );
         let mut command = Command::new(&program);
         command
             .args(&arguments)
@@ -201,11 +229,17 @@ impl AgentHostManager {
         let pending = self.pending.clone();
         spawn_stdout_reader(app.clone(), stdout, pending.clone());
         spawn_stderr_reader(app.clone(), stderr, pending);
+        let pid = child.id();
 
         self.process = Some(AgentHostProcess {
             child,
             stdin: Arc::new(Mutex::new(stdin)),
         });
+
+        info!(
+            target: "clawsharp_desktop::agent_host",
+            "agent host started with pid {pid}"
+        );
 
         let _ = app.emit(
             AGENTHOST_STATE_EVENT,
@@ -224,12 +258,17 @@ fn spawn_stdout_reader(
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<AgentHostResponseEnvelope>>>>,
 ) {
     std::thread::spawn(move || {
+        debug!(target: "clawsharp_desktop::agent_host", "stdout reader started");
         let reader = BufReader::new(stdout);
         for line_result in reader.lines() {
             let line = match line_result {
                 Ok(line) if !line.trim().is_empty() => line,
                 Ok(_) => continue,
                 Err(error) => {
+                    error!(
+                        target: "clawsharp_desktop::agent_host",
+                        "agent host stdout read failed: {error}"
+                    );
                     let _ = app.emit(
                         AGENTHOST_STATE_EVENT,
                         AgentHostStatePayload {
@@ -244,11 +283,15 @@ fn spawn_stdout_reader(
             let value: Value = match serde_json::from_str(&line) {
                 Ok(value) => value,
                 Err(error) => {
+                    warn!(
+                        target: "clawsharp_desktop::agent_host",
+                        "agent host emitted non-protocol stdout: {line} ({error})"
+                    );
                     let _ = app.emit(
                         AGENTHOST_STATE_EVENT,
                         AgentHostStatePayload {
-                            status: "error".to_string(),
-                            detail: Some(format!("AgentHost emitted invalid JSON: {error}")),
+                            status: "stderr".to_string(),
+                            detail: Some(format!("AgentHost stdout: {line}")),
                         },
                     );
                     continue;
@@ -264,6 +307,12 @@ fn spawn_stdout_reader(
 
             if value.get("requestId").is_some() {
                 if let Ok(response) = serde_json::from_value::<AgentHostResponseEnvelope>(value) {
+                    debug!(
+                        target: "clawsharp_desktop::agent_host",
+                        "received response {} ({})",
+                        response.request_id,
+                        response.command
+                    );
                     if let Ok(mut pending_requests) = pending.lock() {
                         if let Some(sender) = pending_requests.remove(&response.request_id) {
                             let _ = sender.send(response);
@@ -297,6 +346,7 @@ fn spawn_stdout_reader(
                 detail: None,
             },
         );
+        info!(target: "clawsharp_desktop::agent_host", "agent host stdout reader stopped");
     });
 }
 
@@ -306,11 +356,14 @@ fn spawn_stderr_reader(
     _pending: Arc<Mutex<HashMap<String, oneshot::Sender<AgentHostResponseEnvelope>>>>,
 ) {
     std::thread::spawn(move || {
+        debug!(target: "clawsharp_desktop::agent_host", "stderr reader started");
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
             if line.trim().is_empty() {
                 continue;
             }
+
+            warn!(target: "clawsharp_desktop::agent_host::stderr", "{line}");
 
             let _ = app.emit(
                 AGENTHOST_STATE_EVENT,
@@ -329,7 +382,15 @@ fn resolve_agent_host_launch(app: &AppHandle) -> Result<(PathBuf, Vec<String>, P
             .join("../../..")
             .canonicalize()
             .map_err(|error| format!("Failed to resolve repo root: {error}"))?;
-        let project_path = repo_root.join("src/ClawSharp.AgentHost/ClawSharp.AgentHost.csproj");
+        let project_path = normalize_child_process_path(
+            repo_root.join("src/ClawSharp.AgentHost/ClawSharp.AgentHost.csproj"),
+        );
+        let repo_root = normalize_child_process_path(repo_root);
+        debug!(
+            target: "clawsharp_desktop::agent_host",
+            "resolved debug agent host project path {}",
+            project_path.to_string_lossy()
+        );
         return Ok((
             PathBuf::from("dotnet"),
             vec![
@@ -353,6 +414,11 @@ fn resolve_agent_host_launch(app: &AppHandle) -> Result<(PathBuf, Vec<String>, P
         "clawsharp-agenthost"
     };
     let executable_path = sidecar_dir.join(executable_name);
+    debug!(
+        target: "clawsharp_desktop::agent_host",
+        "resolved packaged agent host path {}",
+        executable_path.to_string_lossy()
+    );
     if !executable_path.exists() {
         return Err(format!(
             "AgentHost sidecar not found at {}",
@@ -361,6 +427,21 @@ fn resolve_agent_host_launch(app: &AppHandle) -> Result<(PathBuf, Vec<String>, P
     }
 
     Ok((executable_path, Vec::new(), resource_dir))
+}
+
+fn normalize_child_process_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let value = path.to_string_lossy();
+        if let Some(stripped) = value.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{stripped}"));
+        }
+        if let Some(stripped) = value.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+    }
+
+    path
 }
 
 fn current_rid_folder() -> &'static str {
@@ -381,10 +462,32 @@ fn current_rid_folder() -> &'static str {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let max_level = if cfg!(debug_assertions) {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
+
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(max_level)
+                .target(Target::new(TargetKind::Webview))
+                .rotation_strategy(RotationStrategy::KeepAll)
+                .timezone_strategy(TimezoneStrategy::UseLocal)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .manage(AgentHostState::default())
         .invoke_handler(tauri::generate_handler![agent_host_request])
+        .setup(|app| {
+            info!(
+                target: "clawsharp_desktop::startup",
+                "desktop shell ready for window {:?}",
+                app.get_webview_window("main").map(|window| window.label().to_string())
+            );
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running ClawSharp desktop");
 }

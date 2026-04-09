@@ -18,9 +18,14 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 
 describe('agentHostClient', () => {
   beforeEach(() => {
+    vi.resetModules();
     invoke.mockReset();
     listen.mockReset();
     open.mockReset();
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      configurable: true,
+      value: {},
+    });
   });
 
   it('sends typed requests through the tauri bridge', async () => {
@@ -34,6 +39,17 @@ describe('agentHostClient', () => {
       payload: {},
     });
     expect(response).toEqual({ hostName: 'ClawSharp.AgentHost' });
+  });
+
+  it('falls back to the browser mock client when tauri is unavailable', async () => {
+    // Simulate plain Vite/browser mode where Tauri APIs are not attached.
+    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+
+    const { agentHostClient } = await import('@/lib/agentHostClient');
+    const response = await agentHostClient.connect();
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(response.hostName).toBe('Browser Mock AgentHost');
   });
 
   it('subscribes to host and state event streams', async () => {

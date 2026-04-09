@@ -10,6 +10,7 @@ using ClawSharp.AgentHost.Sessions;
 
 Console.InputEncoding = System.Text.Encoding.UTF8;
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+Log("boot", "AgentHost process starting.");
 
 var runtimeState = new HostRuntimeState();
 var eventDispatcher = new AgentHostEventDispatcher();
@@ -34,5 +35,12 @@ var commandRouter = new AgentHostCommandRouter(
     externalEditorService,
     approvalCatalog);
 var host = new AgentHostStdioServer(Console.In, Console.Out, commandRouter, eventDispatcher);
+Log("boot", "AgentHost services initialized. Entering stdio server loop.");
 
 await host.RunAsync();
+Log("shutdown", "AgentHost stdio server loop exited.");
+
+static void Log(string category, string message)
+{
+    Console.Error.WriteLine($"[{DateTimeOffset.UtcNow:O}] [AgentHost:{category}] {message}");
+}

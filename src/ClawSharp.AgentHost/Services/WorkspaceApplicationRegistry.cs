@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using ClawSharp.Infrastructure;
 
 namespace ClawSharp.AgentHost.Services;
@@ -13,19 +14,41 @@ public sealed class WorkspaceApplicationRegistry
         CancellationToken cancellationToken = default)
     {
         var normalizedWorkspaceRoot = NormalizeWorkspaceRoot(workspaceRoot);
+        var cacheHit = _applications.ContainsKey(normalizedWorkspaceRoot);
+        Log(
+            cacheHit ? "reuse-request" : "create-request",
+            $"workspace={normalizedWorkspaceRoot}");
+
         var lazy = _applications.GetOrAdd(
             normalizedWorkspaceRoot,
             static path => new Lazy<Task<ClawSharpApplication>>(
                 () => ClawSharpApplicationFactory.CreateForWorkspaceAsync(path),
                 LazyThreadSafetyMode.ExecutionAndPublication));
+        var createdNewLazy = !cacheHit && ReferenceEquals(_applications[normalizedWorkspaceRoot], lazy);
 
         try
         {
-            return await lazy.Value.WaitAsync(cancellationToken);
+            if (createdNewLazy)
+            {
+                Log("create-start", $"workspace={normalizedWorkspaceRoot}");
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+            var app = await lazy.Value.WaitAsync(cancellationToken);
+            stopwatch.Stop();
+
+            Log(
+                createdNewLazy ? "create-complete" : "reuse-complete",
+                $"workspace={normalizedWorkspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds}");
+
+            return app;
         }
-        catch
+        catch (Exception ex)
         {
             _applications.TryRemove(normalizedWorkspaceRoot, out _);
+            Log(
+                "create-failed",
+                $"workspace={normalizedWorkspaceRoot} error={ex.GetType().Name}: {ex.Message}");
             throw;
         }
     }
@@ -44,5 +67,10 @@ public sealed class WorkspaceApplicationRegistry
         }
 
         return normalized;
+    }
+
+    private static void Log(string category, string message)
+    {
+        Console.Error.WriteLine($"[{DateTimeOffset.UtcNow:O}] [AgentHost:workspace-registry:{category}] {message}");
     }
 }

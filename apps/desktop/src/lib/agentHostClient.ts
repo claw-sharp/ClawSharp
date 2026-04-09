@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { BrowserAgentHostClient } from '@/lib/browserAgentHostClient';
 import {
   subscribeAgentHostEvents,
   subscribeAgentHostState,
@@ -30,6 +31,14 @@ import type {
   UpdateSettingsResponse,
   ValidateProviderConfigResponse,
 } from '@/lib/protocol';
+
+function isTauriRuntime(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return '__TAURI_INTERNALS__' in window;
+}
 
 class AgentHostClient {
   async connect(): Promise<HealthResponse> {
@@ -149,4 +158,6 @@ class AgentHostClient {
   }
 }
 
-export const agentHostClient = new AgentHostClient();
+export const agentHostClient = isTauriRuntime()
+  ? new AgentHostClient()
+  : new BrowserAgentHostClient();
