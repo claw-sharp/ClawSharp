@@ -398,9 +398,12 @@ ${sections.join("\n")}
 
   caveats do
     <<~EOS
-      This release is unsigned and not notarized.
-      macOS may show Gatekeeper warnings the first time you open ClawSharp.
-      Future signed and notarized releases can replace this cask without changing the tap structure.
+      ClawSharp is currently unsigned and not notarized.
+      If you see a "damaged" error on macOS, run:
+
+        xattr -cr /Applications/ClawSharp.app
+
+      Then you can open it normally. Future signed releases will remove this requirement.
     EOS
   end
 end
