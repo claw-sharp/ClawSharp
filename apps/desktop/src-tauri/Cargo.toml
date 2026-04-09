@@ -1,6 +1,6 @@
 [package]
 name = "clawsharp-desktop"
-version = "0.0.2"
+version = "0.0.3"
 description = "ClawSharp desktop shell built with Tauri"
 authors = ["ClawSharp"]
 edition = "2021"
