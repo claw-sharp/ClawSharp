@@ -497,28 +497,12 @@ public sealed class TerminalShell
         string userInput,
         CancellationToken cancellationToken)
     {
-        var request = QueryTurnRequest.Create(session, userInput) with
-        {
-            AbortReason = QueryAbortReason.Interrupt
-        };
-
-        if (_toolRegistry is not null)
-        {
-            request = request with
-            {
-                InitialToolUseContext = QueryToolUseContextStateFactory.CreateFromToolRegistry(_toolRegistry)
-            };
-        }
-
-        if (_modelTurnContextProvider is not null)
-        {
-            request = request with
-            {
-                ModelTurnContext = await _modelTurnContextProvider.GetReplMainThreadContextAsync(cancellationToken)
-            };
-        }
-
-        return request;
+        return await MainThreadTurnRequestBuilder.BuildAsync(
+            session,
+            userInput,
+            _toolRegistry,
+            _modelTurnContextProvider,
+            cancellationToken);
     }
 
     private static string ResolveMainSessionTaskDescription(

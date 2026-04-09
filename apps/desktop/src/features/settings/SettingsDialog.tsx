@@ -24,7 +24,7 @@ export const SettingsDialog = () => {
           {/* Provider */}
           <SettingRow label="Default Provider">
             <select
-              value={settings.defaultProvider}
+              value={settings.defaultProvider ?? ''}
               onChange={e => {
                 const provider = settings.availableProviders.find((item) => item.id === e.target.value);
                 void updateSettings({ defaultProvider: e.target.value, defaultModel: provider?.defaultModel ?? settings.defaultModel });
@@ -39,7 +39,7 @@ export const SettingsDialog = () => {
 
           <SettingRow label="Default Model">
             <select
-              value={settings.defaultModel}
+              value={settings.defaultModel ?? ''}
               onChange={e => { void updateSettings({ defaultModel: e.target.value }); }}
               className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
             >
@@ -78,6 +78,23 @@ export const SettingsDialog = () => {
             </div>
           </SettingRow>
 
+          <SettingRow label="Theme">
+            <div className="flex gap-1">
+              {(['system', 'dark', 'light'] as const).map(theme => (
+                <button
+                  key={theme}
+                  onClick={() => { void updateSettings({ theme }); }}
+                  className={cn(
+                    'rounded-md px-2 py-1 text-xs capitalize transition-colors',
+                    settings.theme === theme ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {theme}
+                </button>
+              ))}
+            </div>
+          </SettingRow>
+
           <SettingRow label="Streaming Speed">
             <div className="flex gap-1">
               {(['slow', 'normal', 'fast'] as const).map(s => (
@@ -97,7 +114,7 @@ export const SettingsDialog = () => {
 
           <SettingRow label="Editor Path">
             <input
-              value={settings.editorPath}
+              value={settings.editorPath ?? ''}
               onChange={e => { void updateSettings({ editorPath: e.target.value }); }}
               className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground font-mono outline-none focus:border-primary/40 w-48"
             />

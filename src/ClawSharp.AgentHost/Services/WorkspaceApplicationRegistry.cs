@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using ClawSharp.AgentHost;
 using ClawSharp.Infrastructure;
 
 namespace ClawSharp.AgentHost.Services;
@@ -15,8 +16,8 @@ public sealed class WorkspaceApplicationRegistry
     {
         var normalizedWorkspaceRoot = NormalizeWorkspaceRoot(workspaceRoot);
         var cacheHit = _applications.ContainsKey(normalizedWorkspaceRoot);
-        Log(
-            cacheHit ? "reuse-request" : "create-request",
+        AgentHostLog.Debug(
+            cacheHit ? "workspace-registry:reuse-request" : "workspace-registry:create-request",
             $"workspace={normalizedWorkspaceRoot}");
 
         var lazy = _applications.GetOrAdd(
@@ -30,15 +31,15 @@ public sealed class WorkspaceApplicationRegistry
         {
             if (createdNewLazy)
             {
-                Log("create-start", $"workspace={normalizedWorkspaceRoot}");
+                AgentHostLog.Debug("workspace-registry:create-start", $"workspace={normalizedWorkspaceRoot}");
             }
 
             var stopwatch = Stopwatch.StartNew();
             var app = await lazy.Value.WaitAsync(cancellationToken);
             stopwatch.Stop();
 
-            Log(
-                createdNewLazy ? "create-complete" : "reuse-complete",
+            AgentHostLog.Debug(
+                createdNewLazy ? "workspace-registry:create-complete" : "workspace-registry:reuse-complete",
                 $"workspace={normalizedWorkspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds}");
 
             return app;
@@ -46,8 +47,8 @@ public sealed class WorkspaceApplicationRegistry
         catch (Exception ex)
         {
             _applications.TryRemove(normalizedWorkspaceRoot, out _);
-            Log(
-                "create-failed",
+            AgentHostLog.Warn(
+                "workspace-registry:create-failed",
                 $"workspace={normalizedWorkspaceRoot} error={ex.GetType().Name}: {ex.Message}");
             throw;
         }
@@ -67,10 +68,5 @@ public sealed class WorkspaceApplicationRegistry
         }
 
         return normalized;
-    }
-
-    private static void Log(string category, string message)
-    {
-        Console.Error.WriteLine($"[{DateTimeOffset.UtcNow:O}] [AgentHost:workspace-registry:{category}] {message}");
     }
 }

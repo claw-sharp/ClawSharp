@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
-import { Search, Settings, Bell, ChevronDown, Zap } from 'lucide-react';
+import { Search, Settings, Bell, ChevronDown } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 export const TopBar = () => {
   const {
@@ -8,16 +9,28 @@ export const TopBar = () => {
     openProjectPicker,
     toggleSettings, toggleCommandPalette, setActiveView, ui
   } = useAppStore();
+  const { resolvedTheme } = useTheme();
   const project = projects.find(p => p.id === selectedProjectId);
   const unreadCount = inboxItems.filter(i => !i.read).length;
+  const isLightTheme = resolvedTheme === 'light';
+  const markSrc = isLightTheme ? '/clawsharp-mark-light.png' : '/clawsharp-mark-dark.png';
+  const wordmarkSrc = isLightTheme ? '/clawsharp-wordmark-light.png' : '/clawsharp-wordmark-dark.png';
 
   return (
     <div className="flex h-12 items-center justify-between border-b border-border surface-1 px-3 gap-2">
       {/* Left */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">ClawSharp</span>
+          <img
+            src={markSrc}
+            alt=""
+            className="h-5 w-5 shrink-0 object-contain"
+          />
+          <img
+            src={wordmarkSrc}
+            alt="ClawSharp"
+            className="h-3.5 w-auto shrink-0 object-contain"
+          />
         </div>
         {project ? (
           <>

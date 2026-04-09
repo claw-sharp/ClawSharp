@@ -698,7 +698,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateSettings: async (partial) => {
     const projectId = get().selectedProjectId || null;
 
-    const localOnlyUpdate: Partial<SettingsState> = {
+    const localOnlyUpdate = pickDefinedSettings({
       theme: partial.theme,
       density: partial.density,
       streamingSpeed: partial.streamingSpeed,
@@ -707,7 +707,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       notifications: partial.notifications,
       editorPath: partial.editorPath,
       showDiagnostics: partial.showDiagnostics,
-    };
+    });
 
     set((state) => ({
       settings: { ...state.settings, ...localOnlyUpdate },
@@ -1337,4 +1337,10 @@ function toErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function pickDefinedSettings(partial: Partial<SettingsState>): Partial<SettingsState> {
+  return Object.fromEntries(
+    Object.entries(partial).filter(([, value]) => value !== undefined),
+  ) as Partial<SettingsState>;
 }

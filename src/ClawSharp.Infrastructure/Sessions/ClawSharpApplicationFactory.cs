@@ -251,7 +251,8 @@ public static class ClawSharpApplicationFactory
             tools,
             tasks,
             queryEngine,
-            terminalShell);
+            terminalShell,
+            modelTurnContextProvider);
         StartupProfiler.Checkpoint("create_default_application_end");
         stopwatch.Stop();
         ClawSharpTelemetry.LogEvent(

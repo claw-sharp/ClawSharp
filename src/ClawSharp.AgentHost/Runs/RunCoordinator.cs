@@ -5,6 +5,7 @@ using ClawSharp.AgentHost.Ipc;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 using ClawSharp.Query;
 
 namespace ClawSharp.AgentHost.Runs;
@@ -192,6 +193,7 @@ public sealed class RunCoordinator
         CancellationTokenSource runCts)
     {
         var toolNamesByToolUseId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var emittedAssistantMessage = false;
         try
         {
             await _eventDispatcher.PublishAsync(
@@ -199,7 +201,12 @@ public sealed class RunCoordinator
                 new RunStartedEvent(runId, session.Id, projectId, prompt, DateTimeOffset.UtcNow),
                 CancellationToken.None);
 
-            var turnRequest = QueryTurnRequest.Create(session, prompt);
+            var turnRequest = await MainThreadTurnRequestBuilder.BuildAsync(
+                session,
+                prompt,
+                app.Tools,
+                app.ModelTurnContextProvider,
+                runCts.Token);
             var result = await app.QueryEngine.RunTurnAsync(
                 session,
                 turnRequest,
@@ -213,9 +220,15 @@ public sealed class RunCoordinator
                     runId,
                     session,
                     toolNamesByToolUseId,
+                    () => emittedAssistantMessage = true,
                     consumerEvent,
                     token),
                 cancellationToken: runCts.Token);
+
+            if (!emittedAssistantMessage)
+            {
+                await PublishStreamedAssistantFallbackAsync(runId, session, result, app, CancellationToken.None);
+            }
 
             await _eventDispatcher.PublishAsync(
                 "RunCompleted",
@@ -257,12 +270,13 @@ public sealed class RunCoordinator
         string runId,
         ConversationSession session,
         IDictionary<string, string> toolNamesByToolUseId,
+        Action onAssistantMessageCompleted,
         QueryConsumerEvent consumerEvent,
         CancellationToken cancellationToken)
     {
         return consumerEvent switch
         {
-            QueryMessageConsumerEvent messageEvent => HandleMessageAsync(runId, session, toolNamesByToolUseId, messageEvent.Message, cancellationToken),
+            QueryMessageConsumerEvent messageEvent => HandleMessageAsync(runId, session, toolNamesByToolUseId, onAssistantMessageCompleted, messageEvent.Message, cancellationToken),
             QueryLoopTerminalConsumerEvent => Task.CompletedTask,
             _ => Task.CompletedTask,
         };
@@ -272,6 +286,7 @@ public sealed class RunCoordinator
         string runId,
         ConversationSession session,
         IDictionary<string, string> toolNamesByToolUseId,
+        Action onAssistantMessageCompleted,
         ChatMessage message,
         CancellationToken cancellationToken)
     {
@@ -351,6 +366,11 @@ public sealed class RunCoordinator
             return Task.CompletedTask;
         }
 
+        if (message.Role == MessageRole.Assistant)
+        {
+            onAssistantMessageCompleted();
+        }
+
         return _eventDispatcher.PublishAsync(
             "RunMessageCompleted",
             new RunMessageCompletedEvent(
@@ -363,6 +383,38 @@ public sealed class RunCoordinator
                     message.Content,
                     message.Timestamp),
                 message.Timestamp),
+            cancellationToken);
+    }
+
+    private async Task PublishStreamedAssistantFallbackAsync(
+        string runId,
+        ConversationSession session,
+        QueryResult result,
+        Infrastructure.ClawSharpApplication app,
+        CancellationToken cancellationToken)
+    {
+        var content = string.Concat(result.StreamedChunks);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return;
+        }
+
+        var assistantMessage = ChatMessageFactory.CreateText(MessageRole.Assistant, content);
+        session.Add(assistantMessage);
+        await app.TranscriptStore.RecordTranscriptAsync(session, session.Messages, cancellationToken);
+
+        await _eventDispatcher.PublishAsync(
+            "RunMessageCompleted",
+            new RunMessageCompletedEvent(
+                runId,
+                session.Id,
+                new ThreadMessageDto(
+                    assistantMessage.Id,
+                    session.Id,
+                    "assistant",
+                    assistantMessage.Content,
+                    assistantMessage.Timestamp),
+                assistantMessage.Timestamp),
             cancellationToken);
     }
 

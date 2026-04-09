@@ -395,9 +395,11 @@ fn resolve_agent_host_launch(app: &AppHandle) -> Result<(PathBuf, Vec<String>, P
             PathBuf::from("dotnet"),
             vec![
                 "run".to_string(),
+                "--no-build".to_string(),
                 "--project".to_string(),
                 project_path.to_string_lossy().into_owned(),
                 "--".to_string(),
+                "--debug-to-stderr".to_string(),
             ],
             repo_root,
         ));

@@ -4,6 +4,72 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+    --background: 210 20% 98%;
+    --foreground: 222 18% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 18% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 18% 12%;
+
+    --primary: 210 100% 46%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 18% 94%;
+    --secondary-foreground: 222 14% 28%;
+
+    --muted: 210 16% 94%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 210 20% 92%;
+    --accent-foreground: 222 18% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 18% 88%;
+    --input: 214 18% 91%;
+    --ring: 210 100% 46%;
+
+    --radius: 0.5rem;
+
+    /* Status colors */
+    --status-running: 142 71% 45%;
+    --status-idle: 215 15% 55%;
+    --status-waiting: 38 92% 50%;
+    --status-completed: 142 71% 45%;
+    --status-failed: 0 72% 51%;
+    --status-scheduled: 262 83% 58%;
+
+    /* Diff colors */
+    --diff-add-bg: 142 71% 45% / 0.12;
+    --diff-add-text: 142 71% 65%;
+    --diff-del-bg: 0 72% 51% / 0.12;
+    --diff-del-text: 0 72% 65%;
+    --diff-hunk: 210 100% 56% / 0.08;
+
+    /* Surface layers */
+    --surface-0: 210 25% 97%;
+    --surface-1: 210 20% 98%;
+    --surface-2: 210 18% 95%;
+    --surface-3: 210 16% 92%;
+    --surface-4: 214 16% 88%;
+
+    /* Sidebar */
+    --sidebar-background: 210 22% 96%;
+    --sidebar-foreground: 222 14% 24%;
+    --sidebar-primary: 210 100% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 16% 90%;
+    --sidebar-accent-foreground: 222 18% 12%;
+    --sidebar-border: 214 18% 88%;
+    --sidebar-ring: 210 100% 46%;
+  }
+
+  .dark {
+    color-scheme: dark;
     --background: 220 14% 10%;
     --foreground: 210 20% 90%;
 
@@ -32,9 +98,6 @@
     --input: 220 14% 18%;
     --ring: 210 100% 56%;
 
-    --radius: 0.5rem;
-
-    /* Status colors */
     --status-running: 142 71% 45%;
     --status-idle: 215 15% 55%;
     --status-waiting: 38 92% 50%;
@@ -42,21 +105,18 @@
     --status-failed: 0 72% 51%;
     --status-scheduled: 262 83% 58%;
 
-    /* Diff colors */
     --diff-add-bg: 142 71% 45% / 0.12;
     --diff-add-text: 142 71% 65%;
     --diff-del-bg: 0 72% 51% / 0.12;
     --diff-del-text: 0 72% 65%;
     --diff-hunk: 210 100% 56% / 0.08;
 
-    /* Surface layers */
     --surface-0: 220 14% 8%;
     --surface-1: 220 14% 10%;
     --surface-2: 220 14% 13%;
     --surface-3: 220 14% 16%;
     --surface-4: 220 14% 20%;
 
-    /* Sidebar */
     --sidebar-background: 220 14% 8%;
     --sidebar-foreground: 210 20% 80%;
     --sidebar-primary: 210 100% 56%;
