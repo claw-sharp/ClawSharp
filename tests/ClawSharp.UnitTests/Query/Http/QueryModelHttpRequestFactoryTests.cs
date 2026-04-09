@@ -202,9 +202,10 @@ public sealed class QueryModelHttpRequestFactoryTests
         Assert.False(openAiParameters.ToJsonString().Contains("minimum", StringComparison.Ordinal));
         Assert.False(openAiParameters.ToJsonString().Contains("maximum", StringComparison.Ordinal));
         Assert.False(openAiParameters.ToJsonString().Contains("format", StringComparison.Ordinal));
-        var requiredPath = Assert.Single(openAiParameters["required"]!.AsArray());
-        Assert.NotNull(requiredPath);
-        Assert.Equal("path", requiredPath.GetValue<string>());
+        var openAiRequired = openAiParameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Equal(["path", "timeout", "maybe"], openAiRequired);
+        Assert.True(openAiParameters["properties"]!["timeout"]!["anyOf"] is JsonArray);
+        Assert.True(openAiParameters["properties"]!["maybe"]!["anyOf"] is JsonArray);
 
         var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
         var codexParameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
@@ -246,6 +247,113 @@ public sealed class QueryModelHttpRequestFactoryTests
         Assert.True(messageSchema.ContainsKey("anyOf"));
         Assert.False(messageSchema.ContainsKey("oneOf"));
         Assert.False(messageSchema.ToJsonString().Contains("\"oneOf\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Shapes_AskUserQuestion_For_OpenAi_With_Nullable_Optional_Fields()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var askUserQuestion = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "AskUserQuestion", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-askuserquestion",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(askUserQuestion.Name, askUserQuestion.Description, askUserQuestion.InputSchema, Strict: askUserQuestion.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var openAiRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                "https://api.openai.test/v1",
+                ApiKey: "openai-key",
+                TransportKind: ModelTransportKind.OpenAiChatCompletions,
+                ProviderKind: ApiProviderKind.OpenAi),
+            request);
+
+        var openAiBody = JsonNode.Parse(await openAiRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = openAiBody["tools"]![0]!["function"]!["parameters"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal(["questions", "metadata"], required);
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("answers"));
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("annotations"));
+        Assert.True(parameters["properties"]!["metadata"]!["anyOf"] is JsonArray);
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Shapes_AskUserQuestion_For_Codex_Without_Runtime_Injected_Fields()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var askUserQuestion = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "AskUserQuestion", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-askuserquestion-codex",
+                "codexplan",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(askUserQuestion.Name, askUserQuestion.Description, askUserQuestion.InputSchema, Strict: askUserQuestion.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal(["questions", "metadata"], required);
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("answers"));
+        Assert.False(parameters["properties"]!.AsObject().ContainsKey("annotations"));
+        Assert.Equal(false, parameters["additionalProperties"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Shapes_StructuredOutput_For_OpenAi_With_Explicit_Empty_Properties()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var structuredOutput = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "StructuredOutput", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-structuredoutput",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(structuredOutput.Name, structuredOutput.Description, structuredOutput.InputSchema, Strict: structuredOutput.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var openAiRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                "https://api.openai.test/v1",
+                ApiKey: "openai-key",
+                TransportKind: ModelTransportKind.OpenAiChatCompletions,
+                ProviderKind: ApiProviderKind.OpenAi),
+            request);
+
+        var openAiBody = JsonNode.Parse(await openAiRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = openAiBody["tools"]![0]!["function"]!["parameters"]!.AsObject();
+
+        Assert.Equal("object", parameters["type"]?.GetValue<string>());
+        Assert.NotNull(parameters["properties"]);
+        Assert.Empty(parameters["properties"]!.AsObject());
+        Assert.Equal(true, parameters["additionalProperties"]?.GetValue<bool>());
     }
 
     [Fact]

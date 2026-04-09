@@ -1,8 +1,9 @@
 using System.Text.Json.Nodes;
+using ClawSharp.Core;
 
 namespace ClawSharp.Tools;
 
-internal abstract class BaseTool : IClawSharpTool
+public abstract class BaseTool : IClawSharpTool
 {
     protected BaseTool(ToolDescriptor descriptor)
     {
@@ -56,5 +57,10 @@ internal abstract class BaseTool : IClawSharpTool
     protected static ToolExecutionResult Success(string output, JsonNode? structuredOutput = null)
     {
         return new ToolExecutionResult(true, output, structuredOutput);
+    }
+
+    protected static ToolExecutionResult Success(string output, JsonNode? structuredOutput, IReadOnlyList<ChatMessage>? injectedMessages)
+    {
+        return new ToolExecutionResult(true, output, structuredOutput, InjectedMessages: injectedMessages);
     }
 }

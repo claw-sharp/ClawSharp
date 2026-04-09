@@ -589,11 +589,14 @@ public static class QueryModelHttpRequestFactory
 
     private static JsonObject ToAnthropicJson(QueryRequestTool tool)
     {
-        var json = new JsonObject
+        var json = new JsonObject();
+        if (!string.IsNullOrEmpty(tool.Type))
         {
-            ["name"] = tool.Name,
-            ["description"] = tool.Description
-        };
+            json["type"] = tool.Type;
+        }
+
+        json["name"] = tool.Name;
+        json["description"] = tool.Description;
 
         if (tool.InputSchema is not null)
         {
@@ -645,7 +648,9 @@ public static class QueryModelHttpRequestFactory
         {
             ["name"] = tool.Name,
             ["description"] = tool.Description,
-            ["parameters"] = OpenAiSchemaSanitizer.SanitizeForOpenAiCompat(tool.InputSchema)
+            ["parameters"] = tool.Strict
+                ? OpenAiSchemaSanitizer.EnforceOpenAiStrictSchema(tool.InputSchema)
+                : OpenAiSchemaSanitizer.SanitizeForOpenAiCompat(tool.InputSchema)
         };
         var json = new JsonObject
         {

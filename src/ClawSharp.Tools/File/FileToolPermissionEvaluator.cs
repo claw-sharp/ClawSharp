@@ -165,7 +165,7 @@ internal static class FileToolPermissionEvaluator
         if (!safetyCheck.Safe)
         {
             return FileToolPermissionDecision.Ask(
-                safetyCheck.Message ?? $"Claude requested permissions to write to {path}, but you haven't granted it yet.");
+                safetyCheck.Message ?? $"ClawSharp to write to {path}, but you haven't granted it yet.");
         }
 
         if (MatchesAnyRule(pathsToCheck, workspaceRoot, permissionContext, permissionContext.AlwaysAskRules))

@@ -16,14 +16,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="18.4.0" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\ClawSharp.AgentHost\ClawSharp.AgentHost.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Bridge\ClawSharp.Bridge.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Core\ClawSharp.Core.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Infrastructure\ClawSharp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Query\ClawSharp.Query.csproj" />
+    <ProjectReference Include="..\..\src\ClawSharp.Runtime\ClawSharp.Runtime.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Tasks\ClawSharp.Tasks.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Tools\ClawSharp.Tools.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Ui.Terminal\ClawSharp.Ui.Terminal.csproj" />

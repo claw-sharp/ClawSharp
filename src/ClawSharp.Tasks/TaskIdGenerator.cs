@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace ClawSharp.Tasks;
 
-internal static class TaskIdGenerator
+public static class TaskIdGenerator
 {
     private const string Alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
 

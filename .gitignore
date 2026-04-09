@@ -3,9 +3,15 @@ bin/
 obj/
 .vs/
 artifacts/
+.tmp/
 .env
 local/
 memory/
 tests/ClawSharp.IntegrationTests/TestResults/
 tests/ClawSharp.ParityTests/TestResults/
 tests/ClawSharp.UnitTests/TestResults/
+apps/.DS_Store
+.DS_Store
+apps/desktop/src-tauri/binaries/
+scratch/updater.key.pub
+scratch/updater.key

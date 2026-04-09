@@ -22,7 +22,8 @@ public sealed record ClawSharpAppState(
     string? ActiveSessionProjectDirectory = null,
     string? ActiveSessionTitle = null,
     string? ForegroundedTaskId = null,
-    string? ViewingAgentTaskId = null)
+    string? ViewingAgentTaskId = null,
+    PendingPlanVerification? PendingPlanVerification = null)
 {
     public static ClawSharpAppState CreateDefault(
         string workspaceRoot,

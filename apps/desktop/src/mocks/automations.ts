@@ -1,0 +1,52 @@
+import { Automation } from '@/types';
+
+export const mockAutomations: Automation[] = [
+  {
+    id: 'auto-1',
+    projectId: 'proj-1',
+    title: 'Check failing tests every morning',
+    cadence: 'daily',
+    lastRun: '2026-04-07T06:00:00Z',
+    status: 'active',
+    resultSummary: 'All 47 tests passing. No regressions detected.',
+    linkedThreadId: 'thread-2',
+  },
+  {
+    id: 'auto-2',
+    projectId: 'proj-1',
+    title: 'Summarize open PRs',
+    cadence: 'daily',
+    lastRun: '2026-04-07T07:00:00Z',
+    status: 'active',
+    resultSummary: '3 open PRs: #142 (ready), #138 (needs review), #135 (draft)',
+  },
+  {
+    id: 'auto-3',
+    projectId: 'proj-2',
+    title: 'Audit docs drift weekly',
+    cadence: 'weekly',
+    lastRun: '2026-04-05T06:00:00Z',
+    status: 'active',
+    resultSummary: '2 docs pages outdated: API reference, configuration guide',
+    linkedThreadId: 'thread-7',
+  },
+  {
+    id: 'auto-4',
+    projectId: 'proj-1',
+    title: 'Monitor provider config regressions',
+    cadence: 'on_push',
+    lastRun: '2026-04-07T08:30:00Z',
+    status: 'error',
+    resultSummary: 'Failed: provider config schema changed without migration',
+  },
+  {
+    id: 'auto-5',
+    projectId: 'proj-3',
+    title: 'Sync playground examples',
+    cadence: 'weekly',
+    lastRun: '2026-04-03T06:00:00Z',
+    status: 'paused',
+    resultSummary: 'Paused: waiting for CSP fix in playground',
+    linkedThreadId: 'thread-8',
+  },
+];

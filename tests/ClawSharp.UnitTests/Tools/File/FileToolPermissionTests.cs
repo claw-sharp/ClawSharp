@@ -73,7 +73,7 @@ public sealed class FileToolPermissionTests
 
             Assert.False(result.Success);
             Assert.Equal(
-                $"Claude requested permissions to read from {filePath}, but you haven't granted it yet.",
+                $"ClawSharp to read from {filePath}, but you haven't granted it yet.",
                 result.Output);
         }
         finally
@@ -249,7 +249,7 @@ public sealed class FileToolPermissionTests
 
             Assert.False(result.Success);
             Assert.Equal(
-                $"Claude requested permissions to read from {linkPath}, but you haven't granted it yet.",
+                $"ClawSharp to read from {linkPath}, but you haven't granted it yet.",
                 result.Output);
         }
         finally
@@ -293,7 +293,7 @@ public sealed class FileToolPermissionTests
 
             Assert.False(result.Success);
             Assert.Equal(
-                $"Claude requested permissions to write to {Path.Combine(workspaceRoot, "linked-dir", "new.txt")}, but you haven't granted it yet.",
+                $"ClawSharp to write to {Path.Combine(workspaceRoot, "linked-dir", "new.txt")}, but you haven't granted it yet.",
                 result.Output);
             Assert.False(File.Exists(Path.Combine(outsideRoot, "new.txt")));
         }
@@ -380,7 +380,7 @@ public sealed class FileToolPermissionTests
                 new ClawSharpSettings());
 
             Assert.False(result.Success);
-            Assert.Equal($"Claude requested permissions to edit {filePath} which is a sensitive file.", result.Output);
+            Assert.Equal($"ClawSharp to edit {filePath} which is a sensitive file.", result.Output);
         }
         finally
         {

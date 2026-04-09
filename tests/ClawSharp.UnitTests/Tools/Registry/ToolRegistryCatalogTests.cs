@@ -16,7 +16,7 @@ public sealed class ToolRegistryCatalogTests
 
         var names = registry.All.Select(static tool => tool.Name).ToArray();
 
-        Assert.Equal(["Agent", "Bash", "Edit"], names.Take(3));
+        Assert.Equal(["Agent", "AskUserQuestion", "Bash"], names.Take(3));
         Assert.Equal(["AlphaTool", "ZuluTool"], names.TakeLast(2));
     }
 

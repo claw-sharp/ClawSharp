@@ -532,7 +532,7 @@ public sealed class ShellToolExecutionTests
 
                 Assert.False(result.Success);
                 Assert.Equal(1, prompt.CallCount);
-                Assert.Equal("Claude requested permissions to use PowerShell, but you haven't granted it yet.", result.Output);
+                Assert.Equal("ClawSharp to use PowerShell, but you haven't granted it yet.", result.Output);
             }
             finally
             {
@@ -645,7 +645,7 @@ public sealed class ShellToolExecutionTests
                 new ClawSharpSettings());
 
             Assert.False(result.Success);
-            Assert.Equal("Claude requested permissions to use Bash, but you haven't granted it yet.", result.Output);
+            Assert.Equal("ClawSharp to use Bash, but you haven't granted it yet.", result.Output);
         }
         finally
         {

@@ -154,6 +154,8 @@ public sealed class QueryEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         var settings = _appStateStore?.GetState().Settings ?? _settings;
+        ClawSharpTelemetry.LogDebug(
+            $"[QueryEngine] run-start sessionId={session.Id} appendUserInput={appendUserInputMessage} promptLength={request.UserInput.Length}");
         using var interactionSpan = ClawSharpTelemetry.StartInteractionSpan(request.UserInput);
         await _queuedTaskNotificationDrainer.DrainAsync(session, cancellationToken);
         await _fileUpdateNotifier.HandleQueryStartAsync(cancellationToken).ConfigureAwait(false);
@@ -210,6 +212,8 @@ public sealed class QueryEngine
                 SystemPrompt: request.ModelTurnContext.SystemPrompt,
                 SystemContext: request.ModelTurnContext.SystemContext,
                 UserContext: request.ModelTurnContext.UserContext));
+        ClawSharpTelemetry.LogDebug(
+            $"[QueryEngine] request-built sessionId={session.Id} model={modelRequest.Model} messages={session.Messages.Count} tools={modelRequest.Tools.Count}");
 
         var streamedChunks = new List<string>();
         var turnMessages = new List<ChatMessage>();
@@ -222,6 +226,8 @@ public sealed class QueryEngine
             await foreach (var runtimeEvent in _queryTurnRunner.RunAsync(request, session, settings, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                ClawSharpTelemetry.LogDebug(
+                    $"[QueryEngine] runtime-event sessionId={session.Id} type={runtimeEvent.GetType().Name}");
 
                 switch (runtimeEvent)
                 {
@@ -349,6 +355,8 @@ public sealed class QueryEngine
             loopState = loopState with { Messages = session.Messages.ToArray() };
             throw;
         }
+        ClawSharpTelemetry.LogDebug(
+            $"[QueryEngine] run-finish sessionId={session.Id} streamedChunks={streamedChunks.Count} turnMessages={turnMessages.Count} terminal={(terminal?.Reason.ToString() ?? "none")}");
 
         terminal ??= new QueryLoopTerminal(QueryTerminalReason.Completed);
         var terminalMessage = turnMessages.FindLast(IsSuccessfulTerminalMessage);

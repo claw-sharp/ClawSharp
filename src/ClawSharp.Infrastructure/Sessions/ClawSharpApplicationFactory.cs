@@ -11,9 +11,34 @@ public static class ClawSharpApplicationFactory
 {
     public static async Task<ClawSharpApplication> CreateDefaultAsync(CancellationToken cancellationToken = default)
     {
+        return await CreateForWorkspaceAsync(Directory.GetCurrentDirectory(), cancellationToken);
+    }
+
+    public static async Task<ClawSharpApplication> CreateDefaultAsync(
+        ClawSharpApplicationFactoryOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return await CreateForWorkspaceAsync(Directory.GetCurrentDirectory(), cancellationToken, options);
+    }
+
+    public static async Task<ClawSharpApplication> CreateForWorkspaceAsync(
+        string workspaceRoot,
+        CancellationToken cancellationToken = default)
+    {
+        return await CreateForWorkspaceAsync(
+            workspaceRoot,
+            cancellationToken,
+            options: null);
+    }
+
+    public static async Task<ClawSharpApplication> CreateForWorkspaceAsync(
+        string workspaceRoot,
+        CancellationToken cancellationToken,
+        ClawSharpApplicationFactoryOptions? options)
+    {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         StartupProfiler.Checkpoint("create_default_application_start");
-        var workspaceRoot = Directory.GetCurrentDirectory();
+        workspaceRoot = Path.GetFullPath(workspaceRoot);
         ClawSharpTelemetry.Initialize(workspaceRoot);
         var startupEnvironment = StartupEnvironment.Capture();
         WindowsShellEnvironmentBootstrapper.Initialize();
@@ -96,7 +121,7 @@ public static class ClawSharpApplicationFactory
             new EventSinkFileUpdateNotifier(eventSink),
             new DiagnosticTrackingFileUpdateNotifier(diagnosticTrackingService),
             new VscodeSdkFileUpdateNotifier(mcpConfigService, mcpLifecycleManager));
-        var permissionPrompter = new SpectrePermissionPrompter();
+        var permissionPrompter = options?.PermissionPrompter ?? new SpectrePermissionPrompter();
         var postSamplingHookRegistry = new PostSamplingHookRegistry();
         var modelConfigProvider = new EnvironmentQueryModelHttpClientConfigProvider(mcpSecureStorage);
         var authAccountStateProvider = new SecureStorageQueryAuthAccountStateProvider(mcpSecureStorage);
@@ -109,12 +134,14 @@ public static class ClawSharpApplicationFactory
             modelStreamUpdateParser,
             authAccountStateProvider,
             authFailureRecoveryRunner);
+        var nativeWebSearchService = new NativeWebSearchService(modelCallExecutor);
         var agentExecutionService = new LocalAgentExecutionService(
             eventSink,
             transcriptStore,
             agentPersistenceService,
             queuedCommandQueue,
-            modelCallExecutor);
+            modelCallExecutor,
+            nativeWebSearchService: nativeWebSearchService);
         var tools = new ToolRegistry(
             workspaceRoot,
             tasks,
@@ -124,7 +151,12 @@ public static class ClawSharpApplicationFactory
             agentDefinitions.ActiveAgents,
             appStateStore,
             permissionPrompter,
-            agentExecutionService);
+            agentExecutionService,
+            nativeWebSearchService: nativeWebSearchService,
+            worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(), 
+            mcpResources: mcpResourceCatalog,
+            mcpLifecycle: mcpLifecycleManager,
+            settingsStore: settingsStore);
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
@@ -193,6 +225,7 @@ public static class ClawSharpApplicationFactory
             queryEngine,
             appStateStore,
             transcriptStore);
+        var cronSchedulerService = new CronSchedulerService(workspaceRoot);
         var terminalShell = new TerminalShell(
             queryEngine,
             queuedTaskNotificationDrainer,
@@ -209,7 +242,8 @@ public static class ClawSharpApplicationFactory
             readFileState: readFileState,
             toolRegistry: tools,
             modelTurnContextProvider: modelTurnContextProvider,
-            localMainSessionTaskService: localMainSessionTaskService);
+            localMainSessionTaskService: localMainSessionTaskService,
+            cronSchedulerService: cronSchedulerService);
 
         var application = new ClawSharpApplication(
             sessionFactory,
@@ -235,7 +269,8 @@ public static class ClawSharpApplicationFactory
             tools,
             tasks,
             queryEngine,
-            terminalShell);
+            terminalShell,
+            modelTurnContextProvider);
         StartupProfiler.Checkpoint("create_default_application_end");
         stopwatch.Stop();
         ClawSharpTelemetry.LogEvent(

@@ -32,7 +32,8 @@ public sealed class ClawSharpApplication
         ToolRegistry tools,
         TaskRegistry tasks,
         QueryEngine queryEngine,
-        TerminalShell terminalShell)
+        TerminalShell terminalShell,
+        IQueryModelTurnContextProvider? modelTurnContextProvider = null)
     {
         SessionFactory = sessionFactory;
         SessionLogStore = sessionLogStore;
@@ -58,6 +59,7 @@ public sealed class ClawSharpApplication
         Tasks = tasks;
         QueryEngine = queryEngine;
         TerminalShell = terminalShell;
+        ModelTurnContextProvider = modelTurnContextProvider;
     }
 
     public ISessionFactory SessionFactory { get; }
@@ -85,4 +87,5 @@ public sealed class ClawSharpApplication
     public TaskRegistry Tasks { get; }
     public QueryEngine QueryEngine { get; }
     public TerminalShell TerminalShell { get; }
+    public IQueryModelTurnContextProvider? ModelTurnContextProvider { get; }
 }

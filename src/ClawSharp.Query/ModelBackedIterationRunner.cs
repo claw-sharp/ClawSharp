@@ -463,8 +463,17 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
                         update.Result.ToolCall.ToolUseId,
                         update.Result.ToolCall.ToolName,
                         update.Result.Output,
-                        update.Result.StructuredOutput);
+                        update.Result.StructuredOutput,
+                        update.Result.Success);
                     await EmitAndTrackAsync(toolResultMessage, cancellationToken);
+
+                    if (update.Result.InjectedMessages is { Count: > 0 })
+                    {
+                        foreach (var injected in update.Result.InjectedMessages)
+                        {
+                            await EmitAndTrackAsync(injected, cancellationToken);
+                        }
+                    }
                 }
             }
         }

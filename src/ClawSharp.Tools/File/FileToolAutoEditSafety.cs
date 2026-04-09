@@ -35,7 +35,7 @@ internal static class FileToolAutoEditSafety
             if (HasSuspiciousWindowsPathPattern(pathToCheck))
             {
                 return FileToolAutoEditSafetyResult.Blocked(
-                    $"Claude requested permissions to write to {originalPath}, which contains a suspicious Windows path pattern that requires manual approval.");
+                    $"ClawSharp to write to {originalPath}, which contains a suspicious Windows path pattern that requires manual approval.");
             }
         }
 
@@ -44,7 +44,7 @@ internal static class FileToolAutoEditSafety
             if (IsClaudeConfigFilePath(pathToCheck, workspaceRoot))
             {
                 return FileToolAutoEditSafetyResult.Blocked(
-                    $"Claude requested permissions to write to {originalPath}, but you haven't granted it yet.");
+                    $"ClawSharp to write to {originalPath}, but you haven't granted it yet.");
             }
         }
 
@@ -53,7 +53,7 @@ internal static class FileToolAutoEditSafety
             if (IsDangerousFilePathToAutoEdit(pathToCheck))
             {
                 return FileToolAutoEditSafetyResult.Blocked(
-                    $"Claude requested permissions to edit {originalPath} which is a sensitive file.");
+                    $"ClawSharp to edit {originalPath} which is a sensitive file.");
             }
         }
 
