@@ -1,42 +1,42 @@
 # ClawSharp Desktop
 
-This app packages the React UI as a Tauri desktop application.
+A beautiful, integrated GUI for the ClawSharp coding agent. This app leverages the React frontend and builds a native shell using Tauri, providing a rich multi-window workspace for your AI-driven development.
 
-## Scripts
+## Getting Started
 
-- `npm run dev:web` starts the Vite frontend only. This is a browser preview backed by mock AgentHost data, not the real desktop runtime.
-- `npm run dev` starts the Tauri desktop app in development mode with the real AgentHost runtime.
-- `npm run dev:codex` starts the Tauri desktop app in development mode and forces the Codex provider path.
-- `npm run build:web` builds the frontend assets only.
-- `npm run build` builds the desktop app bundle through Tauri.
+### Installation
+The simplest way to install ClawSharp is through a package manager:
 
-Release engineering notes live in [docs/desktop/release.md](/Users/hadoan/Documents/GitHub/ClawSharp/docs/desktop/release.md).
+*   **macOS**: `brew tap claw-sharp/tap && brew install --cask clawsharp`
+*   **Windows**: `winget install ClawSharp` or `scoop install clawsharp`
+*   **Manual**: Snag the latest installer from the [GitHub Releases](https://github.com/claw-sharp/ClawSharp/releases) page.
 
-## Requirements
+### OS Security Warnings
+Our releases are currently **unsigned** to keep the project open and free.
+*   **macOS**: Right-click the app in your Applications folder and select **Open** to bypass Gatekeeper.
+*   **Windows**: Click **"More info"** on the SmartScreen blue box and then **"Run anyway"**.
 
-- Node.js and npm for the frontend toolchain
-- A Rust toolchain (`rustup`, `cargo`) plus the platform-specific Tauri system dependencies to compile the native shell
+---
 
-## Logs
+## Development
 
-The desktop app writes persistent logs through Tauri's log plugin. On Windows the log folder is:
+If you're looking to contribute or build the desktop app from source:
 
-- `C:\Users\<your-user>\AppData\Local\com.clawsharp.desktop\logs\`
+### Requirements
+- **Node.js**: For the React frontend toolchain.
+- **Rust**: To compile the native Tauri shell (`rustup`, `cargo`).
+- **.NET 10**: To build the `AgentHost` sidecar.
 
-Common files in that folder:
+### Commands
+- `npm run dev`: Starts the Tauri desktop app in development mode with the real AgentHost runtime.
+- `npm run dev:web`: Starts the Vite frontend only (mock data preview).
+- `npm run build`: Compiles the full desktop bundle.
 
-- `webview.log`: frontend/browser-side logs from the React app
-- `rust.log`: current native-shell log file
-- `rust_YYYY-MM-DD_HH-MM-SS.log`: rotated native-shell logs from previous runs
+### Logs & Diagnostics
+Logs are stored in your platform's standard app-data folder (e.g., `AppData/Local/com.clawsharp.desktop/logs` on Windows).
+*   `webview.log`: Frontend React logs.
+*   `rust.log`: Native shell and .NET AgentHost logs.
 
-What goes where:
+---
 
-- Desktop shell startup, IPC, and Tauri-side AgentHost integration logs are written to `rust.log`
-- Frontend chat/composer logs are written to `webview.log`
-- AgentHost stderr is forwarded into the desktop native log, so AgentHost run/debug logs also show up in `rust.log`
-
-Useful notes:
-
-- In development, `npm run dev:web` is frontend-only, so it does not exercise the real Tauri + AgentHost logging path.
-- `npm run dev` and `npm run dev:codex` use the real desktop runtime and are the right entry points when debugging logs.
-- If you change C# or Rust logging code, restart the desktop dev session before collecting a new repro.
+Detailed release engineering notes can be found in [docs/desktop/release.md](../../docs/desktop/release.md).
