@@ -13,8 +13,8 @@ public sealed class IdeIntegrationServiceTests
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -35,7 +35,7 @@ public sealed class IdeIntegrationServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(Path.GetDirectoryName(workspaceRoot)!))
             {
                 Directory.Delete(Path.GetDirectoryName(workspaceRoot)!, recursive: true);
@@ -56,8 +56,8 @@ public sealed class IdeIntegrationServiceTests
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -93,7 +93,7 @@ public sealed class IdeIntegrationServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(Path.GetDirectoryName(workspaceRoot)!))
             {
                 Directory.Delete(Path.GetDirectoryName(workspaceRoot)!, recursive: true);
@@ -130,8 +130,8 @@ public sealed class IdeIntegrationServiceTests
             }
             """);
 
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -173,7 +173,7 @@ public sealed class IdeIntegrationServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(tempRoot))
             {
                 Directory.Delete(tempRoot, recursive: true);
@@ -189,8 +189,8 @@ public sealed class IdeIntegrationServiceTests
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -221,7 +221,7 @@ public sealed class IdeIntegrationServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(Path.GetDirectoryName(workspaceRoot)!))
             {
                 Directory.Delete(Path.GetDirectoryName(workspaceRoot)!, recursive: true);

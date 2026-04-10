@@ -11,13 +11,13 @@ public sealed class ThreadCatalogServiceTests
     [Fact]
     public async Task CreateThreadAsync_Creates_Empty_Transcript_And_GetThreadAsync_Returns_Detail()
     {
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-thread-tests", Guid.NewGuid().ToString("N"));
         var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "workspace");
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -52,7 +52,7 @@ public sealed class ThreadCatalogServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(tempRoot))
             {
                 Directory.Delete(tempRoot, recursive: true);
@@ -63,13 +63,13 @@ public sealed class ThreadCatalogServiceTests
     [Fact]
     public async Task GetThreadAsync_Paginates_To_Recent_Messages_And_Loads_Older_On_Demand()
     {
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-thread-paging-tests", Guid.NewGuid().ToString("N"));
         var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "workspace");
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -125,7 +125,7 @@ public sealed class ThreadCatalogServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(tempRoot))
             {
                 Directory.Delete(tempRoot, recursive: true);

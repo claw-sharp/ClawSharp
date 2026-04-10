@@ -225,14 +225,14 @@ public sealed class ProviderCatalogServiceTests
         public static async Task<ProviderCatalogFixture> CreateAsync(
             IProviderLiveValidationService? liveValidationService = null)
         {
-            var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+            var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
             var root = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-provider-tests", Guid.NewGuid().ToString("N"));
             var configRoot = Path.Combine(root, ".clawsharp");
             var workspaceRoot = Path.Combine(root, "repo");
             Directory.CreateDirectory(root);
             Directory.CreateDirectory(configRoot);
             Directory.CreateDirectory(workspaceRoot);
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
             var store = new RecentProjectStore(Path.Combine(root, "recent-projects.json"));
             var projectId = DesktopContractMapper.CreateProjectId(workspaceRoot);
@@ -262,7 +262,7 @@ public sealed class ProviderCatalogServiceTests
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", _previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", _previousConfigDir);
             if (Directory.Exists(Root))
             {
                 var attempts = 0;

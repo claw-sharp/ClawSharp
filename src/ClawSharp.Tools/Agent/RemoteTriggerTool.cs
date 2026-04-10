@@ -301,7 +301,7 @@ internal static class RemoteTriggerAuth
             return legacyPath;
         }
 
-        var configDirectory = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var configDirectory = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var parentDirectory = string.IsNullOrWhiteSpace(configDirectory)
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             : configDirectory;

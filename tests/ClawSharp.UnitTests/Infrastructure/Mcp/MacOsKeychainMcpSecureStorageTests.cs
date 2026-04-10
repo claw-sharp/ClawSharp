@@ -25,7 +25,7 @@ public sealed class MacOsKeychainMcpSecureStorageTests
                 GetClaudeConfigHomeDir: () => "/tmp/custom-claude",
                 GetEnvironmentVariable: name => name switch
                 {
-                    "CLAUDE_CONFIG_DIR" => "/tmp/custom-claude",
+                    "CLAWSHARP_CONFIG_DIR" => "/tmp/custom-claude",
                     "USER_TYPE" => "ant",
                     "USE_STAGING_OAUTH" => "1",
                     _ => null

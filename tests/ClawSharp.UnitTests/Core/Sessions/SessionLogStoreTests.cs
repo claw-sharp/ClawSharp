@@ -9,11 +9,11 @@ public class SessionLogStoreTests
     [Fact]
     public async Task LoadProjectLogsAsync_Reads_Custom_Title_And_First_User_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -35,7 +35,7 @@ public class SessionLogStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -51,11 +51,11 @@ public class SessionLogStoreTests
     [Fact]
     public async Task SearchProjectLogsByCustomTitleAsync_Matches_Exact_Title_Case_Insensitively()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-search-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -80,7 +80,7 @@ public class SessionLogStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -96,13 +96,13 @@ public class SessionLogStoreTests
     [Fact]
     public async Task LoadSameRepoLogsAsync_Loads_Logs_For_Matching_Worktrees()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-same-repo-tests", Guid.NewGuid().ToString("N"));
         var currentWorkspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"), "repo");
         var siblingWorkspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"), "repo-worktree");
         Directory.CreateDirectory(currentWorkspaceRoot);
         Directory.CreateDirectory(siblingWorkspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -128,7 +128,7 @@ public class SessionLogStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -145,11 +145,11 @@ public class SessionLogStoreTests
     [Fact]
     public async Task LoadProjectLogsAsync_Backfills_Metadata_For_Legacy_Transcript_Only_Sessions()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-migration-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -173,7 +173,7 @@ public class SessionLogStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -189,11 +189,11 @@ public class SessionLogStoreTests
     [Fact]
     public async Task RecordSessionMetadataAsync_Persists_Empty_Thread_Log_Metadata()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-empty-thread-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -218,7 +218,7 @@ public class SessionLogStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);

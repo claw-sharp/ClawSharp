@@ -15,9 +15,9 @@ public sealed class FileToolHistoryTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-file-history-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configDir = Path.Combine(tempDir, ".clawsharp");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -67,7 +67,7 @@ public sealed class FileToolHistoryTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -132,9 +132,9 @@ public sealed class FileToolHistoryTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-file-history-rewind-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configDir = Path.Combine(tempDir, ".clawsharp");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -166,7 +166,7 @@ public sealed class FileToolHistoryTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
@@ -179,9 +179,9 @@ public sealed class FileToolHistoryTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-file-history-delete-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configDir = Path.Combine(tempDir, ".clawsharp");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -203,7 +203,7 @@ public sealed class FileToolHistoryTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);

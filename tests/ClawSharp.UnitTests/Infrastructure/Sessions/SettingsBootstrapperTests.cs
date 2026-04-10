@@ -11,11 +11,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -78,7 +78,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -97,11 +97,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -165,7 +165,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -184,11 +184,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -219,7 +219,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -238,11 +238,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -266,7 +266,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -285,11 +285,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -313,7 +313,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -332,11 +332,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -370,7 +370,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -389,11 +389,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -434,7 +434,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {
@@ -453,11 +453,11 @@ public class SettingsBootstrapperTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-settings-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -492,7 +492,7 @@ public class SettingsBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             if (Directory.Exists(workspaceRoot))
             {

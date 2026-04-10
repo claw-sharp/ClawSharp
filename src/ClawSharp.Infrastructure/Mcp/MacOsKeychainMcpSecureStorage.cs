@@ -250,7 +250,7 @@ AwaitInFlight:
     private string GetStorageServiceName()
     {
         var configDir = _getClaudeConfigHomeDir().Normalize(NormalizationForm.FormC);
-        var isDefaultDir = string.IsNullOrWhiteSpace(_getEnvironmentVariable("CLAUDE_CONFIG_DIR"));
+        var isDefaultDir = string.IsNullOrWhiteSpace(_getEnvironmentVariable("CLAWSHARP_CONFIG_DIR"));
         var dirHash = isDefaultDir
             ? string.Empty
             : "-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(configDir))).ToLowerInvariant()[..8];

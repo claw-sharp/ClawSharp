@@ -315,17 +315,17 @@ public sealed class McpLifecycleManagerTests
 
         public ClaudeConfigDirectoryScope()
         {
-            _original = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+            _original = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
             Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clawsharp-mcp-lifecycle-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path);
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", Path);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", Path);
         }
 
         public string Path { get; }
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", _original);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", _original);
             if (Directory.Exists(Path))
             {
                 Directory.Delete(Path, recursive: true);

@@ -14,7 +14,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_Executes_Foreground_Local_Agent_And_Filters_Child_Tools()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
         var appStateStore = CreateAppStateStore(tempDir);
@@ -62,7 +62,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_Executes_Background_Local_Agent_And_Queues_Notification()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
         var appStateStore = CreateAppStateStore(tempDir);
@@ -104,7 +104,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_Uses_Agent_Routing_Model_When_Configured()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
         var settings = new ClawSharpSettings
@@ -160,7 +160,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task TaskStopTool_Stops_Background_Local_Agent_And_Queues_Stopped_Notification()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
         var appStateStore = CreateAppStateStore(tempDir);
@@ -206,7 +206,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_WithForkGate_Omitted_SubagentType_Uses_Fork_Runtime_And_Inherits_Parent_Context()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         using var forkGate = new EnvironmentVariableScope(ForkSubagentFoundation.ForkSubagentEnvironmentVariable, "1");
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
@@ -295,7 +295,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_WithForkGate_Blocks_Recursive_Fork_In_Fork_Child()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         using var forkGate = new EnvironmentVariableScope(ForkSubagentFoundation.ForkSubagentEnvironmentVariable, "1");
         var appStateStore = CreateAppStateStore(tempDir);
         var tasks = new TaskRegistry(tempDir, appStateStore: appStateStore);
@@ -321,7 +321,7 @@ public sealed class LocalAgentExecutionServiceTests
     public async Task AgentTool_WithForkGate_Forces_Background_Execution_For_Explicit_Subagent()
     {
         var tempDir = CreateTempDirectory();
-        using var configDir = new EnvironmentVariableScope("CLAUDE_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
+        using var configDir = new EnvironmentVariableScope("CLAWSHARP_CONFIG_DIR", Path.Combine(tempDir, ".clawsharp-config"));
         using var forkGate = new EnvironmentVariableScope(ForkSubagentFoundation.ForkSubagentEnvironmentVariable, "1");
         var queue = new InMemoryQueuedCommandQueue();
         var transcriptStore = new JsonlTranscriptStore();
