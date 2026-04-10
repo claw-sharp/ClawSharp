@@ -770,6 +770,43 @@ public sealed class ModelBackedIterationRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_Uses_AutoCompact_PostCompactMessages_Before_Model_Call()
+    {
+        var runner = new ModelBackedIterationRunner(
+            new PostSamplingHookRegistry(),
+            new QueryModelIterationRequestBuilder(),
+            new PromptTooLongModelCallExecutor(),
+            autoCompactRunner: new StaticAutoCompactRunner());
+        var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionRoot);
+        var session = new ConversationSession("session-model-14a", sessionRoot, Path.Combine(sessionRoot, "session.jsonl"));
+        var state = QueryLoopStateFactory.CreateInitial([ChatMessageFactory.CreateText(MessageRole.User, "hello")]);
+        var emittedEvents = new List<QueryRuntimeEvent>();
+
+        var result = await runner.RunAsync(
+            QueryTurnRequest.Create(session, "hello"),
+            state,
+            session,
+            new ClawSharpSettings(),
+            (runtimeEvent, _) =>
+            {
+                emittedEvents.Add(runtimeEvent);
+                return Task.CompletedTask;
+            });
+
+        var continueResult = Assert.IsType<QueryContinueIterationResult>(result);
+        Assert.Equal(QueryContinueReason.AutoCompactRetry, continueResult.Transition.Reason);
+        Assert.NotNull(continueResult.State.AutoCompactTracking);
+        Assert.True(continueResult.State.AutoCompactTracking!.Compacted);
+        Assert.Equal("Conversation compacted", continueResult.State.Messages[0].Content);
+        Assert.Equal("summary", continueResult.State.Messages[1].Content);
+        Assert.Equal("kept tail", continueResult.State.Messages[2].Content);
+        Assert.Equal(string.Empty, continueResult.State.Messages[3].Content);
+        Assert.Equal("hook-result", continueResult.State.Messages[4].Content);
+        Assert.Equal(5, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
+    }
+
+    [Fact]
     public async Task RunAsync_Returns_AbortedStreaming_And_Emits_Interruption_Message_For_NonInterrupt_Cancellation()
     {
         using var cancellationSource = new CancellationTokenSource();
@@ -1374,6 +1411,49 @@ public sealed class ModelBackedIterationRunnerTests
         }
     }
 
+    private sealed class StaticAutoCompactRunner : IQueryAutoCompactRunner
+    {
+        public async Task<QueryAutoCompactResult> TryCompactAsync(
+            QueryTurnRequest request,
+            QueryLoopState state,
+            ConversationSession session,
+            ClawSharpSettings settings,
+            Func<QueryRuntimeEvent, CancellationToken, Task> emitEvent,
+            CancellationToken cancellationToken = default)
+        {
+            var boundary = ChatMessageFactory.CreateCompactBoundaryMessage("auto", 500);
+            var summary = ChatMessageFactory.CreateText(MessageRole.User, "summary");
+            var keptTail = ChatMessageFactory.CreateText(MessageRole.User, "kept tail");
+            var attachment = ChatMessageFactory.CreateOutputTokenUsageAttachmentMessage(50, 50, 100);
+            var hookResult = ChatMessageFactory.CreateText(MessageRole.System, "hook-result");
+            var postCompactMessages = new[]
+            {
+                boundary,
+                summary,
+                keptTail,
+                attachment,
+                hookResult
+            };
+
+            foreach (var message in postCompactMessages)
+            {
+                await emitEvent(new QueryMessageRuntimeEvent(message), cancellationToken);
+            }
+
+            return new QueryAutoCompactResult(
+                state with
+                {
+                    Messages = postCompactMessages,
+                    AutoCompactTracking = new QueryAutoCompactTrackingState(
+                        Compacted: true,
+                        TurnCounter: 0,
+                        TurnId: "auto-compact",
+                        ConsecutiveFailures: 0)
+                },
+                Compacted: true);
+        }
+    }
+
     private sealed class FakeReactiveCompactExecutor : IQueryReactiveCompactExecutor
     {
         public Task<QueryCompactionResult?> TryReactiveCompactAsync(
@@ -1382,7 +1462,8 @@ public sealed class ModelBackedIterationRunnerTests
             QueryTerminalIterationResult terminalResult,
             ConversationSession session,
             ClawSharpSettings settings,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string trigger = "manual")
         {
             var boundary = ChatMessageFactory.CreateCompactBoundaryMessage("auto", 500);
             var summary = ChatMessageFactory.CreateText(MessageRole.User, "summary");

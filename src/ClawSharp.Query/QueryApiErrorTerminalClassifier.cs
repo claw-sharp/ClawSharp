@@ -6,6 +6,7 @@ namespace ClawSharp.Query;
 public static class QueryApiErrorTerminalClassifier
 {
     public const string PromptTooLongErrorMessage = "Prompt is too long";
+    public const string InputExceedsContextWindowErrorMessage = "input exceeds the context window";
 
     public static QueryLoopTerminal? Classify(ChatMessage? message, QueryLoopState? priorState = null)
     {
@@ -47,18 +48,19 @@ public static class QueryApiErrorTerminalClassifier
 
     private static bool IsPromptTooLongMessage(ChatMessage message)
     {
-        return message.ContentBlocks.Any(
-            block => block.Kind == MessageContentKind.Text &&
-                     block.Value.StartsWith(PromptTooLongErrorMessage, StringComparison.Ordinal));
+        var blockText = string.Join(
+            "\n",
+            message.ContentBlocks
+                .Where(block => block.Kind == MessageContentKind.Text)
+                .Select(block => block.Value));
+
+        return ContainsPromptOverflowIndicator(blockText) ||
+               ContainsPromptOverflowIndicator(GetErrorDetails(message));
     }
 
     private static bool IsMediaSizeErrorMessage(ChatMessage message)
     {
-        var block = message.ContentBlocks.FirstOrDefault();
-        var rawErrorDetails = block?.Metadata is not null &&
-                              block.Metadata.TryGetValue("errorDetails", out var errorDetails)
-            ? errorDetails
-            : null;
+        var rawErrorDetails = GetErrorDetails(message);
 
         if (string.IsNullOrWhiteSpace(rawErrorDetails))
         {
@@ -70,5 +72,28 @@ public static class QueryApiErrorTerminalClassifier
                (rawErrorDetails.Contains("image dimensions exceed", StringComparison.Ordinal) &&
                 rawErrorDetails.Contains("many-image", StringComparison.Ordinal)) ||
                System.Text.RegularExpressions.Regex.IsMatch(rawErrorDetails, @"maximum of \d+ PDF pages");
+    }
+
+    private static string? GetErrorDetails(ChatMessage message)
+    {
+        var block = message.ContentBlocks.FirstOrDefault();
+        return block?.Metadata is not null &&
+               block.Metadata.TryGetValue("errorDetails", out var errorDetails)
+            ? errorDetails
+            : null;
+    }
+
+    private static bool ContainsPromptOverflowIndicator(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Contains(PromptTooLongErrorMessage, StringComparison.OrdinalIgnoreCase) ||
+               text.Contains(InputExceedsContextWindowErrorMessage, StringComparison.OrdinalIgnoreCase) ||
+               (text.Contains("context window", StringComparison.OrdinalIgnoreCase) &&
+                (text.Contains("exceed", StringComparison.OrdinalIgnoreCase) ||
+                 text.Contains("limit", StringComparison.OrdinalIgnoreCase)));
     }
 }

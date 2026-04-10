@@ -2,6 +2,7 @@ namespace ClawSharp.Query;
 
 public enum QueryContinueReason
 {
+    AutoCompactRetry,
     CollapseDrainRetry,
     ReactiveCompactRetry,
     MaxOutputTokensEscalate,

@@ -9,6 +9,7 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
     private readonly IQueryModelIterationRequestBuilder _iterationRequestBuilder;
     private readonly IQueryModelCallExecutor _modelCallExecutor;
     private readonly IQueryPromptOverflowRecoveryRunner _promptOverflowRecoveryRunner;
+    private readonly IQueryAutoCompactRunner _autoCompactRunner;
     private readonly ToolOrchestrator? _toolOrchestrator;
     private readonly IQueryStopHookRunner? _stopHookRunner;
     private readonly IQueryToolUseSummaryGenerator _toolUseSummaryGenerator;
@@ -18,6 +19,7 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
         IQueryModelIterationRequestBuilder? iterationRequestBuilder = null,
         IQueryModelCallExecutor? modelCallExecutor = null,
         IQueryPromptOverflowRecoveryRunner? promptOverflowRecoveryRunner = null,
+        IQueryAutoCompactRunner? autoCompactRunner = null,
         ToolOrchestrator? toolOrchestrator = null,
         IQueryStopHookRunner? stopHookRunner = null,
         IQueryToolUseSummaryGenerator? toolUseSummaryGenerator = null)
@@ -26,6 +28,7 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
         _iterationRequestBuilder = iterationRequestBuilder ?? new QueryModelIterationRequestBuilder();
         _modelCallExecutor = modelCallExecutor ?? new NotImplementedQueryModelCallExecutor();
         _promptOverflowRecoveryRunner = promptOverflowRecoveryRunner ?? new NoOpQueryPromptOverflowRecoveryRunner();
+        _autoCompactRunner = autoCompactRunner ?? new NoOpQueryAutoCompactRunner();
         _toolOrchestrator = toolOrchestrator;
         _stopHookRunner = stopHookRunner;
         _toolUseSummaryGenerator = toolUseSummaryGenerator ?? new NoOpQueryToolUseSummaryGenerator();
@@ -48,6 +51,30 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
 
         while (true)
         {
+            var autoCompactResult = await _autoCompactRunner.TryCompactAsync(
+                request,
+                currentState,
+                session,
+                settings,
+                emitEvent,
+                cancellationToken);
+            currentState = autoCompactResult.State;
+            if (autoCompactResult.Compacted)
+            {
+                var transition = new QueryLoopTransition(QueryContinueReason.AutoCompactRetry);
+                return new QueryContinueIterationResult(
+                    transition,
+                    request,
+                    currentState with
+                    {
+                        HasAttemptedReactiveCompact = false,
+                        MaxOutputTokensOverride = null,
+                        PendingToolUseSummary = null,
+                        StopHookActive = null,
+                        Transition = transition
+                    });
+            }
+
             QueryModelCallAttemptResult? attemptResult = null;
             var streamingRequest = _iterationRequestBuilder.Build(request, currentState, settings);
 
