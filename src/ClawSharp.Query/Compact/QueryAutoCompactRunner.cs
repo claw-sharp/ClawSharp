@@ -4,11 +4,12 @@ namespace ClawSharp.Query;
 
 public sealed class QueryAutoCompactRunner : IQueryAutoCompactRunner
 {
-    private const int CompactSummaryOutputReserve = 20_000;
-    private const int AutoCompactBufferTokens = 13_000;
-    private const int MaxConsecutiveAutoCompactFailures = 3;
-    private const int DefaultContextWindowTokens = 200_000;
-    private const int OneMillionContextWindowTokens = 1_000_000;
+    public const string AutoCompactStatusMessage = "Compacting conversation to stay within the model's context window...";
+    public const int CompactSummaryOutputReserve = 20_000;
+    public const int AutoCompactBufferTokens = 13_000;
+    public const int MaxConsecutiveAutoCompactFailures = 3;
+    public const int DefaultContextWindowTokens = 200_000;
+    public const int OneMillionContextWindowTokens = 1_000_000;
 
     private readonly IQueryCompactionTokenEstimator _tokenEstimator;
     private readonly IQueryReactiveCompactExecutor _executor;
@@ -51,6 +52,11 @@ public sealed class QueryAutoCompactRunner : IQueryAutoCompactRunner
         {
             return new QueryAutoCompactResult(stateWithTracking, Compacted: false);
         }
+
+        await emitEvent(
+            new QueryMessageRuntimeEvent(
+                ChatMessageFactory.CreateSystemMessage(AutoCompactStatusMessage, "info")),
+            cancellationToken);
 
         var syntheticTerminal = new QueryTerminalIterationResult(
             new QueryLoopTerminal(QueryTerminalReason.PromptTooLong),
@@ -102,7 +108,7 @@ public sealed class QueryAutoCompactRunner : IQueryAutoCompactRunner
             Compacted: true);
     }
 
-    private static bool IsAutoCompactEnabled()
+    public static bool IsAutoCompactEnabled()
     {
         return !IsTruthy(Environment.GetEnvironmentVariable("DISABLE_COMPACT")) &&
                !IsTruthy(Environment.GetEnvironmentVariable("DISABLE_AUTO_COMPACT"));
@@ -134,12 +140,12 @@ public sealed class QueryAutoCompactRunner : IQueryAutoCompactRunner
             settings.Runtime.Model);
     }
 
-    private static int GetAutoCompactThreshold(string model)
+    public static int GetAutoCompactThreshold(string model)
     {
         return GetEffectiveContextWindowSize(model) - AutoCompactBufferTokens;
     }
 
-    private static int GetEffectiveContextWindowSize(string model)
+    public static int GetEffectiveContextWindowSize(string model)
     {
         var reservedTokens = Math.Min(
             QueryMaxOutputTokensResolver.GetMaxOutputTokensForModel(model),
@@ -147,7 +153,7 @@ public sealed class QueryAutoCompactRunner : IQueryAutoCompactRunner
         return GetContextWindowForModel(model) - reservedTokens;
     }
 
-    private static int GetContextWindowForModel(string model)
+    public static int GetContextWindowForModel(string model)
     {
         var maxContextOverride = Environment.GetEnvironmentVariable("CLAUDE_CODE_MAX_CONTEXT_TOKENS");
         if (int.TryParse(maxContextOverride, out var parsedOverride) && parsedOverride > 0)

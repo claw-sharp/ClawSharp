@@ -766,7 +766,9 @@ public sealed class ModelBackedIterationRunnerTests
         Assert.Equal("kept tail", continueResult.State.Messages[2].Content);
         Assert.Equal(string.Empty, continueResult.State.Messages[3].Content);
         Assert.Equal("hook-result", continueResult.State.Messages[4].Content);
-        Assert.Equal(6, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
+        var emittedMessages = emittedEvents.OfType<QueryMessageRuntimeEvent>().Select(e => e.Message).ToArray();
+        Assert.Contains(emittedMessages, message => message.Content == ReactiveCompactPromptOverflowRecoveryRunner.ReactiveCompactStatusMessage);
+        Assert.Equal(7, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
     }
 
     [Fact]
@@ -798,12 +800,15 @@ public sealed class ModelBackedIterationRunnerTests
         Assert.Equal(QueryContinueReason.AutoCompactRetry, continueResult.Transition.Reason);
         Assert.NotNull(continueResult.State.AutoCompactTracking);
         Assert.True(continueResult.State.AutoCompactTracking!.Compacted);
+        Assert.Equal(5, continueResult.State.Messages.Count);
         Assert.Equal("Conversation compacted", continueResult.State.Messages[0].Content);
         Assert.Equal("summary", continueResult.State.Messages[1].Content);
         Assert.Equal("kept tail", continueResult.State.Messages[2].Content);
         Assert.Equal(string.Empty, continueResult.State.Messages[3].Content);
         Assert.Equal("hook-result", continueResult.State.Messages[4].Content);
-        Assert.Equal(5, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
+        var autoCompactMessages = emittedEvents.OfType<QueryMessageRuntimeEvent>().Select(e => e.Message).ToArray();
+        Assert.Contains(autoCompactMessages, message => message.Content == QueryAutoCompactRunner.AutoCompactStatusMessage);
+        Assert.Equal(6, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
     }
 
     [Fact]
@@ -1421,6 +1426,10 @@ public sealed class ModelBackedIterationRunnerTests
             Func<QueryRuntimeEvent, CancellationToken, Task> emitEvent,
             CancellationToken cancellationToken = default)
         {
+            await emitEvent(
+                new QueryMessageRuntimeEvent(
+                    ChatMessageFactory.CreateSystemMessage(QueryAutoCompactRunner.AutoCompactStatusMessage, "info")),
+                cancellationToken);
             var boundary = ChatMessageFactory.CreateCompactBoundaryMessage("auto", 500);
             var summary = ChatMessageFactory.CreateText(MessageRole.User, "summary");
             var keptTail = ChatMessageFactory.CreateText(MessageRole.User, "kept tail");

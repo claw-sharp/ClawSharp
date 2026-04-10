@@ -58,8 +58,41 @@ public sealed class GoldenOutputTests
                 ["task-1"] = new LocalBashTask("task-1", "run build", ClawSharp.Tasks.TaskStatus.Running, DateTimeOffset.UtcNow, "build.log", "dotnet build")
             });
 
-        var actual = NormalizeNewlines(string.Join(Environment.NewLine, renderer.Render(appState)));
+        var actual = NormalizeNewlines(string.Join(Environment.NewLine, renderer.Render(appState, session)));
         Assert.Equal(LoadFixture("terminal-footer.golden.txt"), actual);
+    }
+
+    [Fact]
+    public void Terminal_Footer_Rendering_Includes_Context_Usage_For_Active_Session()
+    {
+        var renderer = new TerminalFooterRenderer();
+        var settings = new ClawSharpSettings
+        {
+            Runtime = new RuntimeSettings
+            {
+                Model = "claude-sonnet-4-5-20250929"
+            }
+        };
+        var appState = ClawSharpAppState.CreateDefault(
+            Environment.CurrentDirectory,
+            new StartupEnvironment(SessionStoragePaths.GetClaudeConfigHomeDir()),
+            settings,
+            [],
+            [],
+            [],
+            [],
+            [],
+            []);
+        var session = new ConversationSession("session-ctx", Environment.CurrentDirectory);
+        session.AddRecorded(ChatMessageFactory.CreateText(
+            MessageRole.User,
+            new string('a', 40_000)));
+
+        var rendered = renderer.Render(appState, session);
+
+        Assert.Contains(rendered, line => line.StartsWith("context ~", StringComparison.Ordinal));
+        Assert.Contains(rendered, line => line.Contains("tokens used", StringComparison.Ordinal));
+        Assert.Contains(rendered, line => line.Contains("auto-compact on", StringComparison.Ordinal));
     }
 
     [Fact]
