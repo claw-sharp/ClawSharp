@@ -9,7 +9,7 @@ public sealed class IdeIntegrationServiceTests
     public async Task DetectIdesAsync_Parses_Legacy_Lockfile_Format()
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "workspace");
-        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".claude");
+        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".clawsharp");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 
@@ -52,7 +52,7 @@ public sealed class IdeIntegrationServiceTests
     public async Task DetectIdesAsync_Parses_Json_Lockfiles_And_Marks_Workspace_Validity()
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "workspace");
-        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".claude");
+        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".clawsharp");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 
@@ -111,14 +111,14 @@ public sealed class IdeIntegrationServiceTests
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(tempRoot, "workspace");
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var windowsUsersRoot = Path.Combine(tempRoot, "Users");
         var windowsHomeOnDisk = Path.Combine(windowsUsersRoot, "TestUser");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
-        Directory.CreateDirectory(Path.Combine(windowsHomeOnDisk, ".claude", "ide"));
+        Directory.CreateDirectory(Path.Combine(windowsHomeOnDisk, ".clawsharp", "ide"));
 
-        var lockfilePath = Path.Combine(windowsHomeOnDisk, ".claude", "ide", "22334.lock");
+        var lockfilePath = Path.Combine(windowsHomeOnDisk, ".clawsharp", "ide", "22334.lock");
         await File.WriteAllTextAsync(
             lockfilePath,
             """
@@ -185,7 +185,7 @@ public sealed class IdeIntegrationServiceTests
     public async Task DetectIdesAsync_In_Wsl_Rejects_Wsl_Unc_Paths_From_Different_Distro()
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "workspace");
-        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".claude");
+        var configRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), ".clawsharp");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
 

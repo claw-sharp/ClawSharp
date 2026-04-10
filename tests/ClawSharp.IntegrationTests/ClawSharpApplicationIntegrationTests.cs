@@ -748,7 +748,7 @@ public class ClawSharpApplicationIntegrationTests
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempConfigDir);
         Directory.CreateDirectory(workspaceRoot);
-        Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
         Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
 
         await File.WriteAllTextAsync(
@@ -764,7 +764,7 @@ public class ClawSharpApplicationIntegrationTests
             }
             """);
         await File.WriteAllTextAsync(
-            Path.Combine(workspaceRoot, ".claude", "settings.json"),
+            Path.Combine(workspaceRoot, ".clawsharp", "settings.json"),
             """
             {
               "runtime": {

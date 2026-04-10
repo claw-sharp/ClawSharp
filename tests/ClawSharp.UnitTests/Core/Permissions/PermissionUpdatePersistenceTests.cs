@@ -133,7 +133,7 @@ public sealed class PermissionUpdatePersistenceTests
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             var projectSettingsPath = ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot);
             File.WriteAllText(
                 projectSettingsPath,
@@ -177,7 +177,7 @@ public sealed class PermissionUpdatePersistenceTests
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             var localSettingsPath = ClaudeConfigPaths.GetLocalSettingsFilePath(workspaceRoot);
             var service = new PermissionUpdatePersistenceService();
 

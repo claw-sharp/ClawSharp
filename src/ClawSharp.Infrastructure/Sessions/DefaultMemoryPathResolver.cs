@@ -25,7 +25,7 @@ public sealed class DefaultMemoryPathResolver : IMemoryPathResolver
         }
 
         // 2. Check settings.json (policy/local/user)
-        // Note: project-level .claude/settings.json is ignored for security in TS
+        // Note: project-level .clawsharp/settings.json is ignored for security in TS
         var validatedSetting = ValidateMemoryPath(_settings.Runtime.AutoMemoryDirectory, expandTilde: true);
         if (!string.IsNullOrWhiteSpace(validatedSetting))
         {

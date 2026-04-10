@@ -8,7 +8,7 @@ public sealed class SkillUsageTrackerTests
     public void RecordSkillUsage_Debounces_Repeated_Writes_And_Computes_Recency_Score()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-skill-usage-tests", Guid.NewGuid().ToString("N"));
-        var configPath = Path.Combine(tempRoot, ".claude.json");
+        var configPath = Path.Combine(tempRoot, ".clawsharp.json");
         Directory.CreateDirectory(tempRoot);
 
         try

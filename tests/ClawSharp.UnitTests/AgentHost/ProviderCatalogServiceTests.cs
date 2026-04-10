@@ -80,7 +80,7 @@ public sealed class ProviderCatalogServiceTests
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(fixture.WorkspaceRoot),
                 """
@@ -117,7 +117,7 @@ public sealed class ProviderCatalogServiceTests
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(fixture.WorkspaceRoot),
                 """
@@ -227,7 +227,7 @@ public sealed class ProviderCatalogServiceTests
         {
             var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
             var root = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-provider-tests", Guid.NewGuid().ToString("N"));
-            var configRoot = Path.Combine(root, ".claude");
+            var configRoot = Path.Combine(root, ".clawsharp");
             var workspaceRoot = Path.Combine(root, "repo");
             Directory.CreateDirectory(root);
             Directory.CreateDirectory(configRoot);

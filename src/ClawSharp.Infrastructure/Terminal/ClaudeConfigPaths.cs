@@ -12,12 +12,12 @@ public static class ClaudeConfigPaths
 
     public static string GetProjectSettingsFilePath(string workspaceRoot)
     {
-        return Path.Combine(workspaceRoot, ".claude", "settings.json");
+        return Path.Combine(workspaceRoot, ".clawsharp", "settings.json");
     }
 
     public static string GetLocalSettingsFilePath(string workspaceRoot)
     {
-        return Path.Combine(workspaceRoot, ".claude", "settings.local.json");
+        return Path.Combine(workspaceRoot, ".clawsharp", "settings.local.json");
     }
 
     public static string GetManagedSettingsFilePath()
@@ -32,7 +32,7 @@ public static class ClaudeConfigPaths
 
     public static string GetManagedSkillsDirectoryPath()
     {
-        return Path.Combine(GetManagedFilePath(), ".claude", "skills");
+        return Path.Combine(GetManagedFilePath(), ".clawsharp", "skills");
     }
 
     public static string GetPluginsDirectoryPath()
@@ -92,7 +92,7 @@ public static class ClaudeConfigPaths
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             : configDirectory;
 
-        return Path.Combine(parentDirectory, ".claude.json");
+        return Path.Combine(parentDirectory, ".clawsharp.json");
     }
 
     public static string GetManagedFilePath()

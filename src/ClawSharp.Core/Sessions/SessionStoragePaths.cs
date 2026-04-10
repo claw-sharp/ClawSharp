@@ -13,7 +13,7 @@ public static class SessionStoragePaths
         var configHome = string.IsNullOrWhiteSpace(configured)
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".claude")
+                ".clawsharp")
             : configured;
 
         return configHome.Normalize(NormalizationForm.FormC);

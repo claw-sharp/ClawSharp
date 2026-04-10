@@ -23,8 +23,8 @@ All telemetry output is rooted at `CLAUDE_CONFIG_DIR` when that variable is set.
 
 If `CLAUDE_CONFIG_DIR` is not set, ClawSharp uses:
 
-- Windows: `%USERPROFILE%\.claude`
-- macOS/Linux: `~/.claude`
+- Windows: `%USERPROFILE%\.clawsharp`
+- macOS/Linux: `~/.clawsharp`
 
 Within that directory, the current implementation writes:
 
@@ -139,7 +139,7 @@ dotnet run --project .\src\ClawSharp.Cli -- repl
 After running a session, inspect:
 
 ```powershell
-Get-ChildItem "$env:USERPROFILE\.claude\telemetry"
+Get-ChildItem "$env:USERPROFILE\.clawsharp\telemetry"
 ```
 
 Or if you want a temporary isolated location:

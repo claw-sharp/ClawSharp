@@ -104,7 +104,7 @@ public sealed class McpConfigServiceTests
     public void GetConfigByName_UsesEnterpriseThenLocalThenProjectThenUserPrecedence()
     {
         var workspaceRoot = CreateTempDirectory();
-        var globalConfigPath = Path.Combine(workspaceRoot, ".claude.json");
+        var globalConfigPath = Path.Combine(workspaceRoot, ".clawsharp.json");
         var enterprisePath = Path.Combine(workspaceRoot, "managed-mcp.json");
 
         File.WriteAllText(

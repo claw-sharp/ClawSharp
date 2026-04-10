@@ -74,7 +74,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://api.anthropic.com',
         transport: 'AnthropicMessages',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: false,
@@ -104,7 +104,7 @@ describe('useAppStore', () => {
         baseUrl: 'https://api.anthropic.com',
         transport: 'AnthropicMessages',
         environment: 'macOS',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         uptime: '1.0m',
         memoryUsage: '120 MB',
         logPaths: {
@@ -157,7 +157,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 1,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -183,7 +183,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 1,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -243,7 +243,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 1,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -383,7 +383,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 1,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -425,7 +425,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 1,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -498,7 +498,7 @@ describe('useAppStore', () => {
               summary: 'Summary',
               lastUpdatedAt: '2026-04-08T10:01:00.000Z',
               messageCount: 3,
-              transcriptPath: '/repo/.claude/thread-1.jsonl',
+              transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
               worktree: {
                 repoRoot: '/repo',
                 worktreePath: '/repo',
@@ -537,7 +537,7 @@ describe('useAppStore', () => {
             summary: 'Summary',
             lastUpdatedAt: '2026-04-08T10:01:00.000Z',
             messageCount: 3,
-            transcriptPath: '/repo/.claude/thread-1.jsonl',
+            transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
             worktree: {
               repoRoot: '/repo',
               worktreePath: '/repo',
@@ -638,7 +638,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 0,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -664,7 +664,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 0,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -803,7 +803,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 0,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -859,7 +859,7 @@ describe('useAppStore', () => {
           summary: 'Summary',
           lastUpdatedAt: '2026-04-08T10:01:00.000Z',
           messageCount: 0,
-          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
           worktree: {
             repoRoot: '/repo',
             worktreePath: '/repo',
@@ -969,7 +969,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://api.openai.com/v1',
         transport: 'OpenAIChatCompletions',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: true,
@@ -1102,7 +1102,7 @@ describe('useAppStore', () => {
           fileCheckpointingEnabled: true,
           baseUrl: 'https://api.anthropic.com',
           transport: 'AnthropicMessages',
-          configPath: '/Users/test/.claude/settings.json',
+          configPath: '/Users/test/.clawsharp/settings.json',
           settingsIssues: [],
           credentials: {
             hasApiKey: false,
@@ -1131,7 +1131,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://api.openai.com/v1',
         transport: 'OpenAIChatCompletions',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: true,
@@ -1172,7 +1172,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://api.anthropic.com',
         transport: 'AnthropicMessages',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: false,
@@ -1244,7 +1244,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         transport: 'CodexResponses',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: true,
@@ -1294,7 +1294,7 @@ describe('useAppStore', () => {
         fileCheckpointingEnabled: true,
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         transport: 'CodexResponses',
-        configPath: '/Users/test/.claude/settings.json',
+        configPath: '/Users/test/.clawsharp/settings.json',
         settingsIssues: [],
         credentials: {
           hasApiKey: false,

@@ -163,7 +163,7 @@ public sealed class IdeIntegrationService
             var convertedHome = _pathConverterFactory(wslDistroName).ToLocalPath(windowsHome);
             if (!string.IsNullOrWhiteSpace(convertedHome))
             {
-                directories.Add(Path.GetFullPath(Path.Combine(convertedHome, ".claude", "ide")));
+                directories.Add(Path.GetFullPath(Path.Combine(convertedHome, ".clawsharp", "ide")));
             }
         }
 
@@ -204,7 +204,7 @@ public sealed class IdeIntegrationService
                     continue;
                 }
 
-                directories.Add(Path.Combine(entry, ".claude", "ide"));
+                directories.Add(Path.Combine(entry, ".clawsharp", "ide"));
             }
         }
         catch

@@ -136,7 +136,7 @@ public class SettingsCommandRendererTests
     {
         var repoPath = OperatingSystem.IsWindows() ? @"D:\repo" : "/repo";
         var configPath = OperatingSystem.IsWindows() ? @"D:\config" : "/config";
-        var settingsPath = Path.Combine(repoPath, ".claude", "settings.json");
+        var settingsPath = Path.Combine(repoPath, ".clawsharp", "settings.json");
 
         var renderer = new SettingsCommandRenderer();
         var settings = new ClawSharpSettings();

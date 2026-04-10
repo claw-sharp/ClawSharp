@@ -13,7 +13,7 @@ public sealed class FileOpenFileUpdateIntegrationTests
     public async Task DiagnosticTrackingNotifier_CapturesIdeDiagnosticsAfterQueryStart()
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-diagnostic-tracking-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(workspaceRoot, ".claude");
+        var configRoot = Path.Combine(workspaceRoot, ".clawsharp");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
         var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");

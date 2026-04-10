@@ -14,7 +14,7 @@ internal static class FileToolAutoEditSafety
         ".zprofile",
         ".profile",
         ".ripgreprc",
-        ".claude.json"
+        ".clawsharp.json"
     ];
 
     private static readonly string[] DangerousDirectories =
@@ -22,7 +22,7 @@ internal static class FileToolAutoEditSafety
         ".git",
         ".vscode",
         ".idea",
-        ".claude"
+        ".clawsharp"
     ];
 
     public static FileToolAutoEditSafetyResult Check(
@@ -73,16 +73,16 @@ internal static class FileToolAutoEditSafety
     {
         var expandedPath = Path.GetFullPath(filePath);
         var normalizedPath = NormalizeCaseForComparison(expandedPath);
-        var workspaceClaudeDir = Path.Combine(Path.GetFullPath(workspaceRoot), ".claude");
+        var workspaceClaudeDir = Path.Combine(Path.GetFullPath(workspaceRoot), ".clawsharp");
         var userClaudeDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".claude");
+            ".clawsharp");
 
         if (normalizedPath.EndsWith(
-                $"{Path.DirectorySeparatorChar}.claude{Path.DirectorySeparatorChar}settings.json",
+                $"{Path.DirectorySeparatorChar}.clawsharp{Path.DirectorySeparatorChar}settings.json",
                 GetPathComparison()) ||
             normalizedPath.EndsWith(
-                $"{Path.DirectorySeparatorChar}.claude{Path.DirectorySeparatorChar}settings.local.json",
+                $"{Path.DirectorySeparatorChar}.clawsharp{Path.DirectorySeparatorChar}settings.local.json",
                 GetPathComparison()))
         {
             return true;
@@ -121,7 +121,7 @@ internal static class FileToolAutoEditSafety
                     continue;
                 }
 
-                if (dangerousDirectory == ".claude" &&
+                if (dangerousDirectory == ".clawsharp" &&
                     index + 1 < pathSegments.Length &&
                     string.Equals(
                         NormalizeCaseForComparison(pathSegments[index + 1]),

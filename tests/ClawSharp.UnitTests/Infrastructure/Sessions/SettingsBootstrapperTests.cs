@@ -33,7 +33,7 @@ public class SettingsBootstrapperTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -131,7 +131,7 @@ public class SettingsBootstrapperTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -349,7 +349,7 @@ public class SettingsBootstrapperTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -404,7 +404,7 @@ public class SettingsBootstrapperTests
                   "skipAutoPermissionPrompt": true
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -471,7 +471,7 @@ public class SettingsBootstrapperTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """

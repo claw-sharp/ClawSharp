@@ -7,8 +7,8 @@ public sealed class MemoryFileDetectionTests
     [Fact]
     public void DetectSessionFileType_Returns_SessionMemory_For_Markdown_Under_Config_Directory()
     {
-        var configHome = CombinePath("home", "user", ".claude");
-        var filePath = CombinePath("home", "user", ".claude", "session-memory", "session-1.md");
+        var configHome = CombinePath("home", "user", ".clawsharp");
+        var filePath = CombinePath("home", "user", ".clawsharp", "session-memory", "session-1.md");
 
         var result = MemoryFileDetection.DetectSessionFileType(filePath, configHome);
 
@@ -18,8 +18,8 @@ public sealed class MemoryFileDetectionTests
     [Fact]
     public void IsMemoryDirectory_Does_Not_Treat_Project_Memory_As_Tracked_When_AutoMemory_Is_Disabled()
     {
-        var memoryBase = CombinePath("home", "user", ".claude", "projects", "repo");
-        var directoryPath = CombinePath("home", "user", ".claude", "projects", "repo", "memory");
+        var memoryBase = CombinePath("home", "user", ".clawsharp", "projects", "repo");
+        var directoryPath = CombinePath("home", "user", ".clawsharp", "projects", "repo", "memory");
 
         var result = MemoryFileDetection.IsMemoryDirectory(directoryPath, memoryBase);
 
@@ -29,9 +29,9 @@ public sealed class MemoryFileDetectionTests
     [Fact]
     public void IsShellCommandTargetingMemory_Does_Not_False_Positive_When_AutoMemory_Is_Disabled()
     {
-        var configHome = CombinePath("home", "user", ".claude");
-        var memoryBase = CombinePath("home", "user", ".claude", "projects", "repo");
-        var command = $"grep needle {CombinePath("home", "user", ".claude", "notes.md")}";
+        var configHome = CombinePath("home", "user", ".clawsharp");
+        var memoryBase = CombinePath("home", "user", ".clawsharp", "projects", "repo");
+        var command = $"grep needle {CombinePath("home", "user", ".clawsharp", "notes.md")}";
 
         var result = MemoryFileDetection.IsShellCommandTargetingMemory(
             command,
@@ -45,9 +45,9 @@ public sealed class MemoryFileDetectionTests
     [Fact]
     public void IsShellCommandTargetingMemory_Returns_True_For_SessionMemory_File()
     {
-        var configHome = CombinePath("home", "user", ".claude");
-        var memoryBase = CombinePath("home", "user", ".claude", "projects", "repo");
-        var command = $"cat {CombinePath("home", "user", ".claude", "session-memory", "session-2.md")}";
+        var configHome = CombinePath("home", "user", ".clawsharp");
+        var memoryBase = CombinePath("home", "user", ".clawsharp", "projects", "repo");
+        var command = $"cat {CombinePath("home", "user", ".clawsharp", "session-memory", "session-2.md")}";
 
         var result = MemoryFileDetection.IsShellCommandTargetingMemory(
             command,

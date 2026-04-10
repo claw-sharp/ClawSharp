@@ -163,7 +163,7 @@ public sealed class PermissionModeTransitionTests
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             File.WriteAllText(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -215,7 +215,7 @@ public sealed class PermissionModeTransitionTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """

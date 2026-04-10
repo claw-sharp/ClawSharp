@@ -3,7 +3,7 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class ClaudeAiOAuthTokenSource
 {
-    public const string CcrOAuthTokenPath = "/home/claude/.claude/remote/.oauth_token";
+    public const string CcrOAuthTokenPath = "/home/claude/.clawsharp/remote/.oauth_token";
 
     private readonly string _wellKnownTokenPath;
     private readonly Func<string, string?> _getEnvironmentVariable;

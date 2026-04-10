@@ -694,7 +694,7 @@ public class ParityMilestoneCoverageTests
     public async Task Write_Rejects_Claude_Settings_Path()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-write-claude-settings-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(tempDir, ".claude"));
+        Directory.CreateDirectory(Path.Combine(tempDir, ".clawsharp"));
 
         var registry = new ToolRegistry(
             tempDir,
@@ -705,7 +705,7 @@ public class ParityMilestoneCoverageTests
 
         var result = await registry.ExecuteAsync(
             "Write",
-            """{"file_path":".claude/settings.json","content":"{}"}""",
+            """{"file_path":".clawsharp/settings.json","content":"{}"}""",
             session,
             settings);
 

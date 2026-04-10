@@ -14,7 +14,7 @@ internal static class CronToolSchemas
                 ("cron", ToolJsonSchemaFactory.String("Standard 5-field cron expression in local time: M H DoM Mon DoW.")),
                 ("prompt", ToolJsonSchemaFactory.String("Prompt text to associate with the schedule.")),
                 ("recurring", ToolJsonSchemaFactory.Boolean("Whether the job repeats. Defaults to true.", defaultValue: true)),
-                ("durable", ToolJsonSchemaFactory.Boolean("Persist the job to .claude/scheduled_tasks.json.", defaultValue: false))
+                ("durable", ToolJsonSchemaFactory.Boolean("Persist the job to .clawsharp/scheduled_tasks.json.", defaultValue: false))
             ],
             required: ["cron", "prompt"]);
 
@@ -529,7 +529,7 @@ internal static class CronJobStore
 
     private static string GetDurableStorePath(string workspaceRoot)
     {
-        return Path.Combine(Path.GetFullPath(workspaceRoot), ".claude", "scheduled_tasks.json");
+        return Path.Combine(Path.GetFullPath(workspaceRoot), ".clawsharp", "scheduled_tasks.json");
     }
 }
 

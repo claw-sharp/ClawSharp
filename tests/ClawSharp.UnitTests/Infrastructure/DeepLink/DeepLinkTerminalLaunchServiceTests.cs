@@ -48,7 +48,7 @@ public sealed class DeepLinkTerminalLaunchServiceTests
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "clawsharp-deeplink", Guid.NewGuid().ToString("N"));
         var trackedClone = Path.Combine(tempDirectory, "tracked-clone");
-        var globalConfigPath = Path.Combine(tempDirectory, ".claude.json");
+        var globalConfigPath = Path.Combine(tempDirectory, ".clawsharp.json");
         Directory.CreateDirectory(trackedClone);
         await File.WriteAllTextAsync(
             globalConfigPath,

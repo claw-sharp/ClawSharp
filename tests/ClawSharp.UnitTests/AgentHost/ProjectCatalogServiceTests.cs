@@ -60,7 +60,7 @@ public sealed class ProjectCatalogServiceTests
     {
         var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-project-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "repo-one");
         Directory.CreateDirectory(tempRoot);
         Directory.CreateDirectory(configRoot);
@@ -113,7 +113,7 @@ public sealed class ProjectCatalogServiceTests
     {
         var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-project-open-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "repo-one");
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);

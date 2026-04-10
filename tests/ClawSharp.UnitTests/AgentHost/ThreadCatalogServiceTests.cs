@@ -13,7 +13,7 @@ public sealed class ThreadCatalogServiceTests
     {
         var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-thread-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "workspace");
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);
@@ -65,7 +65,7 @@ public sealed class ThreadCatalogServiceTests
     {
         var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-thread-paging-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "workspace");
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);
