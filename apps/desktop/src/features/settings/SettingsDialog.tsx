@@ -295,10 +295,10 @@ export const SettingsDialog = () => {
 };
 
 const SettingRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="flex items-center justify-between">
+  <label className="flex items-center justify-between cursor-pointer">
     <span className="text-xs text-secondary-foreground">{label}</span>
     {children}
-  </div>
+  </label>
 );
 
 const CredentialPanel = ({
