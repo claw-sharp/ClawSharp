@@ -1351,8 +1351,12 @@ function createPromptLogContext(prompt: string): {
 }
 
 function upsertProject(projects: Project[], nextProject: Project): Project[] {
-  const remaining = projects.filter((project) => project.id !== nextProject.id);
-  return [nextProject, ...remaining];
+  const existingIndex = projects.findIndex((project) => project.id === nextProject.id);
+  if (existingIndex === -1) {
+    return [nextProject, ...projects];
+  }
+
+  return projects.map((project, index) => (index === existingIndex ? nextProject : project));
 }
 
 function mergeProjectLists(currentProjects: Project[], incomingProjects: Project[]): Project[] {
