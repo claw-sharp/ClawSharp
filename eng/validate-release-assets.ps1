@@ -12,6 +12,7 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $resolvedPublishedRoot = Join-Path $repoRoot $PublishedRoot
 $resolvedTauriBinariesRoot = Join-Path $repoRoot $TauriBinariesRoot
+$resolvedTauriConfigPath = Join-Path $repoRoot "apps/desktop/src-tauri/tauri.conf.json"
 
 function Get-AgentHostExecutableName([string]$RuntimeIdentifier) {
     if ($RuntimeIdentifier.StartsWith("win-")) {
@@ -19,6 +20,40 @@ function Get-AgentHostExecutableName([string]$RuntimeIdentifier) {
     }
 
     return "clawsharp-agenthost"
+}
+
+function Test-TauriBundlesAgentHostResources {
+    if (-not (Test-Path $resolvedTauriConfigPath)) {
+        throw "Tauri config not found: $resolvedTauriConfigPath"
+    }
+
+    $config = Get-Content $resolvedTauriConfigPath -Raw | ConvertFrom-Json
+    $resources = $config.bundle.resources
+    if ($null -eq $resources) {
+        return $false
+    }
+
+    if ($resources -is [System.Collections.IDictionary]) {
+        foreach ($key in $resources.Keys) {
+            if ($key -eq "binaries/") {
+                return $true
+            }
+        }
+
+        return $false
+    }
+
+    foreach ($entry in $resources) {
+        if ($entry -eq "binaries/") {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+if (-not (Test-TauriBundlesAgentHostResources)) {
+    throw "Tauri bundle.resources must include 'binaries/' so the AgentHost sidecar is packaged."
 }
 
 if ($RuntimeIdentifiers.Count -eq 0) {

@@ -244,6 +244,32 @@ jobs:
             -Repo "${{ github.event.repository.name }}" `
             -Tag "${{ needs.validate.outputs.tag }}"
 
+      - name: Validate WinGet manifest line endings
+        shell: pwsh
+        run: |
+          $manifestRoot = Join-Path "artifacts/desktop/winget/ClawSharp.ClawSharp" "${{ needs.validate.outputs.version }}"
+          $manifestFiles = Get-ChildItem -Path $manifestRoot -Filter *.yaml -File
+          if ($manifestFiles.Count -eq 0) {
+            throw "No WinGet manifests found under $manifestRoot"
+          }
+
+          foreach ($file in $manifestFiles) {
+            $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.Length -lt 2 -or $bytes[$bytes.Length - 2] -ne 13 -or $bytes[$bytes.Length - 1] -ne 10) {
+              throw "Expected trailing CRLF in $($file.FullName)"
+            }
+
+            for ($index = 0; $index -lt $bytes.Length; $index++) {
+              if ($bytes[$index] -eq 10 -and ($index -eq 0 -or $bytes[$index - 1] -ne 13)) {
+                throw "Found lone LF in $($file.FullName)"
+              }
+
+              if ($bytes[$index] -eq 13 -and ($index + 1 -ge $bytes.Length -or $bytes[$index + 1] -ne 10)) {
+                throw "Found lone CR in $($file.FullName)"
+              }
+            }
+          }
+
       - name: Generate Homebrew cask
         shell: pwsh
         run: |

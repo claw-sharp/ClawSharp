@@ -58,6 +58,19 @@ function writeJson(jsonPath, value) {
   fs.writeFileSync(jsonPath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function writeTextFile(textPath, content, options = {}) {
+  const { eol = "\n", finalNewline = true } = options;
+  fs.mkdirSync(path.dirname(textPath), { recursive: true });
+
+  let normalized = content.replace(/\r?\n/g, eol);
+  if (finalNewline) {
+    normalized = normalized.replace(new RegExp(`${eol}$`), "");
+    normalized += eol;
+  }
+
+  fs.writeFileSync(textPath, normalized, "utf8");
+}
+
 function sha256(filePath) {
   const hash = crypto.createHash("sha256");
   hash.update(fs.readFileSync(filePath));
@@ -290,7 +303,7 @@ function generateWingetManifests(options) {
 
   const sharedHeader = `# yaml-language-server: $schema=https://aka.ms/winget-manifest.`;
   const date = new Date().toISOString().slice(0, 10);
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.yaml`),
     `${sharedHeader}version.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -299,9 +312,10 @@ DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.installer.yaml`),
     `${sharedHeader}installer.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -325,9 +339,10 @@ Installers:
 ManifestType: installer
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.locale.en-US.yaml`),
     `${sharedHeader}defaultLocale.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -351,6 +366,7 @@ Tags:
 ManifestType: defaultLocale
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 }
 
