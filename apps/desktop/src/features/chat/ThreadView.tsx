@@ -1,11 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/store';
 import { StatusBadge } from '@/components/StatusBadge';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 import {
   Send, Square, Bot, User, FileCode,
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
-  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle,
+  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge,
 } from 'lucide-react';
 import type { Message, ToolProgressEvent } from '@/types';
 
@@ -264,6 +265,8 @@ export const ThreadView = () => {
       {/* Composer */}
       <PromptComposer
         threadId={thread.id}
+        threadModel={thread.model}
+        threadMessages={threadMessages}
         isRunning={run.isRunning}
         isBrowserPreview={isBrowserPreview}
         onSend={sendPrompt}
@@ -422,12 +425,16 @@ function iconForToolEvent(event: ToolProgressEvent) {
 
 const PromptComposer = ({
   threadId,
+  threadModel,
+  threadMessages,
   isRunning,
   isBrowserPreview,
   onSend,
   onCancel,
 }: {
   threadId: string;
+  threadModel: string;
+  threadMessages: Message[];
   isRunning: boolean;
   isBrowserPreview: boolean;
   onSend: (threadId: string, prompt: string) => Promise<void>;
@@ -435,6 +442,7 @@ const PromptComposer = ({
 }) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const contextUsage = summarizeContextUsage(threadMessages, threadModel);
 
   const submit = () => {
     const prompt = value.trim();
@@ -494,11 +502,226 @@ const PromptComposer = ({
           {isRunning ? <Square className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <p className="text-[10px] text-muted-foreground mt-1.5">
-        {isBrowserPreview
-          ? 'This browser preview is read-only. Use `npm run dev` or `npm run dev:codex` for the real desktop runtime.'
-          : `Shift+Enter for newline · ${isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}`}
-      </p>
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <p className="text-[10px] text-muted-foreground">
+          {isBrowserPreview
+            ? 'This browser preview is read-only. Use `npm run dev` or `npm run dev:codex` for the real desktop runtime.'
+            : `Shift+Enter for newline · ${isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}`}
+        </p>
+        {!isBrowserPreview && (
+          <ContextUsageBadge
+            usedPercent={contextUsage.usedPercent}
+            usedTokens={contextUsage.usedTokens}
+            effectiveContextWindow={contextUsage.effectiveContextWindow}
+            remainingTokens={contextUsage.remainingTokens}
+            autoCompactThreshold={contextUsage.autoCompactThreshold}
+          />
+        )}
+      </div>
     </div>
   );
 };
+
+const ContextUsageBadge = ({
+  usedPercent,
+  usedTokens,
+  effectiveContextWindow,
+  remainingTokens,
+  autoCompactThreshold,
+}: {
+  usedPercent: number;
+  usedTokens: number;
+  effectiveContextWindow: number;
+  remainingTokens: number;
+  autoCompactThreshold: number;
+}) => {
+  return (
+    <HoverCard openDelay={0}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/80 bg-muted/30 px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+        >
+          <Gauge className="h-3 w-3" />
+          <span>{`Context ~${usedPercent}%`}</span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-72 space-y-2 px-3 py-3">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-foreground">Context window</p>
+          <p className="text-xs text-muted-foreground">
+            {`${usedPercent}% full`}
+          </p>
+        </div>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p>{`${formatTokenCount(usedTokens)} / ${formatTokenCount(effectiveContextWindow)} tokens used`}</p>
+          <p>{`${formatTokenCount(remainingTokens)} tokens remaining before the effective window fills`}</p>
+          <p>{`Auto-compaction starts near ${formatTokenCount(autoCompactThreshold)} tokens`}</p>
+          <p>ClawSharp automatically compacts the active transcript before overflow when possible.</p>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+};
+
+const COMPACT_BOUNDARY_LABEL = 'Conversation compacted';
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
+const ONE_MILLION_CONTEXT_WINDOW_TOKENS = 1_000_000;
+const AUTO_COMPACT_BUFFER_TOKENS = 13_000;
+const COMPACT_SUMMARY_OUTPUT_RESERVE = 20_000;
+const MAX_OUTPUT_TOKENS_DEFAULT = 32_000;
+const MAX_OUTPUT_TOKENS_UPPER_LIMIT = 64_000;
+
+function summarizeContextUsage(messages: Message[], model: string) {
+  const activeMessages = getMessagesAfterCompactBoundary(messages);
+  const usedTokens = estimateMessageTokens(activeMessages);
+  const effectiveContextWindow = getEffectiveContextWindowSize(model);
+  const usedPercent = Math.max(0, Math.min(100, Math.round((usedTokens / Math.max(effectiveContextWindow, 1)) * 100)));
+  const remainingTokens = Math.max(effectiveContextWindow - usedTokens, 0);
+  const autoCompactThreshold = Math.max(getAutoCompactThreshold(model), 0);
+
+  return {
+    usedTokens,
+    effectiveContextWindow,
+    usedPercent,
+    remainingTokens,
+    autoCompactThreshold,
+  };
+}
+
+function getMessagesAfterCompactBoundary(messages: Message[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'system' && message.content.trim() === COMPACT_BOUNDARY_LABEL) {
+      return messages.slice(index + 1);
+    }
+  }
+
+  return messages;
+}
+
+function estimateMessageTokens(messages: Message[]) {
+  let estimatedTokens = 0;
+
+  for (const message of messages) {
+    estimatedTokens += 4;
+    estimatedTokens += estimateStringTokens(message.role);
+    estimatedTokens += 2;
+    estimatedTokens += estimateStringTokens('text');
+    estimatedTokens += estimateStringTokens(message.content);
+
+    for (const event of message.toolProgress ?? []) {
+      estimatedTokens += 2;
+      estimatedTokens += estimateStringTokens(event.id);
+      estimatedTokens += estimateStringTokens(event.type);
+      estimatedTokens += estimateStringTokens(event.toolName);
+      estimatedTokens += estimateStringTokens(event.label);
+      estimatedTokens += estimateStringTokens(event.detail);
+      estimatedTokens += estimateStringTokens(event.status);
+    }
+  }
+
+  return Math.max(estimatedTokens, 1);
+}
+
+function estimateStringTokens(value: string | undefined) {
+  if (!value || value.trim().length === 0) {
+    return 0;
+  }
+
+  return Math.ceil(value.length / 4);
+}
+
+function getAutoCompactThreshold(model: string) {
+  return getEffectiveContextWindowSize(model) - AUTO_COMPACT_BUFFER_TOKENS;
+}
+
+function getEffectiveContextWindowSize(model: string) {
+  const reservedTokens = Math.min(getMaxOutputTokensForModel(model), COMPACT_SUMMARY_OUTPUT_RESERVE);
+  return getContextWindowForModel(model) - reservedTokens;
+}
+
+function getContextWindowForModel(model: string) {
+  const normalizedModel = model.trim().toLowerCase();
+  if (
+    normalizedModel.includes('[1m]')
+    || normalizedModel.includes('sonnet-4-6')
+    || normalizedModel.includes('opus-4-6')
+  ) {
+    return ONE_MILLION_CONTEXT_WINDOW_TOKENS;
+  }
+
+  return DEFAULT_CONTEXT_WINDOW_TOKENS;
+}
+
+function getMaxOutputTokensForModel(model: string) {
+  const normalizedModel = model.trim().toLowerCase();
+
+  if (normalizedModel.includes('opus-4-6')) {
+    return 64_000;
+  }
+
+  if (normalizedModel.includes('sonnet-4-6')) {
+    return 32_000;
+  }
+
+  if (
+    normalizedModel.includes('opus-4-5')
+    || normalizedModel.includes('sonnet-4')
+    || normalizedModel.includes('haiku-4')
+  ) {
+    return 32_000;
+  }
+
+  if (normalizedModel.includes('opus-4-1') || normalizedModel.includes('opus-4-')) {
+    return 32_000;
+  }
+
+  if (normalizedModel.includes('claude-3-opus')) {
+    return 4_096;
+  }
+
+  if (normalizedModel.includes('claude-3-sonnet')) {
+    return 8_192;
+  }
+
+  if (normalizedModel.includes('claude-3-haiku')) {
+    return 4_096;
+  }
+
+  if (normalizedModel.includes('3-5-sonnet') || normalizedModel.includes('3-5-haiku')) {
+    return 8_192;
+  }
+
+  if (normalizedModel.includes('3-7-sonnet')) {
+    return 32_000;
+  }
+
+  if (normalizedModel.includes('gpt-5') || normalizedModel.includes('codex')) {
+    return 32_000;
+  }
+
+  if (normalizedModel.includes('gpt-4.1') || normalizedModel.includes('gpt-4o')) {
+    return 16_384;
+  }
+
+  if (normalizedModel.includes('gemini')) {
+    return 8_192;
+  }
+
+  return MAX_OUTPUT_TOKENS_DEFAULT > MAX_OUTPUT_TOKENS_UPPER_LIMIT
+    ? MAX_OUTPUT_TOKENS_UPPER_LIMIT
+    : MAX_OUTPUT_TOKENS_DEFAULT;
+}
+
+function formatTokenCount(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+
+  if (value >= 1_000) {
+    return `${Math.round(value / 1_000)}k`;
+  }
+
+  return value.toString();
+}

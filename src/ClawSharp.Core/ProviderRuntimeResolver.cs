@@ -53,7 +53,7 @@ public static class ProviderRuntimeResolver
     public const string DefaultOpenAiModel = "gpt-4o";
     public const string DefaultGeminiModel = "gemini-2.0-flash";
     public const string DefaultGitHubModel = "openai/gpt-4.1";
-    public const string DefaultCodexModel = "codexplan";
+    public const string DefaultCodexModel = "gpt-5.4";
 
     private static readonly IReadOnlyDictionary<string, string> GitHubHeaders =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

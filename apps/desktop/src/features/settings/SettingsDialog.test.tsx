@@ -51,8 +51,8 @@ const baseStoreState = {
       {
         id: 'codex',
         displayName: 'Codex',
-        defaultModel: 'codexplan',
-        models: ['codexplan', 'gpt-5.4', 'gpt-5.4-mini'],
+        defaultModel: 'gpt-5.4',
+        models: ['gpt-5.4', 'gpt-5.4-mini', 'codexplan'],
         baseUrl: 'https://chatgpt.com/backend-api/codex',
         requiresApiKey: true,
         description: 'OpenAI Codex responses transport.',
@@ -89,9 +89,9 @@ describe('SettingsDialog', () => {
 
     expect(updateSettings).not.toHaveBeenCalledWith({
       defaultProvider: 'codex',
-      defaultModel: 'codexplan',
+      defaultModel: 'gpt-5.4',
     });
-    expect(modelSelect).toHaveValue('codexplan');
+    expect(modelSelect).toHaveValue('gpt-5.4');
     expect(screen.getByText('gpt-5.4-mini')).toBeInTheDocument();
     expect(screen.getByText(/Codex uses the Responses transport/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Use Codex auth file')).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('SettingsDialog', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({
       defaultProvider: 'codex',
-      defaultModel: 'codexplan',
+      defaultModel: 'gpt-5.4',
       showDiagnostics: true,
       providerApiKey: 'codex-token',
       providerAccountId: 'acct-123',
@@ -120,7 +120,7 @@ describe('SettingsDialog', () => {
       settings: {
         ...baseStoreState.settings,
         defaultProvider: 'codex',
-        defaultModel: 'codexplan',
+        defaultModel: 'gpt-5.4',
         providerCredentials: {
           hasApiKey: true,
           hasAuthToken: false,
@@ -139,7 +139,7 @@ describe('SettingsDialog', () => {
 
     expect(updateSettings).toHaveBeenLastCalledWith({
       defaultProvider: 'codex',
-      defaultModel: 'codexplan',
+      defaultModel: 'gpt-5.4',
       useExternalProviderCredential: true,
     });
   });
@@ -150,7 +150,7 @@ describe('SettingsDialog', () => {
       settings: {
         ...baseStoreState.settings,
         defaultProvider: 'codex',
-        defaultModel: 'codexplan',
+        defaultModel: 'gpt-5.4',
         providerCredentials: {
           hasApiKey: true,
           hasAuthToken: false,
@@ -169,7 +169,7 @@ describe('SettingsDialog', () => {
 
     expect(updateSettings).toHaveBeenLastCalledWith({
       defaultProvider: 'codex',
-      defaultModel: 'codexplan',
+      defaultModel: 'gpt-5.4',
       showDiagnostics: true,
       useExternalProviderCredential: false,
     });
@@ -185,7 +185,7 @@ describe('SettingsDialog', () => {
 
     expect(updateSettings).toHaveBeenLastCalledWith({
       defaultProvider: 'codex',
-      defaultModel: 'codexplan',
+      defaultModel: 'gpt-5.4',
       showDiagnostics: true,
       providerApiKey: 'codex-token',
       providerAccountId: 'acct-123',
@@ -203,7 +203,7 @@ describe('SettingsDialog', () => {
     await waitFor(() => {
       expect(validateProviderConfig).toHaveBeenCalledWith({
         provider: 'codex',
-        model: 'codexplan',
+        model: 'gpt-5.4',
         providerApiKey: 'codex-token',
         providerAuthToken: undefined,
         providerAccountId: 'acct-123',
@@ -242,7 +242,7 @@ describe('SettingsDialog', () => {
       settings: {
         ...baseStoreState.settings,
         defaultProvider: 'codex',
-        defaultModel: 'codexplan',
+        defaultModel: 'gpt-5.4',
         providerBaseUrl: 'https://chatgpt.com/backend-api/codex',
         providerTransport: 'CodexResponses',
         providerCredentials: {
@@ -255,7 +255,7 @@ describe('SettingsDialog', () => {
     rerender(<SettingsDialog />);
 
     expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
-    expect(screen.getAllByRole('combobox')[1]).toHaveValue('codexplan');
+    expect(screen.getAllByRole('combobox')[1]).toHaveValue('gpt-5.4');
   });
 
   it('shows a disabled placeholder when the provider catalog is unavailable', () => {

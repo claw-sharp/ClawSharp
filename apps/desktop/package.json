@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "dev:codex": "cross-env CLAUDE_CODE_USE_OPENAI=1 OPENAI_MODEL=codexplan tauri dev",
+    "dev:codex": "cross-env CLAUDE_CODE_USE_OPENAI=1 OPENAI_MODEL=gpt-5.4 tauri dev",
     "dev:web": "vite",
-    "dev:web:codex": "cross-env CLAUDE_CODE_USE_OPENAI=1 OPENAI_MODEL=codexplan VITE_DESKTOP_PROVIDER=codex VITE_DESKTOP_MODEL=codexplan vite",
+    "dev:web:codex": "cross-env CLAUDE_CODE_USE_OPENAI=1 OPENAI_MODEL=gpt-5.4 VITE_DESKTOP_PROVIDER=codex VITE_DESKTOP_MODEL=gpt-5.4 vite",
     "build": "tauri build",
     "build:web": "vite build",
     "build:dev": "vite build --mode development",

@@ -143,7 +143,7 @@ describe('ThreadView', () => {
       settings: {
         ...baseStoreState.settings,
         defaultProvider: 'codex',
-        defaultModel: 'codexplan',
+        defaultModel: 'gpt-5.4',
         hasAnyConfiguredProviderCredential: true,
         providerCredentials: {
           hasApiKey: false,
@@ -343,5 +343,78 @@ describe('ThreadView', () => {
     expect(
       transcriptMessage.compareDocumentPosition(approvalSummary) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('shows a context badge based on messages after the latest compaction boundary', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: 'D:/Working/ClawSharp',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Context badge',
+          summary: 'Testing composer context usage',
+          status: 'completed',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'user-old',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'x'.repeat(8_000),
+            timestamp: '2026-04-10T10:00:00Z',
+          },
+          {
+            id: 'boundary-1',
+            threadId: 'thread-1',
+            role: 'system',
+            content: 'Conversation compacted',
+            timestamp: '2026-04-10T10:00:05Z',
+          },
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'y'.repeat(4_000),
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    expect(screen.getByRole('button', { name: 'Context ~1%' })).toBeInTheDocument();
+
   });
 });

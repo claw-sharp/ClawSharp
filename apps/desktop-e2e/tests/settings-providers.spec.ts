@@ -26,7 +26,7 @@ test.describe("Settings Provider Configuration", () => {
     const modelSelect = page.getByRole("combobox", { name: "Default Model" });
 
     await providerSelect.selectOption("codex");
-    await expect(modelSelect).toHaveValue("codexplan");
+    await expect(modelSelect).toHaveValue("gpt-5.4");
 
     await expect(page.getByLabel("Use Codex auth file")).toBeVisible();
     await expect(page.getByLabel("Use saved access token and account ID")).toBeVisible();

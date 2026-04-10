@@ -82,8 +82,8 @@ function createProviderCatalog(): AgentHostProviderOption[] {
     {
       id: 'codex',
       displayName: 'Codex',
-      defaultModel: 'codexplan',
-      models: ['codexplan', 'gpt-5.4', 'gpt-5.4-mini'],
+      defaultModel: 'gpt-5.4',
+      models: ['gpt-5.4', 'gpt-5.4-mini', 'codexplan'],
       baseUrl: 'https://chatgpt.com/backend-api/codex',
       requiresApiKey: true,
       description: 'OpenAI Codex responses transport.',

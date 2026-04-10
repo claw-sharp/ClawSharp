@@ -1691,7 +1691,7 @@ describe('useAppStore', () => {
     mockClient.updateSettings.mockResolvedValue({
       settings: {
         provider: 'codex',
-        model: 'codexplan',
+        model: 'gpt-5.4',
         fallbackModel: null,
         permissionMode: 'Default',
         enableTelemetry: true,
@@ -1741,7 +1741,7 @@ describe('useAppStore', () => {
     mockClient.getSettings.mockResolvedValue({
       settings: {
         provider: 'codex',
-        model: 'codexplan',
+        model: 'gpt-5.4',
         fallbackModel: null,
         permissionMode: 'Default',
         enableTelemetry: true,
@@ -1767,7 +1767,7 @@ describe('useAppStore', () => {
 
     expect(mockClient.getSettings).toHaveBeenCalledWith(null);
     expect(useAppStore.getState().settings.defaultProvider).toBe('codex');
-    expect(useAppStore.getState().settings.defaultModel).toBe('codexplan');
+    expect(useAppStore.getState().settings.defaultModel).toBe('gpt-5.4');
     expect(useAppStore.getState().settings.hasAnyConfiguredProviderCredential).toBe(true);
   });
 
