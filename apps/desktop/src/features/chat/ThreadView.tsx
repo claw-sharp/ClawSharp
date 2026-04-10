@@ -30,6 +30,20 @@ export const ThreadView = () => {
     }
   }, [threadMessages.length, run.isStreaming]);
 
+  if (connection.isBootstrapping) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-muted-foreground">
+        <div className="text-center space-y-3 max-w-sm px-6">
+          <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
+          <p className="text-sm text-foreground">Starting AgentHost...</p>
+          <p className="text-xs text-muted-foreground">
+            {connection.statusLabel || 'Loading desktop runtime state.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!project) {
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
