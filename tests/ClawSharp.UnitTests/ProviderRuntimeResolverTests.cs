@@ -175,6 +175,70 @@ public sealed class ProviderRuntimeResolverTests
     }
 
     [Fact]
+    public void Resolve_Codex_Model_Connection_Can_Prefer_External_Auth_Without_Dropping_Saved_Credentials()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-codex-pref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var authPath = Path.Combine(tempDir, "auth.json");
+        File.WriteAllText(
+            authPath,
+            """
+            {
+              "tokens": {
+                "access_token": "external-codex-token",
+                "account_id": "external-account"
+              }
+            }
+            """);
+
+        try
+        {
+            var settings = new ClawSharpSettings
+            {
+                Runtime = new RuntimeSettings
+                {
+                    Model = "codexplan"
+                },
+                AgentModels = new Dictionary<string, AgentModelConnection>(StringComparer.Ordinal)
+                {
+                    ["codexplan"] = new()
+                    {
+                        Provider = "codex",
+                        BaseUrl = ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                        ApiKey = "saved-codex-token",
+                        AccountId = "saved-account",
+                        UseExternalCredential = true
+                    }
+                },
+                AgentRouting = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["default"] = "codexplan"
+                }
+            };
+            var env = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["CODEX_AUTH_JSON_PATH"] = authPath
+            };
+
+            var config = ProviderRuntimeResolver.Resolve(
+                settings,
+                requestedModel: "codexplan",
+                getEnvironmentVariable: name => env.TryGetValue(name, out var value) ? value : null);
+
+            Assert.Equal(ApiProviderKind.Codex, config.Provider);
+            Assert.Equal("external-codex-token", config.ApiKey);
+            Assert.Equal("external-account", config.AccountId);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Resolve_Uses_Foundry_Environment_BaseUrl_And_Api_Key()
     {
         var env = new Dictionary<string, string?>(StringComparer.Ordinal)

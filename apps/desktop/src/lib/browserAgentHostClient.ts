@@ -632,13 +632,15 @@ export class BrowserAgentHostClient {
         }
       : { ...this.settings.credentials };
 
-    if (request.useExternalCredential) {
-      nextCredentials.hasApiKey = false;
-      nextCredentials.hasAuthToken = false;
-      nextCredentials.accountId = null;
+    if (request.useExternalCredential === true) {
       nextCredentials.source = 'external';
       nextCredentials.hasExternalCredential = true;
       nextCredentials.externalCredentialPath = '%USERPROFILE%\\.codex\\auth.json';
+    } else if (request.useExternalCredential === false || (request.provider === 'codex' && nextCredentials.hasExternalCredential)) {
+      nextCredentials.source =
+        nextCredentials.hasApiKey || nextCredentials.hasAuthToken || Boolean(nextCredentials.accountId)
+          ? 'saved'
+          : 'external';
     }
 
     if (request.clearApiKey) {
@@ -655,21 +657,21 @@ export class BrowserAgentHostClient {
 
     if (request.apiKey !== undefined && request.apiKey !== null) {
       nextCredentials.hasApiKey = request.apiKey.trim().length > 0;
-      if (nextCredentials.hasApiKey) {
+      if (nextCredentials.hasApiKey && !request.useExternalCredential) {
         nextCredentials.source = 'saved';
       }
     }
 
     if (request.authToken !== undefined && request.authToken !== null) {
       nextCredentials.hasAuthToken = request.authToken.trim().length > 0;
-      if (nextCredentials.hasAuthToken) {
+      if (nextCredentials.hasAuthToken && !request.useExternalCredential) {
         nextCredentials.source = 'saved';
       }
     }
 
     if (request.accountId !== undefined && request.accountId !== null) {
       nextCredentials.accountId = request.accountId.trim() || null;
-      if (nextCredentials.accountId) {
+      if (nextCredentials.accountId && !request.useExternalCredential) {
         nextCredentials.source = 'saved';
       }
     }

@@ -218,9 +218,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       await agentHostClient.connect();
 
-      const [recentResult, providersResult] = await Promise.allSettled([
+      const [recentResult, providersResult, settingsResult] = await Promise.allSettled([
         agentHostClient.listRecentProjects(),
         agentHostClient.listProviders(),
+        agentHostClient.getSettings(null),
       ]);
       const recent = recentResult.status === 'fulfilled'
         ? recentResult.value
@@ -228,6 +229,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const providers = providersResult.status === 'fulfilled'
         ? providersResult.value
         : { providers: [] };
+      const runtimeSettings = settingsResult.status === 'fulfilled'
+        ? settingsResult.value.settings
+        : null;
       const recentProjects = recent.projects.map(mapProject);
       const mappedProviders = providers.providers.map(mapProviderOption);
       set((state) => ({
@@ -241,10 +245,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
             : 'Connected · no project open',
         },
         projects: mergeProjectLists(state.projects, recentProjects),
-        settings: {
-          ...state.settings,
-          availableProviders: mappedProviders,
-        },
+        settings: runtimeSettings
+          ? mergeRuntimeSettings(state.settings, runtimeSettings, mappedProviders)
+          : {
+              ...state.settings,
+              availableProviders: mappedProviders,
+            },
       }));
 
       const approvalsResponse = await agentHostClient.listPendingApprovals(null).catch(() => null);
@@ -321,7 +327,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const [response, settingsResponse, diagnosticsResponse] = await Promise.all([
         agentHostClient.listThreads(id),
-        agentHostClient.getSettings(id),
+        agentHostClient.getSettings(null),
         agentHostClient.listDiagnostics(id, null),
       ]);
       const project = mapProject(response.project);
@@ -803,7 +809,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   })),
 
   updateSettings: async (partial) => {
-    const projectId = get().selectedProjectId || null;
+    const projectId = null;
 
     const localOnlyUpdate = pickDefinedSettings({
       theme: partial.theme,
@@ -845,7 +851,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         !runtimePatch.clearApiKey &&
         !runtimePatch.clearAuthToken &&
         !runtimePatch.clearAccountId &&
-        !runtimePatch.useExternalCredential) {
+        runtimePatch.useExternalCredential === undefined) {
       return;
     }
 
@@ -860,17 +866,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ]);
 
       set((state) => ({
-        threads: state.threads.map((thread) => {
-          if (projectId && thread.projectId !== projectId) {
-            return thread;
-          }
-
-          return {
-            ...thread,
-            provider: updatedSettings.settings.provider,
-            model: updatedSettings.settings.model,
-          };
-        }),
+        threads: state.threads.map((thread) => ({
+          ...thread,
+          provider: updatedSettings.settings.provider,
+          model: updatedSettings.settings.model,
+        })),
         settings: {
           ...mergeRuntimeSettings(state.settings, updatedSettings.settings, state.settings.availableProviders),
           providerValidationWarnings: validation.validation.warnings,
@@ -889,7 +889,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   validateProviderConfig: async (request = {}) => {
-    const projectId = get().selectedProjectId || null;
+    const projectId = null;
     const provider = request.provider ?? get().settings.defaultProvider;
     const model = request.model ?? get().settings.defaultModel;
     const response = await agentHostClient.validateProviderConfig({
@@ -923,7 +923,7 @@ async function refreshSettingsSnapshot(
   get: () => AppStore,
   set: Parameters<typeof useAppStore.setState>[0],
 ): Promise<void> {
-  const projectId = get().selectedProjectId || null;
+    const projectId = null;
 
   try {
     const settingsResponse = await agentHostClient.getSettings(projectId);

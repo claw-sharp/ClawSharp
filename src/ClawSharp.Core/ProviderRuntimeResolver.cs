@@ -83,7 +83,7 @@ public static class ProviderRuntimeResolver
         Func<string, string?>? getEnvironmentVariable = null)
     {
         getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
-        if (TryResolveModelConnection(settings, requestedModel, out var modelConnectionConfig))
+        if (TryResolveModelConnection(settings, requestedModel, getEnvironmentVariable, out var modelConnectionConfig))
         {
             return modelConnectionConfig;
         }
@@ -358,6 +358,7 @@ public static class ProviderRuntimeResolver
     private static bool TryResolveModelConnection(
         ClawSharpSettings settings,
         string? requestedModel,
+        Func<string, string?> getEnvironmentVariable,
         out ProviderRuntimeConfig config)
     {
         config = null!;
@@ -374,7 +375,7 @@ public static class ProviderRuntimeResolver
                 continue;
             }
 
-            config = CreateModelConnectionConfig(candidate, connection);
+            config = CreateModelConnectionConfig(candidate, connection, getEnvironmentVariable);
             return true;
         }
 
@@ -498,7 +499,8 @@ public static class ProviderRuntimeResolver
 
     private static ProviderRuntimeConfig CreateModelConnectionConfig(
         string requestedModel,
-        AgentModelConnection connection)
+        AgentModelConnection connection,
+        Func<string, string?> getEnvironmentVariable)
     {
         var provider = ParseConfiguredProvider(connection.Provider, connection.BaseUrl, requestedModel);
         var baseUrl = ResolveConnectionBaseUrl(connection.BaseUrl, provider);
@@ -544,16 +546,7 @@ public static class ProviderRuntimeResolver
                     ApiVersion: connection.ApiVersion,
                     AdditionalHeaders: additionalHeaders),
             ApiProviderKind.Codex =>
-                new ProviderRuntimeConfig(
-                    provider,
-                    ModelTransportKind.CodexResponses,
-                    normalizedRequestedModel,
-                    ResolveModelAlias(normalizedRequestedModel),
-                    baseUrl,
-                    ApiKey: connection.ApiKey ?? connection.AuthToken,
-                    AccountId: connection.AccountId,
-                    ApiVersion: connection.ApiVersion,
-                    AdditionalHeaders: additionalHeaders),
+                CreateCodexConnectionConfig(connection, normalizedRequestedModel, baseUrl, additionalHeaders, getEnvironmentVariable),
             _ =>
                 new ProviderRuntimeConfig(
                     ApiProviderKind.OpenAi,
@@ -682,6 +675,33 @@ public static class ProviderRuntimeResolver
             ApiKey: credentials.ApiKey,
             AccountId: credentials.AccountId,
             AdditionalHeaders: headers);
+    }
+
+    private static ProviderRuntimeConfig CreateCodexConnectionConfig(
+        AgentModelConnection connection,
+        string normalizedRequestedModel,
+        string baseUrl,
+        IReadOnlyDictionary<string, string>? additionalHeaders,
+        Func<string, string?> getEnvironmentVariable)
+    {
+        var externalCredentials = connection.UseExternalCredential
+            ? ResolveCodexCredentials(getEnvironmentVariable)
+            : (ApiKey: (string?)null, AccountId: (string?)null, AuthPath: (string?)null);
+
+        return new ProviderRuntimeConfig(
+            ApiProviderKind.Codex,
+            ModelTransportKind.CodexResponses,
+            normalizedRequestedModel,
+            ResolveModelAlias(normalizedRequestedModel),
+            baseUrl,
+            ApiKey: connection.UseExternalCredential
+                ? externalCredentials.ApiKey
+                : connection.ApiKey ?? connection.AuthToken,
+            AccountId: connection.UseExternalCredential
+                ? externalCredentials.AccountId ?? connection.AccountId
+                : connection.AccountId,
+            ApiVersion: connection.ApiVersion,
+            AdditionalHeaders: additionalHeaders);
     }
 
     private static string ResolveRequestedModel(

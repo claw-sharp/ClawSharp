@@ -126,6 +126,40 @@ describe('ThreadView', () => {
     expect(openProjectPicker).not.toHaveBeenCalled();
   });
 
+  it('does not prompt to configure provider keys when startup settings already include credentials', () => {
+    const openProjectPicker = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected · no project open',
+      },
+      openProjectPicker,
+      settings: {
+        ...baseStoreState.settings,
+        defaultProvider: 'codex',
+        defaultModel: 'codexplan',
+        hasAnyConfiguredProviderCredential: true,
+        providerCredentials: {
+          hasApiKey: false,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'external',
+          hasExternalCredential: true,
+          externalCredentialPath: 'C:\\Users\\hadoa\\.codex\\auth.json',
+        },
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    expect(screen.queryByRole('button', { name: 'Configure Provider Keys' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Project' })).not.toBeDisabled();
+  });
+
   it('prompts for provider keys when a project is open but no thread is selected', () => {
     const toggleSettings = vi.fn();
     mockedUseAppStore.mockReturnValue({

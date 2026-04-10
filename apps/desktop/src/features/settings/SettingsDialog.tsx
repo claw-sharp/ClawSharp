@@ -35,18 +35,9 @@ export const SettingsDialog = () => {
   const [codexCredentialMode, setCodexCredentialMode] = useState<CodexCredentialMode>('saved');
   const [isValidatingProvider, setIsValidatingProvider] = useState(false);
   const wasSettingsOpenRef = useRef(false);
+  const hasEditedDraftRef = useRef(false);
 
-  useEffect(() => {
-    if (!ui.settingsOpen) {
-      wasSettingsOpenRef.current = false;
-      return;
-    }
-
-    if (wasSettingsOpenRef.current) {
-      return;
-    }
-
-    wasSettingsOpenRef.current = true;
+  const resetDraftFromSettings = () => {
     setDraftProvider(settings.defaultProvider);
     setDraftModel(settings.defaultModel);
     setDraftTelemetryEnabled(settings.showDiagnostics);
@@ -63,6 +54,40 @@ export const SettingsDialog = () => {
         ? 'external'
         : 'saved',
     );
+  };
+
+  useEffect(() => {
+    if (!ui.settingsOpen) {
+      wasSettingsOpenRef.current = false;
+      hasEditedDraftRef.current = false;
+      return;
+    }
+
+    if (wasSettingsOpenRef.current) {
+      return;
+    }
+
+    wasSettingsOpenRef.current = true;
+    hasEditedDraftRef.current = false;
+    resetDraftFromSettings();
+  }, [
+    settings.defaultModel,
+    settings.defaultProvider,
+    settings.providerCredentials.accountId,
+    settings.providerCredentials.hasExternalCredential,
+    settings.providerCredentials.hasApiKey,
+    settings.providerCredentials.hasAuthToken,
+    settings.providerCredentials.source,
+    settings.showDiagnostics,
+    ui.settingsOpen,
+  ]);
+
+  useEffect(() => {
+    if (!ui.settingsOpen || !wasSettingsOpenRef.current || hasEditedDraftRef.current) {
+      return;
+    }
+
+    resetDraftFromSettings();
   }, [
     settings.defaultModel,
     settings.defaultProvider,
@@ -109,13 +134,14 @@ export const SettingsDialog = () => {
     settings.providerCredentials.hasAuthToken ||
     Boolean(settings.providerCredentials.accountId);
   const useExternalProviderCredential = providerIdUsesExternalCredential(selectedProviderId, codexCredentialMode);
-  const shouldUseExternalCredential =
-    useExternalProviderCredential && settings.providerCredentials.source !== 'external';
+  const hasExternalCredentialPreferenceChange =
+    selectedProviderId === 'codex' &&
+    useExternalProviderCredential !== (settings.providerCredentials.source === 'external');
   const hasSettingsChanges =
     draftProvider !== settings.defaultProvider ||
     draftModel !== settings.defaultModel ||
     draftTelemetryEnabled !== settings.showDiagnostics;
-  const hasCredentialChanges = credentialUpdate !== null || shouldUseExternalCredential;
+  const hasCredentialChanges = credentialUpdate !== null || hasExternalCredentialPreferenceChange;
   const hasPendingChanges = hasSettingsChanges || hasCredentialChanges;
   const validationRequest = {
     provider: selectedProviderId,
@@ -154,6 +180,7 @@ export const SettingsDialog = () => {
                 const provider = settings.availableProviders.find((item) => item.id === e.target.value);
                 const nextModel = provider?.defaultModel ?? settings.defaultModel;
 
+                hasEditedDraftRef.current = true;
                 setDraftProvider(e.target.value);
                 setDraftModel(nextModel);
                 setApiKeyInput('');
@@ -174,6 +201,7 @@ export const SettingsDialog = () => {
             <select
               value={draftModel ?? settings.defaultModel ?? ''}
               onChange={e => {
+                hasEditedDraftRef.current = true;
                 setDraftModel(e.target.value);
               }}
               className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
@@ -227,15 +255,15 @@ export const SettingsDialog = () => {
                 defaultProvider: draftProvider,
                 defaultModel: draftModel,
                 useExternalProviderCredential: true,
-                clearProviderApiKey: settings.providerCredentials.hasApiKey,
-                clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
-                clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
               });
               setApiKeyInput('');
               setAuthTokenInput('');
               setAccountIdInput('');
             }}
             canClear={hasSavedCredentials}
+            onDraftInteraction={() => {
+              hasEditedDraftRef.current = true;
+            }}
           />
 
           <div className="flex justify-end">
@@ -283,7 +311,14 @@ export const SettingsDialog = () => {
             <span className="max-w-64 truncate text-right font-mono text-[10px] text-muted-foreground">{settings.configPath}</span>
           </SettingRow>
 
-          <SettingToggle label="Telemetry Enabled" checked={draftTelemetryEnabled} onChange={setDraftTelemetryEnabled} />
+          <SettingToggle
+            label="Telemetry Enabled"
+            checked={draftTelemetryEnabled}
+            onChange={(value) => {
+              hasEditedDraftRef.current = true;
+              setDraftTelemetryEnabled(value);
+            }}
+          />
 
           {/*
             Temporarily hidden until the desktop runtime persists them for real:
@@ -332,13 +367,8 @@ export const SettingsDialog = () => {
                   defaultModel: draftModel,
                   showDiagnostics: draftTelemetryEnabled,
                   ...(credentialUpdate ?? {}),
-                  ...(shouldUseExternalCredential
-                    ? {
-                        useExternalProviderCredential: true,
-                        clearProviderApiKey: settings.providerCredentials.hasApiKey,
-                        clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
-                        clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
-                      }
+                  ...(hasExternalCredentialPreferenceChange
+                    ? { useExternalProviderCredential }
                     : {}),
                 });
                 setApiKeyInput('');
@@ -385,6 +415,7 @@ const CredentialPanel = ({
   onClear,
   onUseExternal,
   canClear,
+  onDraftInteraction,
 }: {
   providerId: string;
   credentialConfig: CredentialConfig | null;
@@ -402,6 +433,7 @@ const CredentialPanel = ({
   onClear: () => void;
   onUseExternal: () => void;
   canClear: boolean;
+  onDraftInteraction: () => void;
 }) => {
   if (!credentialConfig) {
     return (
@@ -433,7 +465,10 @@ const CredentialPanel = ({
               type="radio"
               name="codex-credential-mode"
               checked={codexCredentialMode === 'external'}
-              onChange={() => onCodexCredentialModeChange('external')}
+              onChange={() => {
+                onDraftInteraction();
+                onCodexCredentialModeChange('external');
+              }}
               className="mt-0.5"
             />
             <span>
@@ -449,7 +484,10 @@ const CredentialPanel = ({
               type="radio"
               name="codex-credential-mode"
               checked={codexCredentialMode === 'saved'}
-              onChange={() => onCodexCredentialModeChange('saved')}
+              onChange={() => {
+                onDraftInteraction();
+                onCodexCredentialModeChange('saved');
+              }}
               className="mt-0.5"
             />
             <span>
@@ -471,7 +509,10 @@ const CredentialPanel = ({
             <select
               aria-label="Gemini credential type"
               value={geminiCredentialMode}
-              onChange={event => onGeminiCredentialModeChange(event.target.value as GeminiCredentialMode)}
+              onChange={event => {
+                onDraftInteraction();
+                onGeminiCredentialModeChange(event.target.value as GeminiCredentialMode);
+              }}
               className="w-full rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
             >
               <option value="apiKey">API key</option>
@@ -512,6 +553,7 @@ const CredentialPanel = ({
             value={secretValue}
             onChange={event => {
               const nextValue = event.target.value;
+              onDraftInteraction();
               if (credentialConfig.secretField === 'apiKey') {
                 onApiKeyChange(nextValue);
               } else {
@@ -528,13 +570,16 @@ const CredentialPanel = ({
           <label className="block space-y-1">
             <span className="text-xs text-secondary-foreground">{credentialConfig.accountIdLabel}</span>
             <input
-              aria-label={credentialConfig.accountIdLabel}
-              type="text"
-              value={accountIdInput}
-              onChange={event => onAccountIdChange(event.target.value)}
-              className="w-full rounded-md border border-border bg-input px-2 py-2 text-xs text-foreground outline-none focus:border-primary/40"
-              placeholder={`Enter ${credentialConfig.accountIdLabel.toLowerCase()}`}
-              autoComplete="off"
+            aria-label={credentialConfig.accountIdLabel}
+            type="text"
+            value={accountIdInput}
+            onChange={event => {
+              onDraftInteraction();
+              onAccountIdChange(event.target.value);
+            }}
+            className="w-full rounded-md border border-border bg-input px-2 py-2 text-xs text-foreground outline-none focus:border-primary/40"
+            placeholder={`Enter ${credentialConfig.accountIdLabel.toLowerCase()}`}
+            autoComplete="off"
             />
           </label>
         )}

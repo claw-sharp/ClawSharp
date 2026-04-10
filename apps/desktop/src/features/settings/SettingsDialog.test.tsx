@@ -141,9 +141,37 @@ describe('SettingsDialog', () => {
       defaultProvider: 'codex',
       defaultModel: 'codexplan',
       useExternalProviderCredential: true,
-      clearProviderApiKey: true,
-      clearProviderAuthToken: false,
-      clearProviderAccountId: true,
+    });
+  });
+
+  it('can switch codex back to saved credentials without clearing the saved token', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      settings: {
+        ...baseStoreState.settings,
+        defaultProvider: 'codex',
+        defaultModel: 'codexplan',
+        providerCredentials: {
+          hasApiKey: true,
+          hasAuthToken: false,
+          accountId: 'acct-123',
+          source: 'external',
+          hasExternalCredential: true,
+          externalCredentialPath: 'C:\\Users\\hadoa\\.codex\\auth.json',
+        },
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<SettingsDialog />);
+
+    fireEvent.click(screen.getByLabelText('Use saved access token and account ID'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      defaultProvider: 'codex',
+      defaultModel: 'codexplan',
+      showDiagnostics: true,
+      useExternalProviderCredential: false,
     });
   });
 
@@ -202,5 +230,31 @@ describe('SettingsDialog', () => {
     rerender(<SettingsDialog />);
 
     expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
+  });
+
+  it('syncs the provider selection when settings refresh after the dialog opens and the user has not edited anything', () => {
+    const { rerender } = render(<SettingsDialog />);
+
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('anthropic');
+
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      settings: {
+        ...baseStoreState.settings,
+        defaultProvider: 'codex',
+        defaultModel: 'codexplan',
+        providerBaseUrl: 'https://chatgpt.com/backend-api/codex',
+        providerTransport: 'CodexResponses',
+        providerCredentials: {
+          ...baseStoreState.settings.providerCredentials,
+          source: 'external',
+        },
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    rerender(<SettingsDialog />);
+
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
+    expect(screen.getAllByRole('combobox')[1]).toHaveValue('codexplan');
   });
 });

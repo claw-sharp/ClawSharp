@@ -3,6 +3,8 @@ using ClawSharp.AgentHost.Mapping;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Providers;
 using ClawSharp.AgentHost.Services;
+using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 
 namespace ClawSharp.UnitTests;
 
@@ -64,6 +66,111 @@ public sealed class ProviderCatalogServiceTests
             Assert.True(liveValidationService.WasCalled);
             Assert.True(response.Validation.IsValid);
             Assert.Empty(response.Validation.Errors);
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_Without_ProjectId_Reads_Global_User_Settings()
+    {
+        var fixture = await ProviderCatalogFixture.CreateAsync();
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".claude"));
+            await File.WriteAllTextAsync(
+                ClaudeConfigPaths.GetProjectSettingsFilePath(fixture.WorkspaceRoot),
+                """
+                {
+                  "runtime": {
+                    "model": "project-model"
+                  }
+                }
+                """);
+
+            await fixture.Service.UpdateSettingsAsync(new UpdateSettingsRequest
+            {
+                Provider = "openai",
+                Model = "gpt-4o"
+            });
+
+            var response = await fixture.Service.GetSettingsAsync(new GetSettingsRequest());
+
+            Assert.Equal("openai", response.Settings.Provider);
+            Assert.Equal("gpt-4o", response.Settings.Model);
+            Assert.Equal(ClaudeConfigPaths.GetUserSettingsFilePath(), response.Settings.ConfigPath);
+            Assert.Empty(response.Settings.SettingsIssues);
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_Without_ProjectId_Does_Not_Persist_Project_Overrides()
+    {
+        var fixture = await ProviderCatalogFixture.CreateAsync();
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(fixture.WorkspaceRoot, ".claude"));
+            await File.WriteAllTextAsync(
+                ClaudeConfigPaths.GetProjectSettingsFilePath(fixture.WorkspaceRoot),
+                """
+                {
+                  "runtime": {
+                    "permissionMode": "plan",
+                    "enableTelemetry": false
+                  }
+                }
+                """);
+
+            await fixture.Service.UpdateSettingsAsync(new UpdateSettingsRequest
+            {
+                Provider = "openai",
+                Model = "gpt-4o"
+            });
+
+            var stored = await new JsonSettingsStore(ClaudeConfigPaths.GetUserSettingsFilePath()).LoadAsync();
+
+            Assert.Equal("gpt-4o", stored.Runtime.Model);
+            Assert.Equal(PermissionMode.Default, stored.Runtime.PermissionMode);
+            Assert.False(stored.Runtime.EnableTelemetry);
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSettingsAsync_Can_Persist_Codex_External_Preference_Alongside_Saved_Credentials()
+    {
+        var fixture = await ProviderCatalogFixture.CreateAsync();
+
+        try
+        {
+            await fixture.Service.UpdateSettingsAsync(new UpdateSettingsRequest
+            {
+                Provider = "codex",
+                Model = "codexplan",
+                ApiKey = "saved-codex-token",
+                AccountId = "saved-account",
+                UseExternalCredential = true
+            });
+
+            var stored = await new JsonSettingsStore(ClaudeConfigPaths.GetUserSettingsFilePath()).LoadAsync();
+            var connection = stored.AgentModels["codexplan"];
+
+            Assert.Equal("codex", connection.Provider);
+            Assert.Equal("saved-codex-token", connection.ApiKey);
+            Assert.Equal("saved-account", connection.AccountId);
+            Assert.True(connection.UseExternalCredential);
+            Assert.Equal("codexplan", stored.AgentRouting["default"]);
         }
         finally
         {
@@ -158,7 +265,20 @@ public sealed class ProviderCatalogServiceTests
             Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", _previousConfigDir);
             if (Directory.Exists(Root))
             {
-                Directory.Delete(Root, recursive: true);
+                var attempts = 0;
+                while (Directory.Exists(Root))
+                {
+                    try
+                    {
+                        Directory.Delete(Root, recursive: true);
+                        break;
+                    }
+                    catch (IOException) when (attempts < 4)
+                    {
+                        attempts++;
+                        Thread.Sleep(50);
+                    }
+                }
             }
         }
     }

@@ -210,7 +210,8 @@ describe('useAppStore', () => {
     expect(state.projects[0]?.name).toBe('ClawSharp');
     expect(state.messages['thread-1'][0]?.content).toBe('Hello');
     expect(state.connection.isConnected).toBe(true);
-    expect(mockClient.getSettings).toHaveBeenCalledTimes(1);
+    expect(mockClient.getSettings).toHaveBeenCalledTimes(2);
+    expect(mockClient.getSettings).toHaveBeenCalledWith(null);
   });
 
   it('loads the thread even when ancillary thread requests fail', async () => {
@@ -481,6 +482,172 @@ describe('useAppStore', () => {
       errors: [],
     });
     expect(useAppStore.getState().settings.providerValidationWarnings).toEqual(['Validated against the live API.']);
+  });
+
+  it('updates global provider settings without scoping them to the selected project', async () => {
+    mockClient.updateSettings.mockResolvedValue({
+      settings: {
+        provider: 'openai',
+        model: 'gpt-4o',
+        fallbackModel: null,
+        permissionMode: 'Default',
+        enableTelemetry: true,
+        fileCheckpointingEnabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        transport: 'OpenAIChatCompletions',
+        configPath: '/Users/test/.claude/settings.json',
+        settingsIssues: [],
+        credentials: {
+          hasApiKey: true,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'saved',
+          hasExternalCredential: false,
+          externalCredentialPath: null,
+        },
+        hasAnyConfiguredProviderCredential: true,
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState((state) => ({
+      ...state,
+      selectedProjectId: 'proj-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Project One',
+          summary: '',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          status: 'idle',
+          pinned: false,
+        },
+        {
+          id: 'thread-2',
+          projectId: 'proj-2',
+          title: 'Project Two',
+          summary: '',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          status: 'idle',
+          pinned: false,
+        },
+      ],
+    }));
+
+    await useAppStore.getState().updateSettings({
+      defaultProvider: 'openai',
+      defaultModel: 'gpt-4o',
+    });
+
+    expect(mockClient.updateSettings).toHaveBeenCalledWith({
+      projectId: null,
+      provider: 'openai',
+      model: 'gpt-4o',
+      fallbackModel: undefined,
+      enableTelemetry: undefined,
+      apiKey: undefined,
+      authToken: undefined,
+      accountId: undefined,
+      clearApiKey: undefined,
+      clearAuthToken: undefined,
+      clearAccountId: undefined,
+      useExternalCredential: undefined,
+    });
+    expect(useAppStore.getState().threads.map((thread) => thread.provider)).toEqual(['openai', 'openai']);
+    expect(useAppStore.getState().threads.map((thread) => thread.model)).toEqual(['gpt-4o', 'gpt-4o']);
+  });
+
+  it('persists switching codex back to saved credentials by sending useExternalCredential false', async () => {
+    mockClient.updateSettings.mockResolvedValue({
+      settings: {
+        provider: 'codex',
+        model: 'codexplan',
+        fallbackModel: null,
+        permissionMode: 'Default',
+        enableTelemetry: true,
+        fileCheckpointingEnabled: true,
+        baseUrl: 'https://chatgpt.com/backend-api/codex',
+        transport: 'CodexResponses',
+        configPath: '/Users/test/.claude/settings.json',
+        settingsIssues: [],
+        credentials: {
+          hasApiKey: true,
+          hasAuthToken: false,
+          accountId: 'acct-123',
+          source: 'saved',
+          hasExternalCredential: true,
+          externalCredentialPath: 'C:\\Users\\hadoa\\.codex\\auth.json',
+        },
+        hasAnyConfiguredProviderCredential: true,
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().updateSettings({
+      useExternalProviderCredential: false,
+    });
+
+    expect(mockClient.updateSettings).toHaveBeenCalledWith({
+      projectId: null,
+      provider: undefined,
+      model: undefined,
+      fallbackModel: undefined,
+      enableTelemetry: undefined,
+      apiKey: undefined,
+      authToken: undefined,
+      accountId: undefined,
+      clearApiKey: undefined,
+      clearAuthToken: undefined,
+      clearAccountId: undefined,
+      useExternalCredential: false,
+    });
+  });
+
+  it('loads global settings during initialize even when no project is open', async () => {
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [],
+    });
+    mockClient.getSettings.mockResolvedValue({
+      settings: {
+        provider: 'codex',
+        model: 'codexplan',
+        fallbackModel: null,
+        permissionMode: 'Default',
+        enableTelemetry: true,
+        fileCheckpointingEnabled: true,
+        baseUrl: 'https://chatgpt.com/backend-api/codex',
+        transport: 'CodexResponses',
+        configPath: '/Users/test/.claude/settings.json',
+        settingsIssues: [],
+        credentials: {
+          hasApiKey: false,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'external',
+          hasExternalCredential: true,
+          externalCredentialPath: 'C:\\Users\\hadoa\\.codex\\auth.json',
+        },
+        hasAnyConfiguredProviderCredential: true,
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    expect(mockClient.getSettings).toHaveBeenCalledWith(null);
+    expect(useAppStore.getState().settings.defaultProvider).toBe('codex');
+    expect(useAppStore.getState().settings.defaultModel).toBe('codexplan');
+    expect(useAppStore.getState().settings.hasAnyConfiguredProviderCredential).toBe(true);
   });
 
   it('does not overwrite a newly opened project when bootstrap recents resolve late', async () => {

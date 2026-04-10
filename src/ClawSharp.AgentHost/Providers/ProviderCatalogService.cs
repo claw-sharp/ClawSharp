@@ -88,6 +88,12 @@ public sealed class ProviderCatalogService
         GetSettingsRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.ProjectId))
+        {
+            var settings = await LoadUserSettingsAsync(cancellationToken);
+            return new GetSettingsResponse(MapSettings(settings));
+        }
+
         var app = await ResolveApplicationAsync(request.ProjectId, cancellationToken);
         return new GetSettingsResponse(MapSettings(app));
     }
@@ -96,68 +102,19 @@ public sealed class ProviderCatalogService
         UpdateSettingsRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.ProjectId))
+        {
+            var settingsStore = CreateUserSettingsStore();
+            var current = await settingsStore.LoadAsync(cancellationToken);
+            var nextSettings = BuildUpdatedSettings(current, request);
+            await settingsStore.SaveAsync(nextSettings, cancellationToken);
+            return new UpdateSettingsResponse(MapSettings(nextSettings));
+        }
+
         var app = await ResolveApplicationAsync(request.ProjectId, cancellationToken);
-        var current = app.AppState.Settings;
-        var currentRuntime = ProviderRuntimeResolver.Resolve(current, current.Runtime.Model);
-        var nextModel = string.IsNullOrWhiteSpace(request.Model) ? current.Runtime.Model : request.Model.Trim();
-        var nextRuntime = new RuntimeSettings
-        {
-            PermissionMode = current.Runtime.PermissionMode,
-            Model = nextModel,
-            FallbackModel = request.FallbackModel ?? current.Runtime.FallbackModel,
-            EnableTelemetry = request.EnableTelemetry ?? current.Runtime.EnableTelemetry,
-            FileCheckpointingEnabled = request.FileCheckpointingEnabled ?? current.Runtime.FileCheckpointingEnabled,
-            AutoMemoryEnabled = current.Runtime.AutoMemoryEnabled,
-            AutoMemoryDirectory = current.Runtime.AutoMemoryDirectory
-        };
-        var agentModels = new Dictionary<string, AgentModelConnection>(current.AgentModels, StringComparer.Ordinal);
-        var agentRouting = new Dictionary<string, string>(current.AgentRouting, StringComparer.Ordinal);
-        var nextSettings = new ClawSharpSettings
-        {
-            Runtime = nextRuntime,
-            Terminal = current.Terminal,
-            Sandbox = current.Sandbox,
-            ClaudeApiKey = current.ClaudeApiKey,
-            SkipAutoPermissionPrompt = current.SkipAutoPermissionPrompt,
-            UseAutoModeDuringPlan = current.UseAutoModeDuringPlan,
-            ApiKeyHelper = current.ApiKeyHelper,
-            AwsCredentialExport = current.AwsCredentialExport,
-            AwsAuthRefresh = current.AwsAuthRefresh,
-            Agent = current.Agent,
-            Attribution = current.Attribution,
-            Permissions = current.Permissions,
-            AllowManagedPermissionRulesOnly = current.AllowManagedPermissionRulesOnly,
-            Hooks = current.Hooks,
-            DisableAllHooks = current.DisableAllHooks,
-            AllowManagedHooksOnly = current.AllowManagedHooksOnly,
-            ForceLoginOrgUUID = current.ForceLoginOrgUUID,
-            OtelHeadersHelper = current.OtelHeadersHelper,
-            EnabledPlugins = current.EnabledPlugins,
-            PluginConfigs = current.PluginConfigs,
-            AgentModels = agentModels,
-            AgentRouting = agentRouting
-        };
-        var nextProvider = string.IsNullOrWhiteSpace(request.Provider)
-            ? ToProviderId(currentRuntime.Provider)
-            : request.Provider.Trim().ToLowerInvariant();
-
-        if (!string.IsNullOrWhiteSpace(nextProvider))
-        {
-            var providerError = ProviderFlagUtilities.ApplyProviderFlags(
-                ["--provider", nextProvider, "--model", nextRuntime.Model]);
-            if (!string.IsNullOrWhiteSpace(providerError))
-            {
-                throw new AgentHostException("invalid_provider", providerError);
-            }
-        }
-
-        if (HasCredentialUpdate(request))
-        {
-            nextSettings = ApplyCredentialUpdate(nextSettings, nextProvider, nextModel, request);
-        }
-
-        app.AppStateStore.SetState(state => ClawSharpAppStateMutations.WithSettings(state, nextSettings));
-        await app.SettingsStore.SaveAsync(nextSettings, cancellationToken);
+        var nextProjectSettings = BuildUpdatedSettings(app.AppState.Settings, request);
+        app.AppStateStore.SetState(state => ClawSharpAppStateMutations.WithSettings(state, nextProjectSettings));
+        await app.SettingsStore.SaveAsync(nextProjectSettings, cancellationToken);
         return new UpdateSettingsResponse(MapSettings(app));
     }
 
@@ -247,8 +204,18 @@ public sealed class ProviderCatalogService
     private RuntimeSettingsDto MapSettings(Infrastructure.ClawSharpApplication app)
     {
         var state = app.AppStateStore.GetState();
-        var settings = state.Settings;
-        var runtime = ProviderRuntimeResolver.Resolve(settings, state.MainLoopModel ?? settings.Runtime.Model);
+        return MapSettings(
+            state.Settings,
+            state.SettingsIssues.Select(issue => $"{issue.File}: {issue.Message}"),
+            state.MainLoopModel);
+    }
+
+    private RuntimeSettingsDto MapSettings(
+        ClawSharpSettings settings,
+        IEnumerable<string>? settingsIssues = null,
+        string? mainLoopModel = null)
+    {
+        var runtime = ProviderRuntimeResolver.Resolve(settings, mainLoopModel ?? settings.Runtime.Model);
         return new RuntimeSettingsDto(
             runtime.Provider.ToString().ToLowerInvariant(),
             runtime.ResolvedModel,
@@ -259,7 +226,7 @@ public sealed class ProviderCatalogService
             runtime.BaseUrl,
             runtime.Transport.ToString(),
             ClaudeConfigPaths.GetUserSettingsFilePath(),
-            state.SettingsIssues.Select(issue => $"{issue.File}: {issue.Message}").ToArray(),
+            (settingsIssues ?? Enumerable.Empty<string>()).ToArray(),
             MapCredentialState(settings, runtime.Provider, runtime.RequestedModel, runtime.ResolvedModel),
             HasAnyConfiguredProviderCredential(settings));
     }
@@ -268,8 +235,94 @@ public sealed class ProviderCatalogService
         string? projectId,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            return await LoadUserSettingsAsync(cancellationToken);
+        }
+
         var app = await ResolveApplicationAsync(projectId, cancellationToken);
         return app.AppStateStore.GetState().Settings;
+    }
+
+    private async Task<ClawSharpSettings> LoadUserSettingsAsync(CancellationToken cancellationToken)
+    {
+        var settingsStore = CreateUserSettingsStore();
+        return await settingsStore.LoadAsync(cancellationToken);
+    }
+
+    private static ISettingsStore CreateUserSettingsStore()
+    {
+        return new JsonSettingsStore(ClaudeConfigPaths.GetUserSettingsFilePath());
+    }
+
+    private static ClawSharpSettings BuildUpdatedSettings(
+        ClawSharpSettings current,
+        UpdateSettingsRequest request)
+    {
+        var currentRuntime = ProviderRuntimeResolver.Resolve(current, current.Runtime.Model);
+        var nextModel = string.IsNullOrWhiteSpace(request.Model) ? current.Runtime.Model : request.Model.Trim();
+        var nextRuntime = new RuntimeSettings
+        {
+            PermissionMode = current.Runtime.PermissionMode,
+            Model = nextModel,
+            FallbackModel = request.FallbackModel ?? current.Runtime.FallbackModel,
+            EnableTelemetry = request.EnableTelemetry ?? current.Runtime.EnableTelemetry,
+            FileCheckpointingEnabled = request.FileCheckpointingEnabled ?? current.Runtime.FileCheckpointingEnabled,
+            AutoMemoryEnabled = current.Runtime.AutoMemoryEnabled,
+            AutoMemoryDirectory = current.Runtime.AutoMemoryDirectory
+        };
+        var agentModels = new Dictionary<string, AgentModelConnection>(current.AgentModels, StringComparer.Ordinal);
+        var agentRouting = new Dictionary<string, string>(current.AgentRouting, StringComparer.Ordinal);
+        var nextSettings = new ClawSharpSettings
+        {
+            Runtime = nextRuntime,
+            Terminal = current.Terminal,
+            Sandbox = current.Sandbox,
+            ClaudeApiKey = current.ClaudeApiKey,
+            SkipAutoPermissionPrompt = current.SkipAutoPermissionPrompt,
+            UseAutoModeDuringPlan = current.UseAutoModeDuringPlan,
+            ApiKeyHelper = current.ApiKeyHelper,
+            AwsCredentialExport = current.AwsCredentialExport,
+            AwsAuthRefresh = current.AwsAuthRefresh,
+            Agent = current.Agent,
+            Attribution = current.Attribution,
+            Permissions = current.Permissions,
+            AllowManagedPermissionRulesOnly = current.AllowManagedPermissionRulesOnly,
+            Hooks = current.Hooks,
+            DisableAllHooks = current.DisableAllHooks,
+            AllowManagedHooksOnly = current.AllowManagedHooksOnly,
+            ForceLoginOrgUUID = current.ForceLoginOrgUUID,
+            OtelHeadersHelper = current.OtelHeadersHelper,
+            EnabledPlugins = current.EnabledPlugins,
+            PluginConfigs = current.PluginConfigs,
+            AgentModels = agentModels,
+            AgentRouting = agentRouting
+        };
+        var nextProvider = string.IsNullOrWhiteSpace(request.Provider)
+            ? ToProviderId(currentRuntime.Provider)
+            : request.Provider.Trim().ToLowerInvariant();
+
+        if (!string.IsNullOrWhiteSpace(nextProvider))
+        {
+            var providerError = ProviderFlagUtilities.ApplyProviderFlags(
+                ["--provider", nextProvider, "--model", nextRuntime.Model]);
+            if (!string.IsNullOrWhiteSpace(providerError))
+            {
+                throw new AgentHostException("invalid_provider", providerError);
+            }
+        }
+
+        if (HasProviderSelectionUpdate(request))
+        {
+            nextSettings = ApplyProviderSelection(nextSettings, current, currentRuntime, nextProvider, nextModel);
+        }
+
+        if (HasCredentialUpdate(request))
+        {
+            nextSettings = ApplyCredentialUpdate(nextSettings, nextProvider, nextModel, request);
+        }
+
+        return nextSettings;
     }
 
     private ValidationTarget BuildValidationTarget(
@@ -330,7 +383,98 @@ public sealed class ProviderCatalogService
                request.ClearApiKey == true ||
                request.ClearAuthToken == true ||
                request.ClearAccountId == true ||
-               request.UseExternalCredential == true;
+               request.UseExternalCredential is not null;
+    }
+
+    private static bool HasProviderSelectionUpdate(UpdateSettingsRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.Provider) ||
+               !string.IsNullOrWhiteSpace(request.Model);
+    }
+
+    private static ClawSharpSettings ApplyProviderSelection(
+        ClawSharpSettings nextSettings,
+        ClawSharpSettings currentSettings,
+        ProviderRuntimeConfig currentRuntime,
+        string provider,
+        string model)
+    {
+        var agentModels = new Dictionary<string, AgentModelConnection>(nextSettings.AgentModels, StringComparer.Ordinal);
+        var agentRouting = new Dictionary<string, string>(nextSettings.AgentRouting, StringComparer.Ordinal);
+        agentModels.TryGetValue(model, out var targetConnection);
+
+        var currentConnection = ResolveConnection(
+            currentSettings,
+            currentRuntime.RequestedModel,
+            currentRuntime.ResolvedModel);
+        var normalizedProvider = NormalizeStoredProviderId(provider);
+        var preservedConnection = IsConnectionForProvider(targetConnection, normalizedProvider)
+            ? targetConnection
+            : string.Equals(ToProviderId(currentRuntime.Provider), provider, StringComparison.OrdinalIgnoreCase)
+                ? currentConnection
+                : null;
+
+        switch (provider)
+        {
+            case "anthropic":
+                if (preservedConnection is not null &&
+                    (!string.IsNullOrWhiteSpace(preservedConnection.BaseUrl) ||
+                     !string.IsNullOrWhiteSpace(preservedConnection.AuthToken) ||
+                     !string.IsNullOrWhiteSpace(preservedConnection.AccountId)))
+                {
+                    agentModels[model] = CloneConnection(
+                        preservedConnection,
+                        provider: "anthropic",
+                        baseUrl: preservedConnection.BaseUrl ?? ProviderRuntimeResolver.DefaultAnthropicBaseUrl,
+                        apiKey: nextSettings.ClaudeApiKey,
+                        authToken: preservedConnection.AuthToken,
+                        accountId: preservedConnection.AccountId);
+                }
+                else
+                {
+                    agentModels.Remove(model);
+                }
+
+                agentRouting.Remove("default");
+                break;
+            case "ollama":
+                agentModels[model] = CloneConnection(
+                    preservedConnection,
+                    provider: "openai",
+                    baseUrl: preservedConnection?.BaseUrl ?? "http://localhost:11434/v1",
+                    apiKey: preservedConnection?.ApiKey ?? "ollama",
+                    authToken: null,
+                    accountId: null);
+                agentRouting["default"] = model;
+                break;
+            default:
+                agentModels[model] = CloneConnection(
+                    preservedConnection,
+                    provider: normalizedProvider,
+                    baseUrl: preservedConnection?.BaseUrl ?? ResolveDefaultBaseUrl(provider),
+                    apiKey: preservedConnection?.ApiKey,
+                    authToken: preservedConnection?.AuthToken,
+                    accountId: preservedConnection?.AccountId);
+                agentRouting["default"] = model;
+                break;
+        }
+
+        return CloneSettings(nextSettings, nextSettings.Runtime, nextSettings.ClaudeApiKey, agentModels, agentRouting);
+    }
+
+    private static bool IsConnectionForProvider(AgentModelConnection? connection, string provider)
+    {
+        return connection is not null &&
+               string.Equals(connection.Provider, provider, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeStoredProviderId(string provider)
+    {
+        return provider switch
+        {
+            "ollama" => "openai",
+            _ => provider
+        };
     }
 
     private static ClawSharpSettings ApplyCredentialUpdate(
@@ -370,8 +514,15 @@ public sealed class ProviderCatalogService
 
                 agentRouting.Remove("default");
                 break;
-            case "codex" when request.UseExternalCredential == true:
-                agentModels.Remove(model);
+            case "codex":
+                agentModels[model] = CloneConnection(
+                    existingConnection,
+                    provider: "codex",
+                    baseUrl: existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                    apiKey: currentApiKey,
+                    authToken: currentAuthToken,
+                    accountId: currentAccountId,
+                    useExternalCredential: request.UseExternalCredential ?? existingConnection?.UseExternalCredential ?? false);
                 agentRouting["default"] = model;
                 break;
             case "ollama":
@@ -427,7 +578,8 @@ public sealed class ProviderCatalogService
         string baseUrl,
         string? apiKey,
         string? authToken,
-        string? accountId)
+        string? accountId,
+        bool? useExternalCredential = null)
     {
         return new AgentModelConnection
         {
@@ -437,6 +589,7 @@ public sealed class ProviderCatalogService
             AuthToken = string.IsNullOrWhiteSpace(authToken) ? null : authToken.Trim(),
             AccountId = string.IsNullOrWhiteSpace(accountId) ? null : accountId.Trim(),
             ApiVersion = existing?.ApiVersion,
+            UseExternalCredential = useExternalCredential ?? existing?.UseExternalCredential ?? false,
             Headers = existing?.Headers ??
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
@@ -479,11 +632,13 @@ public sealed class ProviderCatalogService
         var externalCredentials = ProviderRuntimeResolver.ResolveCodexCredentials();
         var hasExternalAuthFile = !string.IsNullOrWhiteSpace(externalCredentials.AuthPath) &&
                                   File.Exists(externalCredentials.AuthPath);
-        var source = hasSavedApiKey || hasSavedAuthToken || hasSavedAccountId
-            ? "saved"
-            : hasExternalAuthFile
-                ? "external"
-                : "none";
+        var source = connection?.UseExternalCredential == true && hasExternalAuthFile
+            ? "external"
+            : hasSavedApiKey || hasSavedAuthToken || hasSavedAccountId
+                ? "saved"
+                : hasExternalAuthFile
+                    ? "external"
+                    : "none";
 
         return new ProviderCredentialStateDto(
             hasSavedApiKey,
@@ -774,7 +929,7 @@ public sealed class ProviderCatalogService
         ValidateProviderConfigRequest request)
     {
         var externalCredentials = ProviderRuntimeResolver.ResolveCodexCredentials();
-        var useExternalCredential = request.UseExternalCredential == true;
+        var useExternalCredential = request.UseExternalCredential ?? existingConnection?.UseExternalCredential ?? false;
         var apiKey = useExternalCredential
             ? externalCredentials.ApiKey
             : request.ApiKey ?? existingConnection?.ApiKey ?? existingConnection?.AuthToken ?? externalCredentials.ApiKey;
@@ -788,7 +943,8 @@ public sealed class ProviderCatalogService
             baseUrl: existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultCodexBaseUrl,
             apiKey: apiKey,
             authToken: null,
-            accountId: accountId);
+            accountId: accountId,
+            useExternalCredential: useExternalCredential);
     }
 
     private string? ResolveAnthropicAuthToken()
