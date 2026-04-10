@@ -79,6 +79,11 @@ interface AppStore {
   toggleCommandPalette: () => void;
   markInboxItemRead: (id: string) => void;
   updateSettings: (partial: SettingsUpdate) => Promise<void>;
+  validateProviderConfig: (request?: ProviderValidationRequest) => Promise<{
+    isValid: boolean;
+    warnings: string[];
+    errors: string[];
+  }>;
 }
 
 type SettingsUpdate = Partial<SettingsState> & {
@@ -89,6 +94,16 @@ type SettingsUpdate = Partial<SettingsState> & {
   clearProviderAuthToken?: boolean;
   clearProviderAccountId?: boolean;
   useExternalProviderCredential?: boolean;
+};
+
+type ProviderValidationRequest = {
+  provider?: string;
+  model?: string;
+  providerApiKey?: string | null;
+  providerAuthToken?: string | null;
+  providerAccountId?: string | null;
+  useExternalProviderCredential?: boolean;
+  liveCheck?: boolean;
 };
 
 const defaultSettings: SettingsState = {
@@ -113,6 +128,7 @@ const defaultSettings: SettingsState = {
     hasExternalCredential: false,
     externalCredentialPath: null,
   },
+  hasAnyConfiguredProviderCredential: false,
   showDiagnostics: true,
   streamingSpeed: 'normal',
   compactMode: false,
@@ -836,11 +852,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const [updatedSettings, validation] = await Promise.all([
         agentHostClient.updateSettings(runtimePatch),
-        agentHostClient.validateProviderConfig(
+        agentHostClient.validateProviderConfig({
           projectId,
-          partial.defaultProvider ?? get().settings.defaultProvider,
-          partial.defaultModel ?? get().settings.defaultModel,
-        ),
+          provider: partial.defaultProvider ?? get().settings.defaultProvider,
+          model: partial.defaultModel ?? get().settings.defaultModel,
+        }),
       ]);
 
       set((state) => ({
@@ -871,6 +887,36 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }));
     }
   },
+
+  validateProviderConfig: async (request = {}) => {
+    const projectId = get().selectedProjectId || null;
+    const provider = request.provider ?? get().settings.defaultProvider;
+    const model = request.model ?? get().settings.defaultModel;
+    const response = await agentHostClient.validateProviderConfig({
+      projectId,
+      provider,
+      model,
+      liveCheck: request.liveCheck,
+      apiKey: request.providerApiKey,
+      authToken: request.providerAuthToken,
+      accountId: request.providerAccountId,
+      useExternalCredential: request.useExternalProviderCredential,
+    });
+
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        providerValidationWarnings: response.validation.warnings,
+        providerValidationErrors: response.validation.errors,
+      },
+    }));
+
+    return {
+      isValid: response.validation.isValid,
+      warnings: response.validation.warnings,
+      errors: response.validation.errors,
+    };
+  },
 }));
 
 async function refreshSettingsSnapshot(
@@ -881,11 +927,11 @@ async function refreshSettingsSnapshot(
 
   try {
     const settingsResponse = await agentHostClient.getSettings(projectId);
-    const validation = await agentHostClient.validateProviderConfig(
+    const validation = await agentHostClient.validateProviderConfig({
       projectId,
-      settingsResponse.settings.provider,
-      settingsResponse.settings.model,
-    );
+      provider: settingsResponse.settings.provider,
+      model: settingsResponse.settings.model,
+    });
 
     set((state) => ({
       settings: {
@@ -1029,6 +1075,7 @@ function mergeRuntimeSettings(
     availableProviders,
     showDiagnostics: runtime.enableTelemetry,
     providerCredentials: runtime.credentials,
+    hasAnyConfiguredProviderCredential: runtime.hasAnyConfiguredProviderCredential ?? false,
   };
 }
 

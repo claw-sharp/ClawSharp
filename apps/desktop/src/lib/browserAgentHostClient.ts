@@ -149,6 +149,7 @@ function createRuntimeSettings(providers: AgentHostProviderOption[]): AgentHostR
       hasExternalCredential: false,
       externalCredentialPath: null,
     },
+    hasAnyConfiguredProviderCredential: false,
   };
 }
 
@@ -690,6 +691,11 @@ export class BrowserAgentHostClient {
           ? 'CodexResponses'
           : 'OpenAiChatCompletions',
       credentials: nextCredentials,
+      hasAnyConfiguredProviderCredential:
+        nextCredentials.hasApiKey ||
+        nextCredentials.hasAuthToken ||
+        Boolean(nextCredentials.accountId) ||
+        nextCredentials.hasExternalCredential,
     };
 
     return {
@@ -704,10 +710,15 @@ export class BrowserAgentHostClient {
   }
 
   async validateProviderConfig(
-    _projectId: string | null,
-    provider: string,
-    model?: string | null,
+    request: {
+      projectId?: string | null;
+      provider: string;
+      model?: string | null;
+      liveCheck?: boolean | null;
+    },
   ): Promise<ValidateProviderConfigResponse> {
+    const provider = request.provider;
+    const model = request.model ?? null;
     const normalizedProvider = provider.trim().toLowerCase();
     const providerOption = this.providers.find((entry) => entry.id === normalizedProvider);
     const warnings = ['Browser preview uses mock AgentHost data. Real provider auth is only exercised in `tauri dev`.'];
@@ -716,6 +727,11 @@ export class BrowserAgentHostClient {
       : [`Unknown provider '${provider}'.`];
     if (providerOption && model && !providerOption.models.includes(model)) {
       warnings.push(`Model '${model}' is not in the preview catalog for ${providerOption.displayName}.`);
+    }
+
+    // Browser preview cannot prove real credentials against a live provider API.
+    if (request.liveCheck) {
+      warnings.push('Live provider validation is unavailable in browser preview mode.');
     }
 
     return {

@@ -63,13 +63,19 @@ public sealed class ProviderCatalogService
 
     private readonly WorkspaceApplicationRegistry _applicationRegistry;
     private readonly RecentProjectStore _recentProjectStore;
+    private readonly IMcpSecureStorage _secureStorage;
+    private readonly IProviderLiveValidationService _liveValidationService;
 
     public ProviderCatalogService(
         WorkspaceApplicationRegistry applicationRegistry,
-        RecentProjectStore recentProjectStore)
+        RecentProjectStore recentProjectStore,
+        IMcpSecureStorage? secureStorage = null,
+        IProviderLiveValidationService? liveValidationService = null)
     {
         _applicationRegistry = applicationRegistry;
         _recentProjectStore = recentProjectStore;
+        _secureStorage = secureStorage ?? McpSecureStorageFactory.CreateDefault();
+        _liveValidationService = liveValidationService ?? new ProviderLiveValidationService(_secureStorage);
     }
 
     public Task<ListProvidersResponse> ListProvidersAsync(CancellationToken cancellationToken = default)
@@ -167,27 +173,27 @@ public sealed class ProviderCatalogService
         }
 
         var provider = request.Provider.Trim().ToLowerInvariant();
-        var model = string.IsNullOrWhiteSpace(request.Model) ? null : request.Model.Trim();
         var settings = await ResolveSettingsForValidationAsync(request.ProjectId, cancellationToken);
+        var validationTarget = BuildValidationTarget(settings, request);
         var errors = new List<string>();
         var warnings = new List<string>();
 
         switch (provider)
         {
             case "anthropic":
-                ValidateAnthropicConfig(settings, model, errors);
+                ValidateAnthropicConfig(validationTarget.Settings, validationTarget.Model, errors);
                 break;
             case "openai":
-                ValidateOpenAiConfig(settings, model, errors);
+                ValidateOpenAiConfig(validationTarget.Settings, validationTarget.Model, errors);
                 break;
             case "codex":
-                ValidateCodexConfig(settings, model, errors, warnings);
+                ValidateCodexConfig(validationTarget.Settings, validationTarget.Model, errors, warnings);
                 break;
             case "gemini":
-                ValidateGeminiConfig(settings, model, errors);
+                ValidateGeminiConfig(validationTarget.Settings, validationTarget.Model, errors);
                 break;
             case "github":
-                ValidateGitHubConfig(settings, model, errors);
+                ValidateGitHubConfig(validationTarget.Settings, validationTarget.Model, errors);
                 break;
             case "ollama":
                 warnings.Add("Ollama assumes a local server is reachable at http://localhost:11434/v1.");
@@ -195,6 +201,19 @@ public sealed class ProviderCatalogService
             default:
                 warnings.Add($"No desktop validation rule exists yet for provider '{provider}'.");
                 break;
+        }
+
+        if (request.LiveCheck &&
+            errors.Count == 0 &&
+            ProviderOptions.Any(item => string.Equals(item.Id, provider, StringComparison.OrdinalIgnoreCase)))
+        {
+            var liveResult = await _liveValidationService.ValidateAsync(
+                provider,
+                validationTarget.Model,
+                validationTarget.Settings,
+                cancellationToken);
+            errors.AddRange(liveResult.Errors);
+            warnings.AddRange(liveResult.Warnings);
         }
 
         return new ValidateProviderConfigResponse(
@@ -225,7 +244,7 @@ public sealed class ProviderCatalogService
         return await _applicationRegistry.GetOrCreateAsync(project.Path, cancellationToken);
     }
 
-    private static RuntimeSettingsDto MapSettings(Infrastructure.ClawSharpApplication app)
+    private RuntimeSettingsDto MapSettings(Infrastructure.ClawSharpApplication app)
     {
         var state = app.AppStateStore.GetState();
         var settings = state.Settings;
@@ -241,7 +260,8 @@ public sealed class ProviderCatalogService
             runtime.Transport.ToString(),
             ClaudeConfigPaths.GetUserSettingsFilePath(),
             state.SettingsIssues.Select(issue => $"{issue.File}: {issue.Message}").ToArray(),
-            MapCredentialState(settings, runtime.Provider, runtime.RequestedModel, runtime.ResolvedModel));
+            MapCredentialState(settings, runtime.Provider, runtime.RequestedModel, runtime.ResolvedModel),
+            HasAnyConfiguredProviderCredential(settings));
     }
 
     private async Task<ClawSharpSettings> ResolveSettingsForValidationAsync(
@@ -250,6 +270,56 @@ public sealed class ProviderCatalogService
     {
         var app = await ResolveApplicationAsync(projectId, cancellationToken);
         return app.AppStateStore.GetState().Settings;
+    }
+
+    private ValidationTarget BuildValidationTarget(
+        ClawSharpSettings settings,
+        ValidateProviderConfigRequest request)
+    {
+        var provider = request.Provider.Trim().ToLowerInvariant();
+        var model = ResolveValidationModel(provider, request.Model, settings);
+        var existingConnection = ResolveConnection(settings, model, ProviderRuntimeResolver.ResolveModelAlias(model));
+        var runtime = new RuntimeSettings
+        {
+            PermissionMode = settings.Runtime.PermissionMode,
+            Model = model,
+            FallbackModel = settings.Runtime.FallbackModel,
+            EnableTelemetry = settings.Runtime.EnableTelemetry,
+            FileCheckpointingEnabled = settings.Runtime.FileCheckpointingEnabled,
+            AutoMemoryEnabled = settings.Runtime.AutoMemoryEnabled,
+            AutoMemoryDirectory = settings.Runtime.AutoMemoryDirectory
+        };
+        var agentModels = new Dictionary<string, AgentModelConnection>(settings.AgentModels, StringComparer.Ordinal);
+        var agentRouting = new Dictionary<string, string>(settings.AgentRouting, StringComparer.Ordinal);
+        var claudeApiKey = settings.ClaudeApiKey;
+
+        if (provider == "anthropic")
+        {
+            var resolvedAuthToken = request.AuthToken ??
+                                    existingConnection?.AuthToken ??
+                                    ResolveAnthropicAuthToken();
+            var resolvedApiKey = request.ApiKey ??
+                                 existingConnection?.ApiKey ??
+                                 settings.ClaudeApiKey ??
+                                 Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ??
+                                 Environment.GetEnvironmentVariable("CLAUDE_API_KEY");
+            claudeApiKey = string.IsNullOrWhiteSpace(resolvedApiKey) ? null : resolvedApiKey.Trim();
+            agentModels[model] = CloneConnection(
+                existingConnection,
+                provider: "anthropic",
+                baseUrl: existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultAnthropicBaseUrl,
+                apiKey: resolvedApiKey,
+                authToken: resolvedAuthToken,
+                accountId: request.AccountId ?? existingConnection?.AccountId);
+        }
+        else
+        {
+            agentModels[model] = BuildValidationConnection(provider, model, existingConnection, request);
+        }
+
+        return new ValidationTarget(
+            model,
+            CloneSettings(settings, runtime, claudeApiKey, agentModels, agentRouting));
     }
 
     private static bool HasCredentialUpdate(UpdateSettingsRequest request)
@@ -444,7 +514,7 @@ public sealed class ProviderCatalogService
         return null;
     }
 
-    private static void ValidateAnthropicConfig(
+    private void ValidateAnthropicConfig(
         ClawSharpSettings settings,
         string? model,
         List<string> errors)
@@ -454,7 +524,7 @@ public sealed class ProviderCatalogService
             !string.IsNullOrWhiteSpace(settings.ClaudeApiKey) ||
             !string.IsNullOrWhiteSpace(connection?.ApiKey) ||
             !string.IsNullOrWhiteSpace(connection?.AuthToken) ||
-            HasAnyEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"))
+            !string.IsNullOrWhiteSpace(ResolveAnthropicAuthToken()))
         {
             return;
         }
@@ -557,10 +627,187 @@ public sealed class ProviderCatalogService
         errors.Add("GitHub token is not configured for provider 'github'.");
     }
 
+    private bool HasAnyConfiguredProviderCredential(ClawSharpSettings settings)
+    {
+        return HasAnthropicCredential(settings) ||
+               HasProviderConnectionCredential(settings, "openai", "github", "gemini", "codex") ||
+               ProviderRuntimeResolver.ResolveCodexCredentials().ApiKey is not null ||
+               HasAnyEnvironmentVariable(
+                   "OPENAI_API_KEY",
+                   "GITHUB_TOKEN",
+                   "GH_TOKEN",
+                   "GEMINI_API_KEY",
+                   "GOOGLE_API_KEY",
+                   "GEMINI_ACCESS_TOKEN");
+    }
+
+    private bool HasAnthropicCredential(ClawSharpSettings settings)
+    {
+        if (HasAnyEnvironmentVariable(
+                "ANTHROPIC_API_KEY",
+                "CLAUDE_API_KEY",
+                "ANTHROPIC_AUTH_TOKEN",
+                "CLAUDE_CODE_OAUTH_TOKEN") ||
+            !string.IsNullOrWhiteSpace(settings.ClaudeApiKey))
+        {
+            return true;
+        }
+
+        if (settings.AgentModels.Values.Any(
+                connection => string.Equals(connection.Provider, "anthropic", StringComparison.OrdinalIgnoreCase) &&
+                              (!string.IsNullOrWhiteSpace(connection.ApiKey) ||
+                               !string.IsNullOrWhiteSpace(connection.AuthToken))))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(ResolveAnthropicAuthToken());
+    }
+
+    private static bool HasProviderConnectionCredential(
+        ClawSharpSettings settings,
+        params string[] providerIds)
+    {
+        return settings.AgentModels.Values.Any(
+            connection => providerIds.Any(
+                              providerId => string.Equals(connection.Provider, providerId, StringComparison.OrdinalIgnoreCase)) &&
+                          (!string.IsNullOrWhiteSpace(connection.ApiKey) ||
+                           !string.IsNullOrWhiteSpace(connection.AuthToken) ||
+                           !string.IsNullOrWhiteSpace(connection.AccountId)));
+    }
+
+    private static string ResolveValidationModel(
+        string provider,
+        string? requestedModel,
+        ClawSharpSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedModel))
+        {
+            return requestedModel.Trim();
+        }
+
+        var option = ProviderOptions.FirstOrDefault(item => string.Equals(item.Id, provider, StringComparison.OrdinalIgnoreCase));
+        return option?.DefaultModel ?? settings.Runtime.Model;
+    }
+
+    private static AgentModelConnection BuildValidationConnection(
+        string provider,
+        string model,
+        AgentModelConnection? existingConnection,
+        ValidateProviderConfigRequest request)
+    {
+        return provider switch
+        {
+            "openai" => CloneConnection(
+                existingConnection,
+                provider: "openai",
+                baseUrl: existingConnection?.BaseUrl ??
+                         Environment.GetEnvironmentVariable("OPENAI_BASE_URL") ??
+                         Environment.GetEnvironmentVariable("OPENAI_API_BASE") ??
+                         ProviderRuntimeResolver.DefaultOpenAiBaseUrl,
+                apiKey: request.ApiKey ??
+                        existingConnection?.ApiKey ??
+                        Environment.GetEnvironmentVariable("OPENAI_API_KEY"),
+                authToken: request.AuthToken ?? existingConnection?.AuthToken,
+                accountId: request.AccountId ?? existingConnection?.AccountId),
+            "gemini" => BuildGeminiValidationConnection(existingConnection, request),
+            "github" => CloneConnection(
+                existingConnection,
+                provider: "github",
+                baseUrl: existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultGitHubModelsBaseUrl,
+                apiKey: request.ApiKey ?? existingConnection?.ApiKey,
+                authToken: request.AuthToken ??
+                           existingConnection?.AuthToken ??
+                           Environment.GetEnvironmentVariable("GITHUB_TOKEN") ??
+                           Environment.GetEnvironmentVariable("GH_TOKEN"),
+                accountId: request.AccountId ?? existingConnection?.AccountId),
+            "codex" => BuildCodexValidationConnection(existingConnection, request),
+            "ollama" => CloneConnection(
+                existingConnection,
+                provider: "openai",
+                baseUrl: existingConnection?.BaseUrl ?? "http://localhost:11434/v1",
+                apiKey: request.ApiKey ?? existingConnection?.ApiKey ?? "ollama",
+                authToken: null,
+                accountId: null),
+            _ => CloneConnection(
+                existingConnection,
+                provider: provider,
+                baseUrl: existingConnection?.BaseUrl ?? ResolveDefaultBaseUrl(provider),
+                apiKey: request.ApiKey ?? existingConnection?.ApiKey,
+                authToken: request.AuthToken ?? existingConnection?.AuthToken,
+                accountId: request.AccountId ?? existingConnection?.AccountId)
+        };
+    }
+
+    private static AgentModelConnection BuildGeminiValidationConnection(
+        AgentModelConnection? existingConnection,
+        ValidateProviderConfigRequest request)
+    {
+        var credential = ProviderRuntimeResolver.ResolveGeminiCredential();
+        var headers = existingConnection?.Headers is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(existingConnection.Headers, StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(credential?.ProjectId))
+        {
+            headers["x-goog-user-project"] = credential.ProjectId;
+        }
+
+        return new AgentModelConnection
+        {
+            Provider = "gemini",
+            BaseUrl = existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultGeminiBaseUrl,
+            ApiKey = string.IsNullOrWhiteSpace(request.ApiKey)
+                ? existingConnection?.ApiKey ?? (credential is { Kind: "api-key" } ? credential.Credential : null)
+                : request.ApiKey.Trim(),
+            AuthToken = string.IsNullOrWhiteSpace(request.AuthToken)
+                ? existingConnection?.AuthToken ?? (credential is { Kind: not "api-key" } ? credential?.Credential : null)
+                : request.AuthToken.Trim(),
+            AccountId = string.IsNullOrWhiteSpace(request.AccountId) ? existingConnection?.AccountId : request.AccountId.Trim(),
+            ApiVersion = existingConnection?.ApiVersion,
+            Headers = headers
+        };
+    }
+
+    private static AgentModelConnection BuildCodexValidationConnection(
+        AgentModelConnection? existingConnection,
+        ValidateProviderConfigRequest request)
+    {
+        var externalCredentials = ProviderRuntimeResolver.ResolveCodexCredentials();
+        var useExternalCredential = request.UseExternalCredential == true;
+        var apiKey = useExternalCredential
+            ? externalCredentials.ApiKey
+            : request.ApiKey ?? existingConnection?.ApiKey ?? existingConnection?.AuthToken ?? externalCredentials.ApiKey;
+        var accountId = useExternalCredential
+            ? request.AccountId ?? externalCredentials.AccountId
+            : request.AccountId ?? existingConnection?.AccountId ?? externalCredentials.AccountId;
+
+        return CloneConnection(
+            existingConnection,
+            provider: "codex",
+            baseUrl: existingConnection?.BaseUrl ?? ProviderRuntimeResolver.DefaultCodexBaseUrl,
+            apiKey: apiKey,
+            authToken: null,
+            accountId: accountId);
+    }
+
+    private string? ResolveAnthropicAuthToken()
+    {
+        var oauthTokenSource = new ClaudeAiOAuthTokenSource();
+        return Environment.GetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN") ??
+               Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN") ??
+               oauthTokenSource.ReadToken() ??
+               _secureStorage.Read()?.ClaudeAiOauth?.AccessToken;
+    }
+
     private static bool HasAnyEnvironmentVariable(params string[] variableNames)
     {
         return variableNames.Any(name => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name)));
     }
+
+    private sealed record ValidationTarget(
+        string Model,
+        ClawSharpSettings Settings);
 
     private static string ToProviderId(ApiProviderKind provider)
     {

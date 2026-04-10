@@ -174,6 +174,11 @@ export interface ValidateProviderConfigRequest {
   projectId?: string | null;
   provider: string;
   model?: string | null;
+  liveCheck?: boolean | null;
+  apiKey?: string | null;
+  authToken?: string | null;
+  accountId?: string | null;
+  useExternalCredential?: boolean | null;
 }
 
 export interface ListPendingApprovalsRequest {
@@ -325,6 +330,7 @@ export interface AgentHostRuntimeSettings {
   configPath: string;
   settingsIssues: string[];
   credentials: AgentHostProviderCredentials;
+  hasAnyConfiguredProviderCredential?: boolean;
 }
 
 export interface GetSettingsResponse {

@@ -76,6 +76,23 @@ describe('useAppStore', () => {
         transport: 'AnthropicMessages',
         configPath: '/Users/test/.claude/settings.json',
         settingsIssues: [],
+        credentials: {
+          hasApiKey: false,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'none',
+          hasExternalCredential: false,
+          externalCredentialPath: null,
+        },
+        hasAnyConfiguredProviderCredential: false,
+      },
+    });
+    mockClient.validateProviderConfig.mockResolvedValue({
+      validation: {
+        provider: 'anthropic',
+        isValid: true,
+        errors: [],
+        warnings: [],
       },
     });
     mockClient.listDiagnostics.mockResolvedValue({
@@ -428,6 +445,42 @@ describe('useAppStore', () => {
     const state = useAppStore.getState();
     expect(state.connection.statusLabel).toBe('Connection failed');
     expect(state.connection.errorMessage).toBe('Failed to start AgentHost using dotnet: program not found');
+  });
+
+  it('validates provider config with draft credential overrides and stores the returned warnings', async () => {
+    mockClient.validateProviderConfig.mockResolvedValue({
+      validation: {
+        provider: 'openai',
+        isValid: true,
+        errors: [],
+        warnings: ['Validated against the live API.'],
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    const result = await useAppStore.getState().validateProviderConfig({
+      provider: 'openai',
+      model: 'gpt-4o',
+      providerApiKey: 'sk-openai-test',
+      liveCheck: true,
+    });
+
+    expect(mockClient.validateProviderConfig).toHaveBeenCalledWith({
+      projectId: null,
+      provider: 'openai',
+      model: 'gpt-4o',
+      liveCheck: true,
+      apiKey: 'sk-openai-test',
+      authToken: undefined,
+      accountId: undefined,
+      useExternalCredential: undefined,
+    });
+    expect(result).toEqual({
+      isValid: true,
+      warnings: ['Validated against the live API.'],
+      errors: [],
+    });
+    expect(useAppStore.getState().settings.providerValidationWarnings).toEqual(['Validated against the live API.']);
   });
 
   it('does not overwrite a newly opened project when bootstrap recents resolve late', async () => {

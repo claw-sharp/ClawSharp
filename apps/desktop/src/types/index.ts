@@ -171,6 +171,7 @@ export interface SettingsState {
   providerValidationErrors: string[];
   availableProviders: ProviderOption[];
   providerCredentials: ProviderCredentialState;
+  hasAnyConfiguredProviderCredential: boolean;
   showDiagnostics: boolean;
   streamingSpeed: 'slow' | 'normal' | 'fast';
   compactMode: boolean;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsDialog } from '@/features/settings/SettingsDialog';
 import { useAppStore } from '@/store';
@@ -9,6 +9,7 @@ vi.mock('@/store', () => ({
 
 const mockedUseAppStore = vi.mocked(useAppStore);
 const updateSettings = vi.fn().mockResolvedValue(undefined);
+const validateProviderConfig = vi.fn().mockResolvedValue({ isValid: true, warnings: [], errors: [] });
 const toggleSettings = vi.fn();
 
 const baseStoreState = {
@@ -36,6 +37,7 @@ const baseStoreState = {
       hasExternalCredential: true,
       externalCredentialPath: 'C:\\Users\\hadoa\\.codex\\auth.json',
     },
+    hasAnyConfiguredProviderCredential: false,
     availableProviders: [
       {
         id: 'anthropic',
@@ -65,17 +67,20 @@ const baseStoreState = {
   },
   toggleSettings,
   updateSettings,
+  validateProviderConfig,
 };
 
 describe('SettingsDialog', () => {
   beforeEach(() => {
     updateSettings.mockReset();
     updateSettings.mockResolvedValue(undefined);
+    validateProviderConfig.mockReset();
+    validateProviderConfig.mockResolvedValue({ isValid: true, warnings: [], errors: [] });
     toggleSettings.mockReset();
     mockedUseAppStore.mockReturnValue(baseStoreState as ReturnType<typeof useAppStore>);
   });
 
-  it('uses the selected provider catalog, saves settings explicitly, saves credentials against the current runtime selection, and hides unsupported placeholder settings', () => {
+  it('uses the selected provider catalog, saves provider settings and credentials together, and hides unsupported placeholder settings', () => {
     render(<SettingsDialog />);
 
     const [providerSelect, modelSelect] = screen.getAllByRole('combobox');
@@ -91,19 +96,14 @@ describe('SettingsDialog', () => {
     expect(screen.getByText(/Codex uses the Responses transport/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Use Codex auth file')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+    fireEvent.change(screen.getByLabelText('Codex Access Token'), { target: { value: 'codex-token' } });
+    fireEvent.change(screen.getByLabelText('Codex Account ID'), { target: { value: 'acct-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateSettings).toHaveBeenCalledWith({
       defaultProvider: 'codex',
       defaultModel: 'codexplan',
       showDiagnostics: true,
-    });
-
-    fireEvent.change(screen.getByLabelText('Codex Access Token'), { target: { value: 'codex-token' } });
-    fireEvent.change(screen.getByLabelText('Codex Account ID'), { target: { value: 'acct-123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Credentials' }));
-
-    expect(updateSettings).toHaveBeenLastCalledWith({
       providerApiKey: 'codex-token',
       providerAccountId: 'acct-123',
     });
@@ -138,10 +138,69 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Codex Auth File' }));
 
     expect(updateSettings).toHaveBeenLastCalledWith({
+      defaultProvider: 'codex',
+      defaultModel: 'codexplan',
       useExternalProviderCredential: true,
       clearProviderApiKey: true,
       clearProviderAuthToken: false,
       clearProviderAccountId: true,
     });
+  });
+
+  it('includes the pending provider selection when saving the combined draft', () => {
+    render(<SettingsDialog />);
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'codex' } });
+    fireEvent.change(screen.getByLabelText('Codex Access Token'), { target: { value: 'codex-token' } });
+    fireEvent.change(screen.getByLabelText('Codex Account ID'), { target: { value: 'acct-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      defaultProvider: 'codex',
+      defaultModel: 'codexplan',
+      showDiagnostics: true,
+      providerApiKey: 'codex-token',
+      providerAccountId: 'acct-123',
+    });
+  });
+
+  it('validates the draft provider settings against the live validation action', async () => {
+    render(<SettingsDialog />);
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'codex' } });
+    fireEvent.change(screen.getByLabelText('Codex Access Token'), { target: { value: 'codex-token' } });
+    fireEvent.change(screen.getByLabelText('Codex Account ID'), { target: { value: 'acct-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Validate Credentials' }));
+
+    await waitFor(() => {
+      expect(validateProviderConfig).toHaveBeenCalledWith({
+        provider: 'codex',
+        model: 'codexplan',
+        providerApiKey: 'codex-token',
+        providerAuthToken: undefined,
+        providerAccountId: 'acct-123',
+        useExternalProviderCredential: false,
+        liveCheck: true,
+      });
+    });
+  });
+
+  it('keeps the draft provider selection while the dialog is open during validation updates', () => {
+    const { rerender } = render(<SettingsDialog />);
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'codex' } });
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
+
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      settings: {
+        ...baseStoreState.settings,
+        providerValidationWarnings: ['Live validation is unavailable.'],
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    rerender(<SettingsDialog />);
+
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
   });
 });

@@ -114,11 +114,18 @@ class AgentHostClient {
   }
 
   async validateProviderConfig(
-    projectId: string | null,
-    provider: string,
-    model?: string | null,
+    request: {
+      projectId?: string | null;
+      provider: string;
+      model?: string | null;
+      liveCheck?: boolean | null;
+      apiKey?: string | null;
+      authToken?: string | null;
+      accountId?: string | null;
+      useExternalCredential?: boolean | null;
+    },
   ): Promise<ValidateProviderConfigResponse> {
-    return await this.request('validateProviderConfig', { projectId, provider, model: model ?? null });
+    return await this.request('validateProviderConfig', request);
   }
 
   async listPendingApprovals(threadId?: string | null): Promise<ListPendingApprovalsResponse> {

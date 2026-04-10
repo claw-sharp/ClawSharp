@@ -11,7 +11,7 @@ import type { Message, ToolProgressEvent } from '@/types';
 export const ThreadView = () => {
   const {
     selectedProjectId, selectedThreadId, projects, threads, messages, inboxItems, run, connection, settings,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
@@ -23,6 +23,7 @@ export const ThreadView = () => {
   const isBrowserPreview = settings.settingsIssues.some((issue) =>
     issue.includes('Browser preview uses mock AgentHost data.'));
   const scrollRef = useRef<HTMLDivElement>(null);
+  const shouldPromptForProviderKeys = !settings.hasAnyConfiguredProviderCredential;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -51,9 +52,28 @@ export const ThreadView = () => {
           <Bot className="h-8 w-8 mx-auto opacity-40" />
           <p className="text-sm text-foreground">Open a local repository to start using the desktop runtime.</p>
           <p className="text-xs text-muted-foreground">{connection.errorMessage ?? 'AgentHost is connected, but no project is selected yet.'}</p>
+          {shouldPromptForProviderKeys && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                No provider credentials are configured yet. Add a provider key before starting a thread.
+              </p>
+              <button
+                onClick={toggleSettings}
+                className="rounded-md border border-status-waiting/40 bg-status-waiting/15 px-3 py-2 text-xs font-medium text-status-waiting hover:bg-status-waiting/20 transition-colors"
+              >
+                Configure Provider Keys
+              </button>
+            </div>
+          )}
           <button
             onClick={() => void openProjectPicker()}
-            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            disabled={shouldPromptForProviderKeys}
+            className={cn(
+              'rounded-md px-3 py-2 text-xs font-medium transition-colors',
+              shouldPromptForProviderKeys
+                ? 'cursor-not-allowed bg-muted text-muted-foreground opacity-60'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90',
+            )}
           >
             Open Project
           </button>
@@ -69,6 +89,19 @@ export const ThreadView = () => {
           <Bot className="h-8 w-8 mx-auto opacity-40" />
           <p className="text-sm text-foreground">No thread selected for {project.name}.</p>
           <p className="text-xs text-muted-foreground">Create a thread to load persisted transcript history for this project.</p>
+          {shouldPromptForProviderKeys && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                No provider credentials are configured yet. Add a provider key before starting a thread.
+              </p>
+              <button
+                onClick={toggleSettings}
+                className="rounded-md border border-status-waiting/40 bg-status-waiting/15 px-3 py-2 text-xs font-medium text-status-waiting hover:bg-status-waiting/20 transition-colors"
+              >
+                Configure Provider Keys
+              </button>
+            </div>
+          )}
           <button
             onClick={() => void createThread()}
             className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -128,6 +161,24 @@ export const ThreadView = () => {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {shouldPromptForProviderKeys && (
+          <div className="rounded-lg border border-status-waiting/30 bg-status-waiting/10 px-3 py-3 text-sm text-foreground">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-status-waiting">Provider setup required</p>
+                <p className="text-xs text-secondary-foreground">
+                  No provider credentials are configured yet. Add a provider key before starting a new run.
+                </p>
+              </div>
+              <button
+                onClick={toggleSettings}
+                className="rounded-md border border-status-waiting/40 bg-status-waiting/15 px-3 py-2 text-xs font-medium text-status-waiting hover:bg-status-waiting/20"
+              >
+                Configure Provider Keys
+              </button>
+            </div>
+          </div>
+        )}
         {pendingApprovals.map((approval) => (
           <div
             key={approval.id}

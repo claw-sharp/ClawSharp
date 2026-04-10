@@ -117,7 +117,8 @@ public sealed record RuntimeSettingsDto(
     string Transport,
     string ConfigPath,
     IReadOnlyList<string> SettingsIssues,
-    ProviderCredentialStateDto Credentials);
+    ProviderCredentialStateDto Credentials,
+    bool HasAnyConfiguredProviderCredential);
 
 public sealed record ProviderValidationDto(
     string Provider,

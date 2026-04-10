@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
+import { toast } from '@/components/ui/sonner';
 import type { ProviderCredentialState } from '@/types';
 
 type GeminiCredentialMode = 'apiKey' | 'accessToken';
@@ -23,7 +24,7 @@ type CredentialUpdate = {
 };
 
 export const SettingsDialog = () => {
-  const { ui, settings, toggleSettings, updateSettings } = useAppStore();
+  const { ui, settings, toggleSettings, updateSettings, validateProviderConfig } = useAppStore();
   const [draftProvider, setDraftProvider] = useState(settings.defaultProvider);
   const [draftModel, setDraftModel] = useState(settings.defaultModel);
   const [draftTelemetryEnabled, setDraftTelemetryEnabled] = useState(settings.showDiagnostics);
@@ -32,12 +33,20 @@ export const SettingsDialog = () => {
   const [accountIdInput, setAccountIdInput] = useState('');
   const [geminiCredentialMode, setGeminiCredentialMode] = useState<GeminiCredentialMode>('apiKey');
   const [codexCredentialMode, setCodexCredentialMode] = useState<CodexCredentialMode>('saved');
+  const [isValidatingProvider, setIsValidatingProvider] = useState(false);
+  const wasSettingsOpenRef = useRef(false);
 
   useEffect(() => {
     if (!ui.settingsOpen) {
+      wasSettingsOpenRef.current = false;
       return;
     }
 
+    if (wasSettingsOpenRef.current) {
+      return;
+    }
+
+    wasSettingsOpenRef.current = true;
     setDraftProvider(settings.defaultProvider);
     setDraftModel(settings.defaultModel);
     setDraftTelemetryEnabled(settings.showDiagnostics);
@@ -99,10 +108,30 @@ export const SettingsDialog = () => {
     settings.providerCredentials.hasApiKey ||
     settings.providerCredentials.hasAuthToken ||
     Boolean(settings.providerCredentials.accountId);
+  const useExternalProviderCredential = providerIdUsesExternalCredential(selectedProviderId, codexCredentialMode);
+  const shouldUseExternalCredential =
+    useExternalProviderCredential && settings.providerCredentials.source !== 'external';
   const hasSettingsChanges =
     draftProvider !== settings.defaultProvider ||
     draftModel !== settings.defaultModel ||
     draftTelemetryEnabled !== settings.showDiagnostics;
+  const hasCredentialChanges = credentialUpdate !== null || shouldUseExternalCredential;
+  const hasPendingChanges = hasSettingsChanges || hasCredentialChanges;
+  const validationRequest = {
+    provider: selectedProviderId,
+    model: draftModel,
+    providerApiKey:
+      credentialConfig?.secretField === 'apiKey' && apiKeyInput.trim().length > 0
+        ? apiKeyInput.trim()
+        : undefined,
+    providerAuthToken:
+      credentialConfig?.secretField === 'authToken' && authTokenInput.trim().length > 0
+        ? authTokenInput.trim()
+        : undefined,
+    providerAccountId: accountIdInput.trim().length > 0 ? accountIdInput.trim() : undefined,
+    useExternalProviderCredential,
+    liveCheck: true,
+  };
 
   if (!ui.settingsOpen) return null;
 
@@ -181,17 +210,10 @@ export const SettingsDialog = () => {
             onApiKeyChange={setApiKeyInput}
             onAuthTokenChange={setAuthTokenInput}
             onAccountIdChange={setAccountIdInput}
-            onSave={() => {
-              if (!credentialUpdate) {
-                return;
-              }
-
-              void updateSettings(credentialUpdate);
-              setApiKeyInput('');
-              setAuthTokenInput('');
-            }}
             onClear={() => {
               void updateSettings({
+                defaultProvider: draftProvider,
+                defaultModel: draftModel,
                 clearProviderApiKey: settings.providerCredentials.hasApiKey,
                 clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
                 clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
@@ -202,6 +224,8 @@ export const SettingsDialog = () => {
             }}
             onUseExternal={() => {
               void updateSettings({
+                defaultProvider: draftProvider,
+                defaultModel: draftModel,
                 useExternalProviderCredential: true,
                 clearProviderApiKey: settings.providerCredentials.hasApiKey,
                 clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
@@ -211,9 +235,41 @@ export const SettingsDialog = () => {
               setAuthTokenInput('');
               setAccountIdInput('');
             }}
-            canSave={credentialUpdate !== null}
             canClear={hasSavedCredentials}
           />
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setIsValidatingProvider(true);
+                void validateProviderConfig(validationRequest)
+                  .then((result) => {
+                    if (result.isValid) {
+                      toast.success(`Validated ${selectedProvider?.displayName ?? selectedProviderId} successfully.`);
+                      return;
+                    }
+
+                    toast.error(`Validation failed for ${selectedProvider?.displayName ?? selectedProviderId}.`);
+                  })
+                  .catch((error) => {
+                    toast.error(error instanceof Error ? error.message : 'Failed to validate provider settings.');
+                  })
+                  .finally(() => {
+                    setIsValidatingProvider(false);
+                  });
+              }}
+              disabled={isValidatingProvider || !selectedProviderId}
+              className={cn(
+                'rounded-md border px-3 py-2 text-xs transition-colors',
+                isValidatingProvider || !selectedProviderId
+                  ? 'cursor-not-allowed border-border text-muted-foreground opacity-60'
+                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              {isValidatingProvider ? 'Validating...' : 'Validate Credentials'}
+            </button>
+          </div>
 
           <SettingRow label="Provider Endpoint">
             <span className="max-w-64 truncate text-right font-mono text-xs text-muted-foreground">{settings.providerBaseUrl}</span>
@@ -267,7 +323,7 @@ export const SettingsDialog = () => {
             <button
               type="button"
               onClick={() => {
-                if (!hasSettingsChanges) {
+                if (!hasPendingChanges) {
                   return;
                 }
 
@@ -275,17 +331,28 @@ export const SettingsDialog = () => {
                   defaultProvider: draftProvider,
                   defaultModel: draftModel,
                   showDiagnostics: draftTelemetryEnabled,
+                  ...(credentialUpdate ?? {}),
+                  ...(shouldUseExternalCredential
+                    ? {
+                        useExternalProviderCredential: true,
+                        clearProviderApiKey: settings.providerCredentials.hasApiKey,
+                        clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
+                        clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
+                      }
+                    : {}),
                 });
+                setApiKeyInput('');
+                setAuthTokenInput('');
               }}
-              disabled={!hasSettingsChanges}
+              disabled={!hasPendingChanges}
               className={cn(
                 'rounded-md border px-3 py-2 text-xs transition-colors',
-                hasSettingsChanges
+                hasPendingChanges
                   ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
                   : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
               )}
             >
-              Save Settings
+              Save
             </button>
           </div>
         </div>
@@ -315,10 +382,8 @@ const CredentialPanel = ({
   onApiKeyChange,
   onAuthTokenChange,
   onAccountIdChange,
-  onSave,
   onClear,
   onUseExternal,
-  canSave,
   canClear,
 }: {
   providerId: string;
@@ -334,10 +399,8 @@ const CredentialPanel = ({
   onApiKeyChange: (value: string) => void;
   onAuthTokenChange: (value: string) => void;
   onAccountIdChange: (value: string) => void;
-  onSave: () => void;
   onClear: () => void;
   onUseExternal: () => void;
-  canSave: boolean;
   canClear: boolean;
 }) => {
   if (!credentialConfig) {
@@ -479,19 +542,6 @@ const CredentialPanel = ({
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={onSave}
-            disabled={!canSave}
-            className={cn(
-              'rounded-md border px-3 py-2 text-xs transition-colors',
-              canSave
-                ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
-                : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
-            )}
-          >
-            Save Credentials
-          </button>
-          <button
-            type="button"
             onClick={onClear}
             disabled={!canClear}
             className={cn(
@@ -625,6 +675,13 @@ function getProviderDetails(providerId: string): string {
     default:
       return 'Provider credentials and transport are resolved by the runtime configuration for the active workspace.';
   }
+}
+
+function providerIdUsesExternalCredential(
+  providerId: string,
+  codexCredentialMode: CodexCredentialMode,
+): boolean {
+  return providerId === 'codex' && codexCredentialMode === 'external';
 }
 
 const SettingToggle = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
