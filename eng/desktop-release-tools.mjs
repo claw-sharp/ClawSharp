@@ -277,7 +277,7 @@ function generateWingetManifests(options) {
   const packageIdentifier = options.packageIdentifier ?? "ClawSharp.ClawSharp";
   const publisher = options.publisher ?? "ClawSharp";
   const packageName = options.packageName ?? "ClawSharp";
-  const manifestVersion = options.manifestVersion ?? "1.9.0";
+  const manifestVersion = options.manifestVersion ?? "1.12.0";
   const installerFile = fs.readdirSync(assetsRoot).find((fileName) => /_windows_x64_setup\.exe$/.test(fileName));
   if (!installerFile) {
     throw new Error(`Could not find a Windows x64 NSIS installer under ${assetsRoot}`);
