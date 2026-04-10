@@ -61,8 +61,20 @@ class AgentHostClient {
     return await this.request('createThread', { projectId, title: title ?? null });
   }
 
-  async getThread(projectId: string, threadId: string): Promise<GetThreadResponse> {
-    return await this.request('getThread', { projectId, threadId });
+  async getThread(
+    projectId: string,
+    threadId: string,
+    options?: {
+      beforeMessageId?: string | null;
+      pageSize?: number | null;
+    },
+  ): Promise<GetThreadResponse> {
+    return await this.request('getThread', {
+      projectId,
+      threadId,
+      beforeMessageId: options?.beforeMessageId ?? null,
+      pageSize: options?.pageSize ?? null,
+    });
   }
 
   async renameThread(projectId: string, threadId: string, title: string): Promise<RenameThreadResponse> {

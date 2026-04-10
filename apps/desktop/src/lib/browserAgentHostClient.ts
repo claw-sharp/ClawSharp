@@ -401,14 +401,34 @@ export class BrowserAgentHostClient {
     };
   }
 
-  async getThread(projectId: string, threadId: string): Promise<GetThreadResponse> {
+  async getThread(
+    projectId: string,
+    threadId: string,
+    options?: {
+      beforeMessageId?: string | null;
+      pageSize?: number | null;
+    },
+  ): Promise<GetThreadResponse> {
     const project = this.requireProject(projectId);
     const thread = this.requireThread(projectId, threadId);
+    const pageSize = Math.max(1, options?.pageSize ?? 50);
+    const messages = this.messagesByThread[threadId] ?? [];
+    const anchorIndex = options?.beforeMessageId
+      ? messages.findIndex((message) => message.id === options.beforeMessageId)
+      : messages.length;
+    const endIndex = anchorIndex >= 0 ? anchorIndex : messages.length;
+    const startIndex = Math.max(0, endIndex - pageSize);
+    const pageMessages = messages.slice(startIndex, endIndex);
+    const hasMoreMessages = startIndex > 0;
+    const nextBeforeMessageId = hasMoreMessages ? pageMessages[0]?.id ?? null : null;
+
     return {
       project: deepClone(project),
       thread: {
         thread: deepClone(thread),
-        messages: deepClone(this.messagesByThread[threadId] ?? []),
+        messages: deepClone(pageMessages),
+        hasMoreMessages,
+        nextBeforeMessageId,
       },
     };
   }

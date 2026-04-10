@@ -48,6 +48,12 @@ export interface Message {
   isStreaming?: boolean;
 }
 
+export interface ThreadHistoryState {
+  hasMoreMessages: boolean;
+  nextBeforeMessageId: string | null;
+  isLoadingOlder: boolean;
+}
+
 export interface ChangedFile {
   path: string;
   status: FileChangeStatus;
@@ -180,6 +186,13 @@ export interface SettingsState {
   editorPath: string;
 }
 
+export interface NavigationLoadingState {
+  requestId: string;
+  kind: 'project' | 'thread';
+  title: string;
+  description: string;
+}
+
 export interface UIState {
   leftSidebarCollapsed: boolean;
   rightPanelTab: 'files' | 'diff';
@@ -190,6 +203,7 @@ export interface UIState {
   selectedChangedFile: string | null;
   selectedInboxItem: string | null;
   activeView: 'threads' | 'inbox' | 'automations' | 'settings';
+  navigationLoading: NavigationLoadingState | null;
 }
 
 export interface RunState {

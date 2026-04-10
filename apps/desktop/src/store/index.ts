@@ -31,11 +31,13 @@ import type {
   InboxItem,
   LogEntry,
   Message,
+  NavigationLoadingState,
   Project,
   ProviderOption,
   RunState,
   SettingsState,
   Thread,
+  ThreadHistoryState,
   ToolProgressEvent,
   UIState,
 } from '@/types';
@@ -44,6 +46,7 @@ interface AppStore {
   projects: Project[];
   threads: Thread[];
   messages: Record<string, Message[]>;
+  threadHistory: Record<string, ThreadHistoryState>;
   changedFiles: Record<string, ChangedFile[]>;
   diffs: Record<string, DiffChunk>;
   logs: Record<string, LogEntry[]>;
@@ -60,8 +63,9 @@ interface AppStore {
   initialize: () => Promise<void>;
   openProjectPicker: () => Promise<void>;
   openProjectPath: (projectPath: string) => Promise<void>;
-  selectProject: (id: string) => Promise<void>;
-  selectThread: (id: string) => Promise<void>;
+  selectProject: (id: string, options?: SelectProjectOptions) => Promise<void>;
+  selectThread: (id: string, options?: SelectThreadOptions) => Promise<void>;
+  loadOlderThreadMessages: (threadId: string) => Promise<void>;
   createThread: (title?: string) => Promise<void>;
   sendPrompt: (threadId: string, prompt: string) => Promise<void>;
   retryThread: (threadId: string, fromMessageId?: string) => Promise<void>;
@@ -104,6 +108,15 @@ type ProviderValidationRequest = {
   providerAccountId?: string | null;
   useExternalProviderCredential?: boolean;
   liveCheck?: boolean;
+};
+
+type SelectProjectOptions = {
+  showLoading?: boolean;
+  preloadFirstThread?: 'await' | 'background' | 'none';
+};
+
+type SelectThreadOptions = {
+  showLoading?: boolean;
 };
 
 const defaultSettings: SettingsState = {
@@ -159,6 +172,7 @@ const defaultUi: UIState = {
   selectedChangedFile: null,
   selectedInboxItem: null,
   activeView: 'threads',
+  navigationLoading: null,
 };
 
 const defaultConnection: ConnectionState = {
@@ -169,12 +183,23 @@ const defaultConnection: ConnectionState = {
   statusLabel: 'Disconnected',
 };
 
+const defaultThreadHistoryState: ThreadHistoryState = {
+  hasMoreMessages: false,
+  nextBeforeMessageId: null,
+  isLoadingOlder: false,
+};
+
+const threadMessagePageSize = 50;
+
 let subscriptionsInitialized = false;
+let settingsMutationVersion = 0;
+let settingsMutationsInFlight = 0;
 
 export const useAppStore = create<AppStore>((set, get) => ({
   projects: [],
   threads: [],
   messages: {},
+  threadHistory: {},
   changedFiles: {},
   diffs: {},
   logs: {},
@@ -218,6 +243,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       await agentHostClient.connect();
 
+      const initialSettingsSnapshotVersion = capturePassiveSettingsSnapshotVersion();
       const [recentResult, providersResult, settingsResult] = await Promise.allSettled([
         agentHostClient.listRecentProjects(),
         agentHostClient.listProviders(),
@@ -245,7 +271,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
             : 'Connected · no project open',
         },
         projects: mergeProjectLists(state.projects, recentProjects),
-        settings: runtimeSettings
+        settings: runtimeSettings && canApplyPassiveSettingsSnapshot(initialSettingsSnapshotVersion)
           ? mergeRuntimeSettings(state.settings, runtimeSettings, mappedProviders)
           : {
               ...state.settings,
@@ -261,7 +287,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       if (!get().selectedProjectId && recent.projects.length > 0) {
-        await get().selectProject(recent.projects[0].id);
+        const initialProjectId = recent.projects[0].id;
+        set((state) => ({
+          selectedProjectId: initialProjectId,
+          selectedThreadId: '',
+          ui: { ...state.ui, activeView: 'threads', selectedChangedFile: null },
+        }));
+        void get().selectProject(initialProjectId, {
+          showLoading: false,
+          preloadFirstThread: 'background',
+        });
       }
     } catch (error) {
       set((state) => ({
@@ -295,41 +330,65 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   openProjectPath: async (projectPath) => {
-    const response = await agentHostClient.openProject(projectPath);
-    const openedProject = mapProject(response.project);
-    const openedThreads = response.threads.map((thread) => mapThread(thread, get().settings.defaultProvider, get().settings.defaultModel));
+    const loadingRequestId = startNavigationLoading(
+      set,
+      'project',
+      'Opening project',
+      `Loading repository data from ${projectPath}.`,
+    );
 
-    set((state) => {
-      const projects = upsertProject(state.projects, openedProject);
-      return {
-        projects,
-        threads: mergeThreads(state.threads, openedProject.id, openedThreads),
-        selectedProjectId: openedProject.id,
-        selectedThreadId: '',
-        ui: { ...state.ui, activeView: 'threads', selectedChangedFile: null },
-        connection: {
-          ...state.connection,
-          isConnected: true,
-          errorMessage: null,
-          statusLabel: `Opened ${openedProject.name}`,
-        },
-      };
-    });
+    try {
+      const response = await agentHostClient.openProject(projectPath);
+      const openedProject = mapProject(response.project);
+      const openedThreads = response.threads.map((thread) => mapThread(thread, get().settings.defaultProvider, get().settings.defaultModel));
 
-    await get().selectProject(openedProject.id);
+      set((state) => {
+        const projects = upsertProject(state.projects, openedProject);
+        return {
+          projects,
+          threads: mergeThreads(state.threads, openedProject.id, openedThreads),
+          selectedProjectId: openedProject.id,
+          selectedThreadId: '',
+          ui: { ...state.ui, activeView: 'threads', selectedChangedFile: null },
+          connection: {
+            ...state.connection,
+            isConnected: true,
+            errorMessage: null,
+            statusLabel: `Opened ${openedProject.name}`,
+          },
+        };
+      });
+
+      await get().selectProject(openedProject.id);
+    } finally {
+      clearNavigationLoading(set, loadingRequestId);
+    }
   },
 
-  selectProject: async (id) => {
+  selectProject: async (id, options) => {
     if (!id) {
       return;
     }
 
+    const projectName = get().projects.find((project) => project.id === id)?.name ?? id;
+    const showLoading = options?.showLoading ?? true;
+    const preloadFirstThread = options?.preloadFirstThread ?? 'await';
+    const loadingRequestId = showLoading
+      ? startNavigationLoading(
+          set,
+          'project',
+          'Loading project',
+          `Fetching threads and diagnostics for ${projectName}.`,
+        )
+      : null;
+
     try {
-      const [response, settingsResponse, diagnosticsResponse] = await Promise.all([
-        agentHostClient.listThreads(id),
+      const settingsSnapshotVersion = capturePassiveSettingsSnapshotVersion();
+      const ancillaryPromise = Promise.allSettled([
         agentHostClient.getSettings(null),
         agentHostClient.listDiagnostics(id, null),
       ]);
+      const response = await agentHostClient.listThreads(id);
       const project = mapProject(response.project);
       const threads = response.threads.map((thread) => mapThread(thread, get().settings.defaultProvider, get().settings.defaultModel));
       const firstThread = threads[0]?.id ?? '';
@@ -344,17 +403,42 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...state.connection,
           errorMessage: null,
         },
-        settings: mergeRuntimeSettings(state.settings, settingsResponse.settings, state.settings.availableProviders),
-        diagnostics: diagnosticsResponse.diagnostics.threadId
-          ? {
-              ...state.diagnostics,
-              [diagnosticsResponse.diagnostics.threadId]: mapDiagnosticsRecord(diagnosticsResponse.diagnostics),
-            }
-          : state.diagnostics,
       }));
 
+      void ancillaryPromise.then(([settingsResponse, diagnosticsResponse]) => {
+        if (settingsResponse.status !== 'fulfilled') {
+          void logToDesktop('warn', '[desktop:project:settings-load-failed]', {
+            projectId: id,
+            error: toErrorMessage(settingsResponse.reason, 'Failed to load settings.'),
+          });
+        }
+
+        if (diagnosticsResponse.status !== 'fulfilled') {
+          void logToDesktop('warn', '[desktop:project:diagnostics-load-failed]', {
+            projectId: id,
+            error: toErrorMessage(diagnosticsResponse.reason, 'Failed to load project diagnostics.'),
+          });
+        }
+
+        set((state) => ({
+          settings: settingsResponse.status === 'fulfilled' && canApplyPassiveSettingsSnapshot(settingsSnapshotVersion)
+            ? mergeRuntimeSettings(state.settings, settingsResponse.value.settings, state.settings.availableProviders)
+            : state.settings,
+          diagnostics: diagnosticsResponse.status === 'fulfilled' && diagnosticsResponse.value.diagnostics.threadId
+            ? {
+                ...state.diagnostics,
+                [diagnosticsResponse.value.diagnostics.threadId]: mapDiagnosticsRecord(diagnosticsResponse.value.diagnostics),
+              }
+            : state.diagnostics,
+        }));
+      });
+
       if (firstThread) {
-        await get().selectThread(firstThread);
+        if (preloadFirstThread === 'await') {
+          await get().selectThread(firstThread, { showLoading });
+        } else if (preloadFirstThread === 'background') {
+          void get().selectThread(firstThread, { showLoading: false });
+        }
       }
     } catch (error) {
       set((state) => ({
@@ -364,99 +448,196 @@ export const useAppStore = create<AppStore>((set, get) => ({
           statusLabel: 'Project load failed',
         },
       }));
+    } finally {
+      if (loadingRequestId) {
+        clearNavigationLoading(set, loadingRequestId);
+      }
     }
   },
 
-  selectThread: async (id) => {
+  selectThread: async (id, options) => {
     const projectId = get().selectedProjectId;
     if (!id || !projectId) {
       set((state) => ({ selectedThreadId: id, ui: { ...state.ui, selectedChangedFile: null } }));
       return;
     }
 
+    const threadTitle = get().threads.find((thread) => thread.id === id)?.title ?? id;
+    const showLoading = options?.showLoading ?? true;
+    const loadingRequestId = showLoading
+      ? startNavigationLoading(
+          set,
+          'thread',
+          'Loading thread',
+          `Refreshing transcript and review data for ${threadTitle}.`,
+        )
+      : null;
+
     try {
-      const [response, changedFilesResponse, diagnosticsResponse, approvalsResponse] = await Promise.allSettled([
-        agentHostClient.getThread(projectId, id),
+      const ancillaryPromise = Promise.allSettled([
         agentHostClient.listChangedFiles(projectId, id),
         agentHostClient.listDiagnostics(projectId, id),
         agentHostClient.listPendingApprovals(id),
       ]);
+      const response = await agentHostClient.getThread(projectId, id, { pageSize: threadMessagePageSize });
 
-      if (response.status !== 'fulfilled') {
-        throw response.reason;
-      }
-
-      const detail = response.value.thread;
-      const changedFiles = changedFilesResponse.status === 'fulfilled'
-        ? changedFilesResponse.value.files.map(mapChangedFile)
-        : [];
-      const diagnostics = diagnosticsResponse.status === 'fulfilled'
-        ? mapDiagnosticsRecord(diagnosticsResponse.value.diagnostics)
-        : null;
-      const inboxItems = approvalsResponse.status === 'fulfilled'
-        ? mapApprovalInboxItems(approvalsResponse.value.approvals, projectId, id)
-        : get().inboxItems;
-
-      if (changedFilesResponse.status !== 'fulfilled') {
-        void logToDesktop('warn', '[desktop:thread:changed-files-load-failed]', {
-          projectId,
-          threadId: id,
-          error: toErrorMessage(changedFilesResponse.reason, 'Failed to load changed files.'),
-        });
-      }
-
-      if (diagnosticsResponse.status !== 'fulfilled') {
-        void logToDesktop('warn', '[desktop:thread:diagnostics-load-failed]', {
-          projectId,
-          threadId: id,
-          error: toErrorMessage(diagnosticsResponse.reason, 'Failed to load diagnostics.'),
-        });
-      }
-
-      if (approvalsResponse.status !== 'fulfilled') {
-        void logToDesktop('warn', '[desktop:thread:approvals-load-failed]', {
-          projectId,
-          threadId: id,
-          error: toErrorMessage(approvalsResponse.reason, 'Failed to load approvals.'),
-        });
-      }
+      const detail = response.thread;
+      const existingThread = get().threads.find((thread) => thread.id === id);
 
       set((state) => ({
         selectedThreadId: id,
         messages: {
           ...state.messages,
-          [id]: detail.messages.map(mapMessage),
+          [id]: mergeHydratedMessages(state.messages[id] ?? [], detail.messages.map(mapMessage)),
+        },
+        threadHistory: {
+          ...state.threadHistory,
+          [id]: {
+            hasMoreMessages: detail.hasMoreMessages ?? false,
+            nextBeforeMessageId: detail.nextBeforeMessageId ?? null,
+            isLoadingOlder: false,
+          },
         },
         threads: upsertThread(
           state.threads,
           {
             ...mapThread(detail.thread, state.settings.defaultProvider, state.settings.defaultModel),
-            changedFilesCount: changedFiles.length,
+            changedFilesCount: existingThread?.changedFilesCount ?? 0,
           },
         ),
-        changedFiles: {
-          ...state.changedFiles,
-          [id]: changedFiles,
-        },
-        diagnostics: diagnostics
-          ? {
-              ...state.diagnostics,
-              [id]: diagnostics,
-            }
-          : state.diagnostics,
-        inboxItems,
         ui: { ...state.ui, activeView: 'threads', selectedChangedFile: null },
         connection: {
           ...state.connection,
           errorMessage: null,
         },
       }));
+
+      void ancillaryPromise.then(([changedFilesResponse, diagnosticsResponse, approvalsResponse]) => {
+        const changedFiles = changedFilesResponse.status === 'fulfilled'
+          ? changedFilesResponse.value.files.map(mapChangedFile)
+          : [];
+        const diagnostics = diagnosticsResponse.status === 'fulfilled'
+          ? mapDiagnosticsRecord(diagnosticsResponse.value.diagnostics)
+          : null;
+        const inboxItems = approvalsResponse.status === 'fulfilled'
+          ? mapApprovalInboxItems(approvalsResponse.value.approvals, projectId, id)
+          : null;
+
+        if (changedFilesResponse.status !== 'fulfilled') {
+          void logToDesktop('warn', '[desktop:thread:changed-files-load-failed]', {
+            projectId,
+            threadId: id,
+            error: toErrorMessage(changedFilesResponse.reason, 'Failed to load changed files.'),
+          });
+        }
+
+        if (diagnosticsResponse.status !== 'fulfilled') {
+          void logToDesktop('warn', '[desktop:thread:diagnostics-load-failed]', {
+            projectId,
+            threadId: id,
+            error: toErrorMessage(diagnosticsResponse.reason, 'Failed to load diagnostics.'),
+          });
+        }
+
+        if (approvalsResponse.status !== 'fulfilled') {
+          void logToDesktop('warn', '[desktop:thread:approvals-load-failed]', {
+            projectId,
+            threadId: id,
+            error: toErrorMessage(approvalsResponse.reason, 'Failed to load approvals.'),
+          });
+        }
+
+        set((state) => ({
+          threads: upsertThread(
+            state.threads,
+            {
+              ...(state.threads.find((thread) => thread.id === id)
+                ?? mapThread(detail.thread, state.settings.defaultProvider, state.settings.defaultModel)),
+              changedFilesCount: changedFiles.length,
+            },
+          ),
+          changedFiles: {
+            ...state.changedFiles,
+            [id]: changedFiles,
+          },
+          diagnostics: diagnostics
+            ? {
+                ...state.diagnostics,
+                [id]: diagnostics,
+              }
+            : state.diagnostics,
+          inboxItems: state.selectedThreadId === id && inboxItems
+            ? inboxItems
+            : state.inboxItems,
+        }));
+      });
     } catch (error) {
       set((state) => ({
         connection: {
           ...state.connection,
           errorMessage: toErrorMessage(error, 'Failed to load thread.'),
           statusLabel: 'Thread load failed',
+        },
+      }));
+    } finally {
+      if (loadingRequestId) {
+        clearNavigationLoading(set, loadingRequestId);
+      }
+    }
+  },
+
+  loadOlderThreadMessages: async (threadId) => {
+    const projectId = get().selectedProjectId;
+    const history = get().threadHistory[threadId];
+    if (!projectId || !threadId || !history?.hasMoreMessages || !history.nextBeforeMessageId || history.isLoadingOlder) {
+      return;
+    }
+
+    set((state) => ({
+      threadHistory: {
+        ...state.threadHistory,
+        [threadId]: {
+          ...(state.threadHistory[threadId] ?? defaultThreadHistoryState),
+          isLoadingOlder: true,
+        },
+      },
+    }));
+
+    try {
+      const response = await agentHostClient.getThread(projectId, threadId, {
+        beforeMessageId: history.nextBeforeMessageId,
+        pageSize: threadMessagePageSize,
+      });
+      const detail = response.thread;
+      const olderMessages = detail.messages.map(mapMessage);
+
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [threadId]: mergeOlderMessages(state.messages[threadId] ?? [], olderMessages),
+        },
+        threadHistory: {
+          ...state.threadHistory,
+          [threadId]: {
+            hasMoreMessages: detail.hasMoreMessages ?? false,
+            nextBeforeMessageId: detail.nextBeforeMessageId ?? null,
+            isLoadingOlder: false,
+          },
+        },
+      }));
+    } catch (error) {
+      set((state) => ({
+        threadHistory: {
+          ...state.threadHistory,
+          [threadId]: {
+            ...(state.threadHistory[threadId] ?? defaultThreadHistoryState),
+            isLoadingOlder: false,
+          },
+        },
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to load older thread messages.'),
+          statusLabel: 'Thread pagination failed',
         },
       }));
     }
@@ -855,6 +1036,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return;
     }
 
+    beginSettingsMutation();
     try {
       const [updatedSettings, validation] = await Promise.all([
         agentHostClient.updateSettings(runtimePatch),
@@ -885,6 +1067,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           statusLabel: 'Settings update failed',
         },
       }));
+    } finally {
+      endSettingsMutation();
     }
   },
 
@@ -923,10 +1107,22 @@ async function refreshSettingsSnapshot(
   get: () => AppStore,
   set: Parameters<typeof useAppStore.setState>[0],
 ): Promise<void> {
-    const projectId = null;
+  const projectId = null;
+  const settingsSnapshotVersion = capturePassiveSettingsSnapshotVersion();
 
   try {
-    const settingsResponse = await agentHostClient.getSettings(projectId);
+    const [settingsResult, providersResult] = await Promise.allSettled([
+      agentHostClient.getSettings(projectId),
+      agentHostClient.listProviders(),
+    ]);
+    if (settingsResult.status !== 'fulfilled') {
+      throw settingsResult.reason;
+    }
+
+    const settingsResponse = settingsResult.value;
+    const availableProviders = providersResult.status === 'fulfilled'
+      ? providersResult.value.providers.map(mapProviderOption)
+      : get().settings.availableProviders;
     const validation = await agentHostClient.validateProviderConfig({
       projectId,
       provider: settingsResponse.settings.provider,
@@ -935,9 +1131,15 @@ async function refreshSettingsSnapshot(
 
     set((state) => ({
       settings: {
-        ...mergeRuntimeSettings(state.settings, settingsResponse.settings, state.settings.availableProviders),
-        providerValidationWarnings: validation.validation.warnings,
-        providerValidationErrors: validation.validation.errors,
+        ...(canApplyPassiveSettingsSnapshot(settingsSnapshotVersion)
+          ? mergeRuntimeSettings(state.settings, settingsResponse.settings, availableProviders)
+          : state.settings),
+        providerValidationWarnings: canApplyPassiveSettingsSnapshot(settingsSnapshotVersion)
+          ? validation.validation.warnings
+          : state.settings.providerValidationWarnings,
+        providerValidationErrors: canApplyPassiveSettingsSnapshot(settingsSnapshotVersion)
+          ? validation.validation.errors
+          : state.settings.providerValidationErrors,
       },
     }));
   } catch (error) {
@@ -1055,6 +1257,43 @@ function mapApprovalInboxItems(
     threadId: threadId ?? undefined,
     approvalId: approval.id,
   }));
+}
+
+function startNavigationLoading(
+  set: Parameters<typeof useAppStore.setState>[0],
+  kind: NavigationLoadingState['kind'],
+  title: string,
+  description: string,
+): string {
+  const requestId = `nav-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  set((state) => ({
+    ui: {
+      ...state.ui,
+      navigationLoading: {
+        requestId,
+        kind,
+        title,
+        description,
+      },
+    },
+  }));
+  return requestId;
+}
+
+function clearNavigationLoading(
+  set: Parameters<typeof useAppStore.setState>[0],
+  requestId: string,
+) {
+  set((state) => (
+    state.ui.navigationLoading?.requestId !== requestId
+      ? state
+      : {
+          ui: {
+            ...state.ui,
+            navigationLoading: null,
+          },
+        }
+  ));
 }
 
 function mergeRuntimeSettings(
@@ -1569,6 +1808,22 @@ function appendLogEntry(
   };
 }
 
+function mergeHydratedMessages(existing: Message[], incoming: Message[]): Message[] {
+  const incomingIds = new Set(incoming.map((message) => message.id));
+  const optimisticMessages = existing.filter((message) =>
+    !incomingIds.has(message.id) &&
+    (message.id.startsWith('local-') || message.isStreaming));
+
+  return [...incoming, ...optimisticMessages]
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function mergeOlderMessages(existing: Message[], older: Message[]): Message[] {
+  const existingIds = new Set(existing.map((message) => message.id));
+  return [...older.filter((message) => !existingIds.has(message.id)), ...existing]
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
 function mapToolProgressType(stage: string, toolName: string): ToolProgressEvent['type'] {
   const normalizedStage = stage.toLowerCase();
   const normalizedTool = toolName.toLowerCase();
@@ -1602,4 +1857,22 @@ function pickDefinedSettings(partial: Partial<SettingsState>): Partial<SettingsS
   return Object.fromEntries(
     Object.entries(partial).filter(([, value]) => value !== undefined),
   ) as Partial<SettingsState>;
+}
+
+function capturePassiveSettingsSnapshotVersion(): number {
+  return settingsMutationVersion;
+}
+
+function canApplyPassiveSettingsSnapshot(version: number): boolean {
+  return settingsMutationsInFlight === 0 && version === settingsMutationVersion;
+}
+
+function beginSettingsMutation() {
+  settingsMutationsInFlight += 1;
+  settingsMutationVersion += 1;
+}
+
+function endSettingsMutation() {
+  settingsMutationsInFlight = Math.max(0, settingsMutationsInFlight - 1);
+  settingsMutationVersion += 1;
 }

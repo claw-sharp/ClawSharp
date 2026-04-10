@@ -14,6 +14,7 @@ const baseStoreState = {
   projects: [],
   threads: [],
   messages: {},
+  threadHistory: {},
   inboxItems: [],
   run: {
     activeRunId: null,
@@ -72,6 +73,7 @@ const baseStoreState = {
   archiveThread: vi.fn(),
   resolveApproval: vi.fn(),
   setActiveView: vi.fn(),
+  loadOlderThreadMessages: vi.fn(),
 };
 
 describe('ThreadView', () => {

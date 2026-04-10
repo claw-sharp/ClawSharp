@@ -257,4 +257,20 @@ describe('SettingsDialog', () => {
     expect(screen.getAllByRole('combobox')[0]).toHaveValue('codex');
     expect(screen.getAllByRole('combobox')[1]).toHaveValue('codexplan');
   });
+
+  it('shows a disabled placeholder when the provider catalog is unavailable', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      settings: {
+        ...baseStoreState.settings,
+        availableProviders: [],
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<SettingsDialog />);
+
+    const providerSelect = screen.getAllByRole('combobox')[0];
+    expect(providerSelect).toBeDisabled();
+    expect(screen.getByText('Provider catalog is unavailable right now. Reopen settings after AgentHost finishes loading.')).toBeInTheDocument();
+  });
 });

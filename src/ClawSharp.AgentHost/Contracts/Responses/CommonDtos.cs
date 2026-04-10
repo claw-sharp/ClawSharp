@@ -35,7 +35,9 @@ public sealed record ThreadMessageDto(
 
 public sealed record ThreadDetailDto(
     ThreadSummaryDto Thread,
-    IReadOnlyList<ThreadMessageDto> Messages);
+    IReadOnlyList<ThreadMessageDto> Messages,
+    bool HasMoreMessages = false,
+    string? NextBeforeMessageId = null);
 
 public sealed record ChangedFileDto(
     string Path,

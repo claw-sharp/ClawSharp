@@ -34,6 +34,11 @@ public static class SessionStoragePaths
         return Path.Combine(GetProjectDir(projectDirectory), $"{sessionId}.jsonl");
     }
 
+    public static string GetSessionLogMetadataPath(string projectDirectory, string sessionId)
+    {
+        return Path.Combine(GetProjectDir(projectDirectory), $"{sessionId}.session.json");
+    }
+
     public static string GetMemoryDir(string projectDirectory)
     {
         return Path.Combine(GetProjectDir(projectDirectory), "memory");

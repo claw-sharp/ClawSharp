@@ -65,6 +65,8 @@ export interface CreateThreadResponse {
 export interface GetThreadRequest {
   threadId: string;
   projectId?: string | null;
+  beforeMessageId?: string | null;
+  pageSize?: number | null;
 }
 
 export interface GetThreadResponse {
@@ -230,6 +232,8 @@ export interface AgentHostThreadMessage {
 export interface AgentHostThreadDetail {
   thread: AgentHostThreadSummary;
   messages: AgentHostThreadMessage[];
+  hasMoreMessages?: boolean;
+  nextBeforeMessageId?: string | null;
 }
 
 export interface AgentHostChangedFile {

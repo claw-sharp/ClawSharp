@@ -31,6 +31,7 @@ public class SessionLogStoreTests
             Assert.Equal(session.Id, log.SessionId);
             Assert.Equal("Named Session", log.CustomTitle);
             Assert.Equal("hello world", log.FirstUserMessage);
+            Assert.True(File.Exists(SessionStoragePaths.GetSessionLogMetadataPath(workspaceRoot, session.Id)));
         }
         finally
         {
@@ -137,6 +138,95 @@ public class SessionLogStoreTests
             if (Directory.Exists(currentRootParent))
             {
                 Directory.Delete(currentRootParent, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task LoadProjectLogsAsync_Backfills_Metadata_For_Legacy_Transcript_Only_Sessions()
+    {
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-migration-tests", Guid.NewGuid().ToString("N"));
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workspaceRoot);
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+
+        try
+        {
+            var transcriptStore = new JsonlTranscriptStore();
+            var sessionFactory = new DefaultSessionFactory(workspaceRoot, transcriptStore);
+            var session = sessionFactory.Create();
+            session.SetCustomTitle("Migrated Session");
+            session.Add(ChatMessageFactory.CreateText(MessageRole.User, "legacy hello"));
+            await transcriptStore.RecordTranscriptAsync(session, session.Messages);
+
+            var metadataPath = SessionStoragePaths.GetSessionLogMetadataPath(workspaceRoot, session.Id);
+            File.Delete(metadataPath);
+
+            var store = new DiskSessionLogStore();
+            var log = Assert.Single(await store.LoadProjectLogsAsync(workspaceRoot));
+
+            Assert.Equal(session.Id, log.SessionId);
+            Assert.Equal("Migrated Session", log.CustomTitle);
+            Assert.Equal("legacy hello", log.FirstUserMessage);
+            Assert.True(File.Exists(metadataPath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            if (Directory.Exists(tempConfigDir))
+            {
+                Directory.Delete(tempConfigDir, recursive: true);
+            }
+
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RecordSessionMetadataAsync_Persists_Empty_Thread_Log_Metadata()
+    {
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-session-log-empty-thread-tests", Guid.NewGuid().ToString("N"));
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workspaceRoot);
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+
+        try
+        {
+            var transcriptStore = new JsonlTranscriptStore();
+            var sessionFactory = new DefaultSessionFactory(workspaceRoot, transcriptStore);
+            var session = sessionFactory.Create();
+
+            var transcriptDirectory = Path.GetDirectoryName(session.TranscriptPath);
+            Assert.NotNull(transcriptDirectory);
+            Directory.CreateDirectory(transcriptDirectory!);
+            await File.WriteAllTextAsync(session.TranscriptPath, string.Empty);
+
+            await transcriptStore.RecordSessionMetadataAsync(session);
+
+            var store = new DiskSessionLogStore();
+            var log = Assert.Single(await store.LoadProjectLogsAsync(workspaceRoot));
+
+            Assert.Equal(session.Id, log.SessionId);
+            Assert.Null(log.CustomTitle);
+            Assert.Null(log.FirstUserMessage);
+            Assert.True(File.Exists(SessionStoragePaths.GetSessionLogMetadataPath(workspaceRoot, session.Id)));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            if (Directory.Exists(tempConfigDir))
+            {
+                Directory.Delete(tempConfigDir, recursive: true);
+            }
+
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
             }
         }
     }

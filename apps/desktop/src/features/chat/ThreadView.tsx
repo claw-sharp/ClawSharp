@@ -10,13 +10,14 @@ import type { Message, ToolProgressEvent } from '@/types';
 
 export const ThreadView = () => {
   const {
-    selectedProjectId, selectedThreadId, projects, threads, messages, inboxItems, run, connection, settings,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings,
+    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
   const thread = threads.find(t => t.id === selectedThreadId);
   const threadMessages = messages[selectedThreadId] || [];
+  const history = selectedThreadId ? threadHistory[selectedThreadId] : undefined;
   const pendingApprovals = thread
     ? inboxItems.filter((item) => item.approvalId && item.threadId === thread.id)
     : [];
@@ -161,6 +162,25 @@ export const ThreadView = () => {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {history?.hasMoreMessages && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => void loadOlderThreadMessages(thread.id)}
+              disabled={history.isLoadingOlder}
+              className={cn(
+                'rounded-md border border-border px-3 py-2 text-xs font-medium transition-colors',
+                history.isLoadingOlder
+                  ? 'cursor-wait text-muted-foreground'
+                  : 'text-muted-foreground hover:border-primary/30 hover:text-foreground',
+              )}
+            >
+              <span className="inline-flex items-center gap-2">
+                {history.isLoadingOlder && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {history.isLoadingOlder ? 'Loading older messages…' : 'Load older messages'}
+              </span>
+            </button>
+          </div>
+        )}
         {shouldPromptForProviderKeys && (
           <div className="rounded-lg border border-status-waiting/30 bg-status-waiting/10 px-3 py-3 text-sm text-foreground">
             <div className="flex items-start justify-between gap-3">

@@ -11,6 +11,12 @@ public sealed class JsonlTranscriptStore : ITranscriptStore
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+    private readonly SessionLogMetadataStore _sessionLogMetadataStore;
+
+    public JsonlTranscriptStore(SessionLogMetadataStore? sessionLogMetadataStore = null)
+    {
+        _sessionLogMetadataStore = sessionLogMetadataStore ?? new SessionLogMetadataStore();
+    }
 
     public async Task RecordTranscriptAsync(
         ConversationSession session,
@@ -76,6 +82,7 @@ public sealed class JsonlTranscriptStore : ITranscriptStore
         }
 
         await writer.FlushAsync(cancellationToken);
+        await _sessionLogMetadataStore.UpsertAsync(session, messages, cancellationToken);
     }
 
     public async Task<TranscriptReadResult> ReadTranscriptAsync(
@@ -140,31 +147,31 @@ public sealed class JsonlTranscriptStore : ITranscriptStore
         ConversationSession session,
         CancellationToken cancellationToken = default)
     {
-        if (!session.HasUnrecordedCustomTitle())
-        {
-            return;
-        }
-
         var transcriptPath = session.TranscriptPath;
         if (!File.Exists(transcriptPath))
         {
             return;
         }
 
-        await using var stream = new FileStream(
-            transcriptPath,
-            FileMode.Append,
-            FileAccess.Write,
-            FileShare.Read,
-            bufferSize: 4096,
-            useAsync: true);
-        await using var writer = new StreamWriter(stream);
-        await WriteLineAsync(
-            writer,
-            new CustomTitleTranscriptEntry("custom-title", session.Id, session.CustomTitle!),
-            cancellationToken);
-        await writer.FlushAsync(cancellationToken);
-        session.MarkCustomTitleRecorded();
+        if (session.HasUnrecordedCustomTitle())
+        {
+            await using var stream = new FileStream(
+                transcriptPath,
+                FileMode.Append,
+                FileAccess.Write,
+                FileShare.Read,
+                bufferSize: 4096,
+                useAsync: true);
+            await using var writer = new StreamWriter(stream);
+            await WriteLineAsync(
+                writer,
+                new CustomTitleTranscriptEntry("custom-title", session.Id, session.CustomTitle!),
+                cancellationToken);
+            await writer.FlushAsync(cancellationToken);
+            session.MarkCustomTitleRecorded();
+        }
+
+        await _sessionLogMetadataStore.UpsertAsync(session, session.Messages, cancellationToken);
     }
 
     private static async Task WriteLineAsync(

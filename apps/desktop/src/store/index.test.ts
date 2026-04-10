@@ -124,7 +124,7 @@ describe('useAppStore', () => {
     mockClient.listPendingApprovals.mockResolvedValue({ approvals: [] });
   });
 
-  it('initializes from recent projects and loads the first thread detail', async () => {
+  it('initializes from recent projects and loads the first thread detail in the background', async () => {
     mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
     mockClient.listRecentProjects.mockResolvedValue({
       projects: [
@@ -204,12 +204,18 @@ describe('useAppStore', () => {
     const { useAppStore } = await import('@/store');
     await useAppStore.getState().initialize();
 
-    const state = useAppStore.getState();
+    let state = useAppStore.getState();
+    expect(state.selectedProjectId).toBe('proj-1');
+    expect(state.projects[0]?.name).toBe('ClawSharp');
+    expect(state.connection.isConnected).toBe(true);
+    expect(state.ui.navigationLoading).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    state = useAppStore.getState();
     expect(state.selectedProjectId).toBe('proj-1');
     expect(state.selectedThreadId).toBe('thread-1');
-    expect(state.projects[0]?.name).toBe('ClawSharp');
     expect(state.messages['thread-1'][0]?.content).toBe('Hello');
-    expect(state.connection.isConnected).toBe(true);
     expect(mockClient.getSettings).toHaveBeenCalledTimes(2);
     expect(mockClient.getSettings).toHaveBeenCalledWith(null);
   });
@@ -285,6 +291,318 @@ describe('useAppStore', () => {
     expect(state.messages['thread-1'][0]?.content).toBe('Hello');
     expect(state.changedFiles['thread-1']).toEqual([]);
     expect(state.connection.errorMessage).toBeNull();
+  });
+
+  it('tracks navigation loading while a thread is being hydrated', async () => {
+    let resolveGetThread: ((value: {
+      project: {
+        id: string;
+        name: string;
+        path: string;
+        lastOpenedAt: string;
+        lastUpdatedAt: string;
+        threadCount: number;
+        gitBranch: string | null;
+      };
+      thread: {
+        thread: {
+          id: string;
+          projectId: string;
+          title: string;
+          summary: string;
+          lastUpdatedAt: string;
+          messageCount: number;
+          transcriptPath: string;
+          worktree: {
+            repoRoot: string;
+            worktreePath: string;
+          };
+        };
+        messages: Array<{
+          id: string;
+          threadId: string;
+          role: string;
+          content: string;
+          timestamp: string;
+        }>;
+      };
+    }) => void) | undefined;
+
+    mockClient.getThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGetThread = resolve;
+        }),
+    );
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+    });
+
+    const selectPromise = useAppStore.getState().selectThread('thread-1');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(useAppStore.getState().ui.navigationLoading).toMatchObject({
+      kind: 'thread',
+      title: 'Loading thread',
+      description: 'Refreshing transcript and review data for Thread One.',
+    });
+
+    resolveGetThread?.({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 1,
+          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [
+          {
+            id: 'msg-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'Hello',
+            timestamp: '2026-04-08T10:01:00.000Z',
+          },
+        ],
+      },
+    });
+
+    await selectPromise;
+
+    expect(useAppStore.getState().ui.navigationLoading).toBeNull();
+  });
+
+  it('clears thread navigation loading once the transcript is loaded even if ancillary requests hang', async () => {
+    mockClient.getThread.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 1,
+          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [
+          {
+            id: 'msg-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'Hello',
+            timestamp: '2026-04-08T10:01:00.000Z',
+          },
+        ],
+      },
+    });
+    mockClient.listChangedFiles.mockImplementation(() => new Promise(() => undefined));
+    mockClient.listDiagnostics.mockImplementation(() => new Promise(() => undefined));
+    mockClient.listPendingApprovals.mockImplementation(() => new Promise(() => undefined));
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+    });
+
+    await useAppStore.getState().selectThread('thread-1');
+
+    const state = useAppStore.getState();
+    expect(state.ui.navigationLoading).toBeNull();
+    expect(state.selectedThreadId).toBe('thread-1');
+    expect(state.messages['thread-1'][0]?.content).toBe('Hello');
+  });
+
+  it('loads thread messages in pages and prepends older messages on demand', async () => {
+    mockClient.getThread.mockImplementation(async (_projectId: string, _threadId: string, options?: {
+      beforeMessageId?: string | null;
+      pageSize?: number | null;
+    }) => {
+      if (options?.beforeMessageId === 'msg-2') {
+        return {
+          project: {
+            id: 'proj-1',
+            name: 'ClawSharp',
+            path: '/repo',
+            lastOpenedAt: '2026-04-08T10:00:00.000Z',
+            lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+            threadCount: 1,
+            gitBranch: 'main',
+          },
+          thread: {
+            thread: {
+              id: 'thread-1',
+              projectId: 'proj-1',
+              title: 'Thread One',
+              summary: 'Summary',
+              lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+              messageCount: 3,
+              transcriptPath: '/repo/.claude/thread-1.jsonl',
+              worktree: {
+                repoRoot: '/repo',
+                worktreePath: '/repo',
+              },
+            },
+            messages: [
+              {
+                id: 'msg-1',
+                threadId: 'thread-1',
+                role: 'user',
+                content: 'First',
+                timestamp: '2026-04-08T10:00:00.000Z',
+              },
+            ],
+            hasMoreMessages: false,
+            nextBeforeMessageId: null,
+          },
+        };
+      }
+
+      return {
+        project: {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+        thread: {
+          thread: {
+            id: 'thread-1',
+            projectId: 'proj-1',
+            title: 'Thread One',
+            summary: 'Summary',
+            lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+            messageCount: 3,
+            transcriptPath: '/repo/.claude/thread-1.jsonl',
+            worktree: {
+              repoRoot: '/repo',
+              worktreePath: '/repo',
+            },
+          },
+          messages: [
+            {
+              id: 'msg-2',
+              threadId: 'thread-1',
+              role: 'assistant',
+              content: 'Second',
+              timestamp: '2026-04-08T10:01:00.000Z',
+            },
+            {
+              id: 'msg-3',
+              threadId: 'thread-1',
+              role: 'user',
+              content: 'Third',
+              timestamp: '2026-04-08T10:02:00.000Z',
+            },
+          ],
+          hasMoreMessages: true,
+          nextBeforeMessageId: 'msg-2',
+        },
+      };
+    });
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+    });
+
+    await useAppStore.getState().selectThread('thread-1', { showLoading: false });
+
+    let state = useAppStore.getState();
+    expect(state.messages['thread-1'].map((message) => message.content)).toEqual(['Second', 'Third']);
+    expect(state.threadHistory['thread-1']).toMatchObject({
+      hasMoreMessages: true,
+      nextBeforeMessageId: 'msg-2',
+    });
+
+    await useAppStore.getState().loadOlderThreadMessages('thread-1');
+
+    state = useAppStore.getState();
+    expect(state.messages['thread-1'].map((message) => message.content)).toEqual(['First', 'Second', 'Third']);
+    expect(state.threadHistory['thread-1']).toMatchObject({
+      hasMoreMessages: false,
+      nextBeforeMessageId: null,
+      isLoadingOlder: false,
+    });
   });
 
   it('sends a real prompt request through the store and marks the run active', async () => {
@@ -415,7 +733,8 @@ describe('useAppStore', () => {
     let state = useAppStore.getState();
     expect(state.projects.map((project) => project.id)).toEqual(['proj-1']);
     expect(state.connection.isBootstrapping).toBe(false);
-    expect(state.selectedProjectId).toBe('');
+    expect(state.selectedProjectId).toBe('proj-1');
+    expect(state.ui.navigationLoading).toBeNull();
 
     resolveListThreads?.({
       project: {
@@ -435,6 +754,161 @@ describe('useAppStore', () => {
     state = useAppStore.getState();
     expect(state.projects[0]?.id).toBe('proj-1');
     expect(state.selectedProjectId).toBe('proj-1');
+  });
+
+  it('keeps navigation loading active until the first thread finishes loading for a project', async () => {
+    let resolveGetThread: ((value: {
+      project: {
+        id: string;
+        name: string;
+        path: string;
+        lastOpenedAt: string;
+        lastUpdatedAt: string;
+        threadCount: number;
+        gitBranch: string | null;
+      };
+      thread: {
+        thread: {
+          id: string;
+          projectId: string;
+          title: string;
+          summary: string;
+          lastUpdatedAt: string;
+          messageCount: number;
+          transcriptPath: string;
+          worktree: {
+            repoRoot: string;
+            worktreePath: string;
+          };
+        };
+        messages: never[];
+      };
+    }) => void) | undefined;
+
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+      ],
+    });
+    mockClient.getThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGetThread = resolve;
+        }),
+    );
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+        },
+      ],
+    });
+
+    const selectPromise = useAppStore.getState().selectProject('proj-1');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(useAppStore.getState().ui.navigationLoading).toMatchObject({
+      kind: 'thread',
+      title: 'Loading thread',
+      description: 'Refreshing transcript and review data for Thread One.',
+    });
+
+    resolveGetThread?.({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.claude/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [],
+      },
+    });
+
+    await selectPromise;
+
+    expect(useAppStore.getState().ui.navigationLoading).toBeNull();
+  });
+
+  it('clears project navigation loading once the thread list is loaded even if ancillary project requests hang', async () => {
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 0,
+        gitBranch: 'main',
+      },
+      threads: [],
+    });
+    mockClient.getSettings.mockImplementation(() => new Promise(() => undefined));
+    mockClient.listDiagnostics.mockImplementation(() => new Promise(() => undefined));
+
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 0,
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+        },
+      ],
+    });
+
+    await useAppStore.getState().selectProject('proj-1');
+
+    const state = useAppStore.getState();
+    expect(state.ui.navigationLoading).toBeNull();
+    expect(state.selectedProjectId).toBe('proj-1');
+    expect(state.threads).toEqual([]);
   });
 
   it('preserves string startup failures during initialize', async () => {
@@ -564,6 +1038,199 @@ describe('useAppStore', () => {
     });
     expect(useAppStore.getState().threads.map((thread) => thread.provider)).toEqual(['openai', 'openai']);
     expect(useAppStore.getState().threads.map((thread) => thread.model)).toEqual(['gpt-4o', 'gpt-4o']);
+  });
+
+  it('does not let a stale background settings refresh overwrite a newer provider save', async () => {
+    let resolveBackgroundSettings: ((value: {
+      settings: {
+        provider: string;
+        model: string;
+        fallbackModel: null;
+        permissionMode: string;
+        enableTelemetry: boolean;
+        fileCheckpointingEnabled: boolean;
+        baseUrl: string;
+        transport: string;
+        configPath: string;
+        settingsIssues: string[];
+        credentials: {
+          hasApiKey: boolean;
+          hasAuthToken: boolean;
+          accountId: null;
+          source: 'none' | 'saved' | 'external';
+          hasExternalCredential: boolean;
+          externalCredentialPath: null;
+        };
+        hasAnyConfiguredProviderCredential: boolean;
+      };
+    }) => void) | undefined;
+
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 0,
+          gitBranch: 'main',
+        },
+      ],
+    });
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 0,
+        gitBranch: 'main',
+      },
+      threads: [],
+    });
+    mockClient.getSettings
+      .mockResolvedValueOnce({
+        settings: {
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          fallbackModel: null,
+          permissionMode: 'Default',
+          enableTelemetry: true,
+          fileCheckpointingEnabled: true,
+          baseUrl: 'https://api.anthropic.com',
+          transport: 'AnthropicMessages',
+          configPath: '/Users/test/.claude/settings.json',
+          settingsIssues: [],
+          credentials: {
+            hasApiKey: false,
+            hasAuthToken: false,
+            accountId: null,
+            source: 'none',
+            hasExternalCredential: false,
+            externalCredentialPath: null,
+          },
+          hasAnyConfiguredProviderCredential: false,
+        },
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveBackgroundSettings = resolve;
+          }),
+      );
+    mockClient.updateSettings.mockResolvedValue({
+      settings: {
+        provider: 'openai',
+        model: 'gpt-4o',
+        fallbackModel: null,
+        permissionMode: 'Default',
+        enableTelemetry: true,
+        fileCheckpointingEnabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        transport: 'OpenAIChatCompletions',
+        configPath: '/Users/test/.claude/settings.json',
+        settingsIssues: [],
+        credentials: {
+          hasApiKey: true,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'saved',
+          hasExternalCredential: false,
+          externalCredentialPath: null,
+        },
+        hasAnyConfiguredProviderCredential: true,
+      },
+    });
+    mockClient.validateProviderConfig.mockResolvedValue({
+      validation: {
+        provider: 'openai',
+        isValid: true,
+        errors: [],
+        warnings: [],
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+    await Promise.resolve();
+
+    await useAppStore.getState().updateSettings({
+      defaultProvider: 'openai',
+      defaultModel: 'gpt-4o',
+    });
+
+    resolveBackgroundSettings?.({
+      settings: {
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5-20251001',
+        fallbackModel: null,
+        permissionMode: 'Default',
+        enableTelemetry: true,
+        fileCheckpointingEnabled: true,
+        baseUrl: 'https://api.anthropic.com',
+        transport: 'AnthropicMessages',
+        configPath: '/Users/test/.claude/settings.json',
+        settingsIssues: [],
+        credentials: {
+          hasApiKey: false,
+          hasAuthToken: false,
+          accountId: null,
+          source: 'none',
+          hasExternalCredential: false,
+          externalCredentialPath: null,
+        },
+        hasAnyConfiguredProviderCredential: false,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(useAppStore.getState().settings.defaultProvider).toBe('openai');
+    expect(useAppStore.getState().settings.defaultModel).toBe('gpt-4o');
+  });
+
+  it('reloads the provider catalog when settings opens after startup provider discovery failed', async () => {
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({ projects: [] });
+    mockClient.listProviders
+      .mockRejectedValueOnce(new Error('provider catalog unavailable during startup'))
+      .mockResolvedValueOnce({
+        providers: [
+          {
+            id: 'anthropic',
+            displayName: 'Anthropic',
+            defaultModel: 'claude-haiku-4-5-20251001',
+            models: ['claude-haiku-4-5-20251001'],
+            baseUrl: 'https://api.anthropic.com',
+            requiresApiKey: true,
+            description: 'Claude default provider selection.',
+          },
+          {
+            id: 'openai',
+            displayName: 'OpenAI',
+            defaultModel: 'gpt-4o',
+            models: ['gpt-4o'],
+            baseUrl: 'https://api.openai.com/v1',
+            requiresApiKey: true,
+            description: 'OpenAI chat completions transport.',
+          },
+        ],
+      });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    expect(useAppStore.getState().settings.availableProviders).toEqual([]);
+
+    useAppStore.getState().toggleSettings();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(useAppStore.getState().settings.availableProviders.map((provider) => provider.id)).toEqual([
+      'anthropic',
+      'openai',
+    ]);
   });
 
   it('persists switching codex back to saved credentials by sending useExternalCredential false', async () => {

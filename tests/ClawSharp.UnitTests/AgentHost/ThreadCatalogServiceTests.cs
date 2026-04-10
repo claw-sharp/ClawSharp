@@ -59,4 +59,77 @@ public sealed class ThreadCatalogServiceTests
             }
         }
     }
+
+    [Fact]
+    public async Task GetThreadAsync_Paginates_To_Recent_Messages_And_Loads_Older_On_Demand()
+    {
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-thread-paging-tests", Guid.NewGuid().ToString("N"));
+        var configRoot = Path.Combine(tempRoot, ".claude");
+        var workspaceRoot = Path.Combine(tempRoot, "workspace");
+        Directory.CreateDirectory(configRoot);
+        Directory.CreateDirectory(workspaceRoot);
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+
+        try
+        {
+            var recentProjects = new RecentProjectStore(Path.Combine(tempRoot, "recent-projects.json"));
+            var applications = new WorkspaceApplicationRegistry();
+            var threads = new ThreadCatalogService(applications, recentProjects);
+
+            var projectId = ClawSharp.AgentHost.Mapping.DesktopContractMapper.CreateProjectId(workspaceRoot);
+            await recentProjects.RecordOpenAsync(
+                new ProjectSummaryDto(projectId, "workspace", workspaceRoot, DateTimeOffset.UtcNow, null, 0, null));
+
+            var created = await threads.CreateThreadAsync(
+                new CreateThreadRequest
+                {
+                    ProjectId = projectId,
+                    Title = "Paged Thread"
+                });
+
+            var transcriptStore = new JsonlTranscriptStore();
+            var session = await new DefaultSessionFactory(workspaceRoot, transcriptStore)
+                .ResumeAsync(created.Thread.Thread.Id);
+            Assert.NotNull(session);
+
+            session!.Add(ChatMessageFactory.CreateText(MessageRole.User, "first"));
+            session.Add(ChatMessageFactory.CreateText(MessageRole.Assistant, "second"));
+            session.Add(ChatMessageFactory.CreateText(MessageRole.User, "third"));
+            await transcriptStore.RecordTranscriptAsync(session, session.Messages);
+
+            var latest = await threads.GetThreadAsync(
+                new GetThreadRequest
+                {
+                    ProjectId = projectId,
+                    ThreadId = created.Thread.Thread.Id,
+                    PageSize = 2,
+                });
+
+            Assert.Equal(["second", "third"], latest.Thread.Messages.Select(message => message.Content).ToArray());
+            Assert.True(latest.Thread.HasMoreMessages);
+            Assert.Equal(latest.Thread.Messages[0].Id, latest.Thread.NextBeforeMessageId);
+
+            var older = await threads.GetThreadAsync(
+                new GetThreadRequest
+                {
+                    ProjectId = projectId,
+                    ThreadId = created.Thread.Thread.Id,
+                    PageSize = 2,
+                    BeforeMessageId = latest.Thread.NextBeforeMessageId,
+                });
+
+            Assert.Equal(["first"], older.Thread.Messages.Select(message => message.Content).ToArray());
+            Assert.False(older.Thread.HasMoreMessages);
+            Assert.Null(older.Thread.NextBeforeMessageId);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
 }

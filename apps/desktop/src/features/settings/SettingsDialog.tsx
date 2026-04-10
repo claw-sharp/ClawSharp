@@ -100,10 +100,13 @@ export const SettingsDialog = () => {
     ui.settingsOpen,
   ]);
 
+  const hasAvailableProviders = settings.availableProviders.length > 0;
   const selectedProvider = settings.availableProviders.find((provider) => provider.id === draftProvider)
     ?? settings.availableProviders.find((provider) => provider.id === settings.defaultProvider)
     ?? settings.availableProviders[0];
-  const selectedProviderId = selectedProvider?.id ?? draftProvider ?? settings.defaultProvider ?? '';
+  const selectedProviderId = hasAvailableProviders
+    ? selectedProvider?.id ?? draftProvider ?? settings.defaultProvider ?? ''
+    : '';
   const modelOptions = useMemo(() => {
     const nextOptions = selectedProvider?.models ?? [];
     const nextModel = draftModel || settings.defaultModel;
@@ -176,6 +179,7 @@ export const SettingsDialog = () => {
           <SettingRow label="Default Provider">
             <select
               value={selectedProviderId}
+              disabled={!hasAvailableProviders}
               onChange={e => {
                 const provider = settings.availableProviders.find((item) => item.id === e.target.value);
                 const nextModel = provider?.defaultModel ?? settings.defaultModel;
@@ -189,13 +193,21 @@ export const SettingsDialog = () => {
                 setGeminiCredentialMode('apiKey');
                 setCodexCredentialMode('saved');
               }}
-              className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
+              className="min-w-[14rem] max-w-full rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {settings.availableProviders.map((provider) => (
-                <option key={provider.id} value={provider.id}>{provider.displayName}</option>
-              ))}
+              {hasAvailableProviders
+                ? settings.availableProviders.map((provider) => (
+                    <option key={provider.id} value={provider.id}>{provider.displayName}</option>
+                  ))
+                : <option value="">Provider catalog unavailable</option>}
             </select>
           </SettingRow>
+
+          {!hasAvailableProviders && (
+            <div className="rounded-md border border-status-waiting/30 bg-status-waiting/10 p-3 text-xs text-status-waiting">
+              Provider catalog is unavailable right now. Reopen settings after AgentHost finishes loading.
+            </div>
+          )}
 
           <SettingRow label="Default Model">
             <select

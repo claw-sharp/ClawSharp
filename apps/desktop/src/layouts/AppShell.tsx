@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAppStore } from '@/store';
 import { TopBar } from '@/components/TopBar';
 import { Sidebar } from '@/components/Sidebar';
+import { NavigationLoadingDialog } from '@/components/NavigationLoadingDialog';
 import { ThreadView } from '@/features/chat/ThreadView';
 import { ReviewPanel } from '@/features/review/ReviewPanel';
 import { BottomDrawer } from '@/features/logs/BottomDrawer';
@@ -61,6 +62,7 @@ export const AppShell = () => {
       </div>
       <SettingsDialog />
       <CommandPalette />
+      <NavigationLoadingDialog />
     </div>
   );
 };
