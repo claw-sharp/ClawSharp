@@ -123,6 +123,15 @@ export interface ProviderOption {
   description: string;
 }
 
+export interface ProviderCredentialState {
+  hasApiKey: boolean;
+  hasAuthToken: boolean;
+  accountId?: string | null;
+  source: 'none' | 'saved' | 'external';
+  hasExternalCredential: boolean;
+  externalCredentialPath?: string | null;
+}
+
 export interface Automation {
   id: string;
   projectId: string;
@@ -161,6 +170,7 @@ export interface SettingsState {
   providerValidationWarnings: string[];
   providerValidationErrors: string[];
   availableProviders: ProviderOption[];
+  providerCredentials: ProviderCredentialState;
   showDiagnostics: boolean;
   streamingSpeed: 'slow' | 'normal' | 'fast';
   compactMode: boolean;

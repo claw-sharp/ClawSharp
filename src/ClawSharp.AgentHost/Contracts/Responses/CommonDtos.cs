@@ -98,6 +98,14 @@ public sealed record ProviderOptionDto(
     bool RequiresApiKey,
     string Description);
 
+public sealed record ProviderCredentialStateDto(
+    bool HasApiKey,
+    bool HasAuthToken,
+    string? AccountId,
+    string Source,
+    bool HasExternalCredential,
+    string? ExternalCredentialPath);
+
 public sealed record RuntimeSettingsDto(
     string Provider,
     string Model,
@@ -108,7 +116,8 @@ public sealed record RuntimeSettingsDto(
     string BaseUrl,
     string Transport,
     string ConfigPath,
-    IReadOnlyList<string> SettingsIssues);
+    IReadOnlyList<string> SettingsIssues,
+    ProviderCredentialStateDto Credentials);
 
 public sealed record ProviderValidationDto(
     string Provider,

@@ -78,8 +78,18 @@ interface AppStore {
   toggleSettings: () => void;
   toggleCommandPalette: () => void;
   markInboxItemRead: (id: string) => void;
-  updateSettings: (partial: Partial<SettingsState>) => Promise<void>;
+  updateSettings: (partial: SettingsUpdate) => Promise<void>;
 }
+
+type SettingsUpdate = Partial<SettingsState> & {
+  providerApiKey?: string | null;
+  providerAuthToken?: string | null;
+  providerAccountId?: string | null;
+  clearProviderApiKey?: boolean;
+  clearProviderAuthToken?: boolean;
+  clearProviderAccountId?: boolean;
+  useExternalProviderCredential?: boolean;
+};
 
 const defaultSettings: SettingsState = {
   theme: 'dark',
@@ -95,6 +105,14 @@ const defaultSettings: SettingsState = {
   providerValidationWarnings: [],
   providerValidationErrors: [],
   availableProviders: [],
+  providerCredentials: {
+    hasApiKey: false,
+    hasAuthToken: false,
+    accountId: null,
+    source: 'none',
+    hasExternalCredential: false,
+    externalCredentialPath: null,
+  },
   showDiagnostics: true,
   streamingSpeed: 'normal',
   compactMode: false,
@@ -749,9 +767,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  toggleSettings: () => set((state) => ({
-    ui: { ...state.ui, settingsOpen: !state.ui.settingsOpen },
-  })),
+  toggleSettings: () => {
+    const opening = !get().ui.settingsOpen;
+    set((state) => ({
+      ui: { ...state.ui, settingsOpen: opening },
+    }));
+
+    if (opening) {
+      void refreshSettingsSnapshot(get, set);
+    }
+  },
 
   toggleCommandPalette: () => set((state) => ({
     ui: { ...state.ui, commandPaletteOpen: !state.ui.commandPaletteOpen },
@@ -785,9 +810,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
       model: partial.defaultModel,
       fallbackModel: partial.fallbackModel,
       enableTelemetry: partial.showDiagnostics,
+      apiKey: partial.providerApiKey,
+      authToken: partial.providerAuthToken,
+      accountId: partial.providerAccountId,
+      clearApiKey: partial.clearProviderApiKey,
+      clearAuthToken: partial.clearProviderAuthToken,
+      clearAccountId: partial.clearProviderAccountId,
+      useExternalCredential: partial.useExternalProviderCredential,
     };
 
-    if (!runtimePatch.provider && !runtimePatch.model && runtimePatch.enableTelemetry === undefined && !runtimePatch.fallbackModel) {
+    if (!runtimePatch.provider &&
+        !runtimePatch.model &&
+        runtimePatch.enableTelemetry === undefined &&
+        !runtimePatch.fallbackModel &&
+        runtimePatch.apiKey === undefined &&
+        runtimePatch.authToken === undefined &&
+        runtimePatch.accountId === undefined &&
+        !runtimePatch.clearApiKey &&
+        !runtimePatch.clearAuthToken &&
+        !runtimePatch.clearAccountId &&
+        !runtimePatch.useExternalCredential) {
       return;
     }
 
@@ -795,12 +837,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const [updatedSettings, validation] = await Promise.all([
         agentHostClient.updateSettings(runtimePatch),
         agentHostClient.validateProviderConfig(
+          projectId,
           partial.defaultProvider ?? get().settings.defaultProvider,
           partial.defaultModel ?? get().settings.defaultModel,
         ),
       ]);
 
       set((state) => ({
+        threads: state.threads.map((thread) => {
+          if (projectId && thread.projectId !== projectId) {
+            return thread;
+          }
+
+          return {
+            ...thread,
+            provider: updatedSettings.settings.provider,
+            model: updatedSettings.settings.model,
+          };
+        }),
         settings: {
           ...mergeRuntimeSettings(state.settings, updatedSettings.settings, state.settings.availableProviders),
           providerValidationWarnings: validation.validation.warnings,
@@ -818,6 +872,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 }));
+
+async function refreshSettingsSnapshot(
+  get: () => AppStore,
+  set: Parameters<typeof useAppStore.setState>[0],
+): Promise<void> {
+  const projectId = get().selectedProjectId || null;
+
+  try {
+    const settingsResponse = await agentHostClient.getSettings(projectId);
+    const validation = await agentHostClient.validateProviderConfig(
+      projectId,
+      settingsResponse.settings.provider,
+      settingsResponse.settings.model,
+    );
+
+    set((state) => ({
+      settings: {
+        ...mergeRuntimeSettings(state.settings, settingsResponse.settings, state.settings.availableProviders),
+        providerValidationWarnings: validation.validation.warnings,
+        providerValidationErrors: validation.validation.errors,
+      },
+    }));
+  } catch (error) {
+    set((state) => ({
+      connection: {
+        ...state.connection,
+        errorMessage: toErrorMessage(error, 'Failed to refresh runtime settings.'),
+        statusLabel: 'Settings refresh failed',
+      },
+    }));
+  }
+}
 
 function mapProject(project: AgentHostProject): Project {
   return {
@@ -942,6 +1028,7 @@ function mergeRuntimeSettings(
     settingsIssues: runtime.settingsIssues,
     availableProviders,
     showDiagnostics: runtime.enableTelemetry,
+    providerCredentials: runtime.credentials,
   };
 }
 

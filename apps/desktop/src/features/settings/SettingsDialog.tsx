@@ -1,11 +1,108 @@
-import { useAppStore } from '@/store';
+import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store';
+import type { ProviderCredentialState } from '@/types';
+
+type GeminiCredentialMode = 'apiKey' | 'accessToken';
+type CodexCredentialMode = 'external' | 'saved';
+
+type CredentialConfig = {
+  secretField: 'apiKey' | 'authToken';
+  secretLabel: string;
+  accountIdLabel?: string;
+};
+
+type CredentialUpdate = {
+  providerApiKey?: string | null;
+  providerAuthToken?: string | null;
+  providerAccountId?: string | null;
+  clearProviderApiKey?: boolean;
+  clearProviderAuthToken?: boolean;
+  clearProviderAccountId?: boolean;
+};
 
 export const SettingsDialog = () => {
   const { ui, settings, toggleSettings, updateSettings } = useAppStore();
-  const selectedProvider = settings.availableProviders.find((provider) => provider.id === settings.defaultProvider);
-  const modelOptions = selectedProvider?.models ?? [settings.defaultModel];
+  const [draftProvider, setDraftProvider] = useState(settings.defaultProvider);
+  const [draftModel, setDraftModel] = useState(settings.defaultModel);
+  const [draftTelemetryEnabled, setDraftTelemetryEnabled] = useState(settings.showDiagnostics);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [authTokenInput, setAuthTokenInput] = useState('');
+  const [accountIdInput, setAccountIdInput] = useState('');
+  const [geminiCredentialMode, setGeminiCredentialMode] = useState<GeminiCredentialMode>('apiKey');
+  const [codexCredentialMode, setCodexCredentialMode] = useState<CodexCredentialMode>('saved');
+
+  useEffect(() => {
+    if (!ui.settingsOpen) {
+      return;
+    }
+
+    setDraftProvider(settings.defaultProvider);
+    setDraftModel(settings.defaultModel);
+    setDraftTelemetryEnabled(settings.showDiagnostics);
+    setApiKeyInput('');
+    setAuthTokenInput('');
+    setAccountIdInput(settings.providerCredentials.accountId ?? '');
+    setGeminiCredentialMode(
+      settings.providerCredentials.hasAuthToken && !settings.providerCredentials.hasApiKey
+        ? 'accessToken'
+        : 'apiKey',
+    );
+    setCodexCredentialMode(
+      settings.providerCredentials.source === 'external' && settings.providerCredentials.hasExternalCredential
+        ? 'external'
+        : 'saved',
+    );
+  }, [
+    settings.defaultModel,
+    settings.defaultProvider,
+    settings.providerCredentials.accountId,
+    settings.providerCredentials.hasExternalCredential,
+    settings.providerCredentials.hasApiKey,
+    settings.providerCredentials.hasAuthToken,
+    settings.providerCredentials.source,
+    settings.showDiagnostics,
+    ui.settingsOpen,
+  ]);
+
+  const selectedProvider = settings.availableProviders.find((provider) => provider.id === draftProvider)
+    ?? settings.availableProviders.find((provider) => provider.id === settings.defaultProvider)
+    ?? settings.availableProviders[0];
+  const selectedProviderId = selectedProvider?.id ?? draftProvider ?? settings.defaultProvider ?? '';
+  const modelOptions = useMemo(() => {
+    const nextOptions = selectedProvider?.models ?? [];
+    const nextModel = draftModel || settings.defaultModel;
+
+    if (nextModel && !nextOptions.includes(nextModel)) {
+      return [nextModel, ...nextOptions];
+    }
+
+    return nextOptions.length > 0 ? nextOptions : [nextModel].filter(Boolean);
+  }, [draftModel, selectedProvider, settings.defaultModel]);
+  const providerDetails = selectedProvider ? getProviderDetails(selectedProvider.id) : null;
+  const credentialConfig = useMemo(
+    () => getCredentialConfig(selectedProviderId, geminiCredentialMode),
+    [geminiCredentialMode, selectedProviderId],
+  );
+  const credentialUpdate = credentialConfig
+    ? buildCredentialUpdate(
+        selectedProviderId,
+        credentialConfig,
+        settings.providerCredentials,
+        apiKeyInput,
+        authTokenInput,
+        accountIdInput,
+      )
+    : null;
+  const hasSavedCredentials =
+    settings.providerCredentials.hasApiKey ||
+    settings.providerCredentials.hasAuthToken ||
+    Boolean(settings.providerCredentials.accountId);
+  const hasSettingsChanges =
+    draftProvider !== settings.defaultProvider ||
+    draftModel !== settings.defaultModel ||
+    draftTelemetryEnabled !== settings.showDiagnostics;
 
   if (!ui.settingsOpen) return null;
 
@@ -13,21 +110,28 @@ export const SettingsDialog = () => {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={toggleSettings} />
       <div className="relative w-full max-w-lg rounded-lg border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">Settings</h2>
-          <button onClick={toggleSettings} className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+          <button onClick={toggleSettings} className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="px-4 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-          {/* Provider */}
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto px-4 py-4">
           <SettingRow label="Default Provider">
             <select
-              value={settings.defaultProvider ?? ''}
+              value={selectedProviderId}
               onChange={e => {
                 const provider = settings.availableProviders.find((item) => item.id === e.target.value);
-                void updateSettings({ defaultProvider: e.target.value, defaultModel: provider?.defaultModel ?? settings.defaultModel });
+                const nextModel = provider?.defaultModel ?? settings.defaultModel;
+
+                setDraftProvider(e.target.value);
+                setDraftModel(nextModel);
+                setApiKeyInput('');
+                setAuthTokenInput('');
+                setAccountIdInput('');
+                setGeminiCredentialMode('apiKey');
+                setCodexCredentialMode('saved');
               }}
               className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
             >
@@ -39,8 +143,10 @@ export const SettingsDialog = () => {
 
           <SettingRow label="Default Model">
             <select
-              value={settings.defaultModel ?? ''}
-              onChange={e => { void updateSettings({ defaultModel: e.target.value }); }}
+              value={draftModel ?? settings.defaultModel ?? ''}
+              onChange={e => {
+                setDraftModel(e.target.value);
+              }}
               className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
             >
               {modelOptions.map((model) => (
@@ -49,8 +155,68 @@ export const SettingsDialog = () => {
             </select>
           </SettingRow>
 
+          {selectedProvider && (
+            <div className="rounded-md border border-border p-3 surface-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {selectedProvider.displayName}
+              </div>
+              <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                <div>{selectedProvider.description}</div>
+                {providerDetails && <div>{providerDetails}</div>}
+              </div>
+            </div>
+          )}
+
+          <CredentialPanel
+            providerId={selectedProviderId}
+            credentialConfig={credentialConfig}
+            credentials={settings.providerCredentials}
+            codexCredentialMode={codexCredentialMode}
+            onCodexCredentialModeChange={setCodexCredentialMode}
+            geminiCredentialMode={geminiCredentialMode}
+            onGeminiCredentialModeChange={setGeminiCredentialMode}
+            apiKeyInput={apiKeyInput}
+            authTokenInput={authTokenInput}
+            accountIdInput={accountIdInput}
+            onApiKeyChange={setApiKeyInput}
+            onAuthTokenChange={setAuthTokenInput}
+            onAccountIdChange={setAccountIdInput}
+            onSave={() => {
+              if (!credentialUpdate) {
+                return;
+              }
+
+              void updateSettings(credentialUpdate);
+              setApiKeyInput('');
+              setAuthTokenInput('');
+            }}
+            onClear={() => {
+              void updateSettings({
+                clearProviderApiKey: settings.providerCredentials.hasApiKey,
+                clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
+                clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
+              });
+              setApiKeyInput('');
+              setAuthTokenInput('');
+              setAccountIdInput('');
+            }}
+            onUseExternal={() => {
+              void updateSettings({
+                useExternalProviderCredential: true,
+                clearProviderApiKey: settings.providerCredentials.hasApiKey,
+                clearProviderAuthToken: settings.providerCredentials.hasAuthToken,
+                clearProviderAccountId: Boolean(settings.providerCredentials.accountId),
+              });
+              setApiKeyInput('');
+              setAuthTokenInput('');
+              setAccountIdInput('');
+            }}
+            canSave={credentialUpdate !== null}
+            canClear={hasSavedCredentials}
+          />
+
           <SettingRow label="Provider Endpoint">
-            <span className="max-w-64 truncate text-right text-xs font-mono text-muted-foreground">{settings.providerBaseUrl}</span>
+            <span className="max-w-64 truncate text-right font-mono text-xs text-muted-foreground">{settings.providerBaseUrl}</span>
           </SettingRow>
 
           <SettingRow label="Transport">
@@ -58,72 +224,16 @@ export const SettingsDialog = () => {
           </SettingRow>
 
           <SettingRow label="Config Path">
-            <span className="max-w-64 truncate text-right text-[10px] font-mono text-muted-foreground">{settings.configPath}</span>
+            <span className="max-w-64 truncate text-right font-mono text-[10px] text-muted-foreground">{settings.configPath}</span>
           </SettingRow>
 
-          <SettingRow label="Density">
-            <div className="flex gap-1">
-              {(['compact', 'comfortable', 'spacious'] as const).map(d => (
-                <button
-                  key={d}
-                  onClick={() => { void updateSettings({ density: d }); }}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs transition-colors',
-                    settings.density === d ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </SettingRow>
+          <SettingToggle label="Telemetry Enabled" checked={draftTelemetryEnabled} onChange={setDraftTelemetryEnabled} />
 
-          <SettingRow label="Theme">
-            <div className="flex gap-1">
-              {(['system', 'dark', 'light'] as const).map(theme => (
-                <button
-                  key={theme}
-                  onClick={() => { void updateSettings({ theme }); }}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs capitalize transition-colors',
-                    settings.theme === theme ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {theme}
-                </button>
-              ))}
-            </div>
-          </SettingRow>
-
-          <SettingRow label="Streaming Speed">
-            <div className="flex gap-1">
-              {(['slow', 'normal', 'fast'] as const).map(s => (
-                <button
-                  key={s}
-                  onClick={() => { void updateSettings({ streamingSpeed: s }); }}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs transition-colors',
-                    settings.streamingSpeed === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </SettingRow>
-
-          <SettingRow label="Editor Path">
-            <input
-              value={settings.editorPath ?? ''}
-              onChange={e => { void updateSettings({ editorPath: e.target.value }); }}
-              className="rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground font-mono outline-none focus:border-primary/40 w-48"
-            />
-          </SettingRow>
-
-          <SettingToggle label="Telemetry Enabled" checked={settings.showDiagnostics} onChange={v => { void updateSettings({ showDiagnostics: v }); }} />
-          <SettingToggle label="Compact Mode" checked={settings.compactMode} onChange={v => { void updateSettings({ compactMode: v }); }} />
-          <SettingToggle label="Reduced Motion" checked={settings.reducedMotion} onChange={v => { void updateSettings({ reducedMotion: v }); }} />
-          <SettingToggle label="Notifications" checked={settings.notifications} onChange={v => { void updateSettings({ notifications: v }); }} />
+          {/*
+            Temporarily hidden until the desktop runtime persists them for real:
+            density, theme, streaming speed, editor path, compact mode,
+            reduced motion, and notifications.
+          */}
 
           {settings.settingsIssues.length > 0 && (
             <div className="rounded-md border border-status-waiting/30 bg-status-waiting/10 p-3">
@@ -149,8 +259,35 @@ export const SettingsDialog = () => {
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-border text-[10px] text-muted-foreground">
-          Runtime settings reuse the existing ClawSharp configuration and provider resolution flow.
+        <div className="border-t border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[10px] text-muted-foreground">
+              Runtime settings reuse the existing ClawSharp configuration and provider resolution flow.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!hasSettingsChanges) {
+                  return;
+                }
+
+                void updateSettings({
+                  defaultProvider: draftProvider,
+                  defaultModel: draftModel,
+                  showDiagnostics: draftTelemetryEnabled,
+                });
+              }}
+              disabled={!hasSettingsChanges}
+              className={cn(
+                'rounded-md border px-3 py-2 text-xs transition-colors',
+                hasSettingsChanges
+                  ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
+                  : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
+              )}
+            >
+              Save Settings
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -163,6 +300,332 @@ const SettingRow = ({ label, children }: { label: string; children: React.ReactN
     {children}
   </div>
 );
+
+const CredentialPanel = ({
+  providerId,
+  credentialConfig,
+  credentials,
+  codexCredentialMode,
+  onCodexCredentialModeChange,
+  geminiCredentialMode,
+  onGeminiCredentialModeChange,
+  apiKeyInput,
+  authTokenInput,
+  accountIdInput,
+  onApiKeyChange,
+  onAuthTokenChange,
+  onAccountIdChange,
+  onSave,
+  onClear,
+  onUseExternal,
+  canSave,
+  canClear,
+}: {
+  providerId: string;
+  credentialConfig: CredentialConfig | null;
+  credentials: ProviderCredentialState;
+  codexCredentialMode: CodexCredentialMode;
+  onCodexCredentialModeChange: (mode: CodexCredentialMode) => void;
+  geminiCredentialMode: GeminiCredentialMode;
+  onGeminiCredentialModeChange: (mode: GeminiCredentialMode) => void;
+  apiKeyInput: string;
+  authTokenInput: string;
+  accountIdInput: string;
+  onApiKeyChange: (value: string) => void;
+  onAuthTokenChange: (value: string) => void;
+  onAccountIdChange: (value: string) => void;
+  onSave: () => void;
+  onClear: () => void;
+  onUseExternal: () => void;
+  canSave: boolean;
+  canClear: boolean;
+}) => {
+  if (!credentialConfig) {
+    return (
+      <div className="rounded-md border border-border p-3 surface-1">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credentials</div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          This provider uses the local runtime endpoint directly and does not require a saved cloud credential.
+        </div>
+      </div>
+    );
+  }
+
+  const secretValue = credentialConfig.secretField === 'apiKey' ? apiKeyInput : authTokenInput;
+  const useCodexExternal = providerId === 'codex' && codexCredentialMode === 'external';
+  const canUseCodexExternal = credentials.hasExternalCredential;
+
+  return (
+    <div className="rounded-md border border-border p-3 surface-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credentials</div>
+        <div className="text-[10px] text-muted-foreground">{formatCredentialStatus(providerId, credentials)}</div>
+      </div>
+
+      {providerId === 'codex' && (
+        <div className="mt-3 space-y-2">
+          <label className="flex items-start gap-2 text-xs text-secondary-foreground">
+            <input
+              aria-label="Use Codex auth file"
+              type="radio"
+              name="codex-credential-mode"
+              checked={codexCredentialMode === 'external'}
+              onChange={() => onCodexCredentialModeChange('external')}
+              className="mt-0.5"
+            />
+            <span>
+              Use Codex auth file
+              <span className="block text-[10px] text-muted-foreground">
+                {credentials.externalCredentialPath ?? '%USERPROFILE%\\.codex\\auth.json'}
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs text-secondary-foreground">
+            <input
+              aria-label="Use saved access token and account ID"
+              type="radio"
+              name="codex-credential-mode"
+              checked={codexCredentialMode === 'saved'}
+              onChange={() => onCodexCredentialModeChange('saved')}
+              className="mt-0.5"
+            />
+            <span>
+              Use saved access token and account ID
+            </span>
+          </label>
+          {!credentials.hasExternalCredential && (
+            <div className="text-[10px] text-muted-foreground">
+              No Codex auth file was found at the local default path.
+            </div>
+          )}
+        </div>
+      )}
+
+      {providerId === 'gemini' && (
+        <div className="mt-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-secondary-foreground">Gemini Credential Type</span>
+            <select
+              aria-label="Gemini credential type"
+              value={geminiCredentialMode}
+              onChange={event => onGeminiCredentialModeChange(event.target.value as GeminiCredentialMode)}
+              className="w-full rounded-md border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
+            >
+              <option value="apiKey">API key</option>
+              <option value="accessToken">Access token</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {useCodexExternal ? (
+        <div className="mt-3 space-y-3">
+          <div className="text-xs text-muted-foreground">
+            ClawSharp will read the token and account metadata from the existing Codex auth file instead of saving a token in `settings.json`.
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onUseExternal}
+              disabled={!canUseCodexExternal || credentials.source === 'external'}
+              className={cn(
+                'rounded-md border px-3 py-2 text-xs transition-colors',
+                canUseCodexExternal && credentials.source !== 'external'
+                  ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
+                  : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
+              )}
+            >
+              Use Codex Auth File
+            </button>
+          </div>
+        </div>
+      ) : (
+      <div className="mt-3 space-y-3">
+        <label className="block space-y-1">
+          <span className="text-xs text-secondary-foreground">{credentialConfig.secretLabel}</span>
+          <input
+            aria-label={credentialConfig.secretLabel}
+            type="password"
+            value={secretValue}
+            onChange={event => {
+              const nextValue = event.target.value;
+              if (credentialConfig.secretField === 'apiKey') {
+                onApiKeyChange(nextValue);
+              } else {
+                onAuthTokenChange(nextValue);
+              }
+            }}
+            className="w-full rounded-md border border-border bg-input px-2 py-2 text-xs text-foreground outline-none focus:border-primary/40"
+            placeholder={`Enter ${credentialConfig.secretLabel.toLowerCase()}`}
+            autoComplete="off"
+          />
+        </label>
+
+        {credentialConfig.accountIdLabel && (
+          <label className="block space-y-1">
+            <span className="text-xs text-secondary-foreground">{credentialConfig.accountIdLabel}</span>
+            <input
+              aria-label={credentialConfig.accountIdLabel}
+              type="text"
+              value={accountIdInput}
+              onChange={event => onAccountIdChange(event.target.value)}
+              className="w-full rounded-md border border-border bg-input px-2 py-2 text-xs text-foreground outline-none focus:border-primary/40"
+              placeholder={`Enter ${credentialConfig.accountIdLabel.toLowerCase()}`}
+              autoComplete="off"
+            />
+          </label>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!canSave}
+            className={cn(
+              'rounded-md border px-3 py-2 text-xs transition-colors',
+              canSave
+                ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
+                : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
+            )}
+          >
+            Save Credentials
+          </button>
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!canClear}
+            className={cn(
+              'rounded-md border px-3 py-2 text-xs transition-colors',
+              canClear
+                ? 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                : 'cursor-not-allowed border-border text-muted-foreground opacity-60',
+            )}
+          >
+            Clear Saved Credentials
+          </button>
+        </div>
+      </div>
+      )}
+    </div>
+  );
+};
+
+function buildCredentialUpdate(
+  providerId: string,
+  credentialConfig: CredentialConfig,
+  credentials: ProviderCredentialState,
+  apiKeyInput: string,
+  authTokenInput: string,
+  accountIdInput: string,
+): CredentialUpdate | null {
+  const trimmedApiKey = apiKeyInput.trim();
+  const trimmedAuthToken = authTokenInput.trim();
+  const trimmedAccountId = accountIdInput.trim();
+  const next: CredentialUpdate = {};
+
+  if (credentialConfig.secretField === 'apiKey' && trimmedApiKey) {
+    next.providerApiKey = trimmedApiKey;
+    if (providerId === 'gemini' && credentials.hasAuthToken) {
+      next.clearProviderAuthToken = true;
+    }
+  }
+
+  if (credentialConfig.secretField === 'authToken' && trimmedAuthToken) {
+    next.providerAuthToken = trimmedAuthToken;
+    if (providerId === 'gemini' && credentials.hasApiKey) {
+      next.clearProviderApiKey = true;
+    }
+  }
+
+  if (credentialConfig.accountIdLabel) {
+    const savedAccountId = credentials.accountId ?? '';
+    if (trimmedAccountId && trimmedAccountId !== savedAccountId) {
+      next.providerAccountId = trimmedAccountId;
+    } else if (!trimmedAccountId && savedAccountId) {
+      next.clearProviderAccountId = true;
+    }
+  }
+
+  return Object.keys(next).length > 0 ? next : null;
+}
+
+function getCredentialConfig(providerId: string, geminiCredentialMode: GeminiCredentialMode): CredentialConfig | null {
+  switch (providerId) {
+    case 'anthropic':
+      return { secretField: 'apiKey', secretLabel: 'Anthropic API Key' };
+    case 'openai':
+      return { secretField: 'apiKey', secretLabel: 'OpenAI API Key' };
+    case 'codex':
+      return {
+        secretField: 'apiKey',
+        secretLabel: 'Codex Access Token',
+        accountIdLabel: 'Codex Account ID',
+      };
+    case 'gemini':
+      return geminiCredentialMode === 'accessToken'
+        ? { secretField: 'authToken', secretLabel: 'Gemini Access Token' }
+        : { secretField: 'apiKey', secretLabel: 'Gemini API Key' };
+    case 'github':
+      return { secretField: 'authToken', secretLabel: 'GitHub Token' };
+    default:
+      return null;
+  }
+}
+
+function formatCredentialStatus(providerId: string, credentials: ProviderCredentialState): string {
+  switch (providerId) {
+    case 'anthropic':
+    case 'openai':
+      return credentials.hasApiKey ? 'API key saved' : 'No saved API key';
+    case 'codex':
+      if (credentials.source === 'external') {
+        return 'Using Codex auth file';
+      }
+
+      if (credentials.hasApiKey && credentials.accountId) {
+        return 'Token and account ID saved';
+      }
+
+      if (credentials.hasApiKey) {
+        return 'Token saved';
+      }
+
+      return credentials.accountId ? 'Account ID saved' : 'No saved token';
+    case 'gemini':
+      if (credentials.hasApiKey) {
+        return 'API key saved';
+      }
+
+      if (credentials.hasAuthToken) {
+        return 'Access token saved';
+      }
+
+      return 'No saved credential';
+    case 'github':
+      return credentials.hasAuthToken ? 'Token saved' : 'No saved token';
+    default:
+      return 'No saved credential';
+  }
+}
+
+function getProviderDetails(providerId: string): string {
+  switch (providerId) {
+    case 'anthropic':
+      return 'ClawSharp uses ANTHROPIC_API_KEY first, then falls back to Claude auth tokens from the existing local login state.';
+    case 'openai':
+      return 'Set CLAUDE_CODE_USE_OPENAI=1 with OPENAI_API_KEY, OPENAI_MODEL, and optionally OPENAI_BASE_URL for compatible gateways.';
+    case 'codex':
+      return 'Codex uses the Responses transport and reads CODEX_API_KEY, CODEX_ACCOUNT_ID or CHATGPT_ACCOUNT_ID, or auth.json from CODEX_HOME or %USERPROFILE%\\.codex.';
+    case 'gemini':
+      return 'Gemini runs through the OpenAI-compatible transport and reads GEMINI_API_KEY, GOOGLE_API_KEY, or GEMINI_ACCESS_TOKEN plus GEMINI_MODEL.';
+    case 'github':
+      return 'GitHub Models reads GITHUB_TOKEN or GH_TOKEN and maps GitHub-hosted models through the OpenAI-compatible transport.';
+    case 'ollama':
+      return 'Ollama uses a local OpenAI-compatible endpoint at http://localhost:11434/v1 and does not require a cloud API key.';
+    default:
+      return 'Provider credentials and transport are resolved by the runtime configuration for the active workspace.';
+  }
+}
 
 const SettingToggle = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
   <div className="flex items-center justify-between">

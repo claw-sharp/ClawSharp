@@ -161,9 +161,17 @@ export interface UpdateSettingsRequest {
   fallbackModel?: string | null;
   enableTelemetry?: boolean | null;
   fileCheckpointingEnabled?: boolean | null;
+  apiKey?: string | null;
+  authToken?: string | null;
+  accountId?: string | null;
+  clearApiKey?: boolean | null;
+  clearAuthToken?: boolean | null;
+  clearAccountId?: boolean | null;
+  useExternalCredential?: boolean | null;
 }
 
 export interface ValidateProviderConfigRequest {
+  projectId?: string | null;
   provider: string;
   model?: string | null;
 }
@@ -316,6 +324,7 @@ export interface AgentHostRuntimeSettings {
   transport: string;
   configPath: string;
   settingsIssues: string[];
+  credentials: AgentHostProviderCredentials;
 }
 
 export interface GetSettingsResponse {
@@ -345,6 +354,15 @@ export interface AgentHostProviderValidation {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+}
+
+export interface AgentHostProviderCredentials {
+  hasApiKey: boolean;
+  hasAuthToken: boolean;
+  accountId?: string | null;
+  source: 'none' | 'saved' | 'external';
+  hasExternalCredential: boolean;
+  externalCredentialPath?: string | null;
 }
 
 export interface ValidateProviderConfigResponse {
