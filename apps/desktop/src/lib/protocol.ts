@@ -189,7 +189,7 @@ export interface ListPendingApprovalsRequest {
 
 export interface ResolveApprovalRequest {
   approvalId: string;
-  decision: 'approved' | 'rejected';
+  decision: 'approved' | 'always_allow' | 'rejected';
 }
 
 export interface AgentHostProject {

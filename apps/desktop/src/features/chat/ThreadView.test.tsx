@@ -193,4 +193,155 @@ describe('ThreadView', () => {
     expect(screen.getByText('No thread selected for ClawSharp.')).toBeInTheDocument();
     expect(toggleSettings).toHaveBeenCalledTimes(1);
   });
+
+  it('renders tool activity inside the chat transcript even when the assistant has no text yet', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: 'D:/Working/ClawSharp',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Tool visibility',
+          summary: 'Testing tool call rendering',
+          status: 'running',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: '',
+            timestamp: '2026-04-10T10:00:10Z',
+            toolProgress: [
+              {
+                id: 'tool-1',
+                type: 'tool',
+                toolName: 'functions.exec_command',
+                label: 'Ran `rg --files`',
+                detail: 'src/App.tsx\nsrc/main.tsx',
+                timestamp: '2026-04-10T10:00:10Z',
+                completed: true,
+                status: 'completed',
+              },
+            ],
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    expect(screen.getByText('Tool activity')).toBeInTheDocument();
+    expect(screen.getByText('functions.exec_command')).toBeInTheDocument();
+    expect(screen.getByText('Ran `rg --files`')).toBeInTheDocument();
+    expect(screen.getByText(/src\/App\.tsx/)).toBeInTheDocument();
+    expect(screen.getByText(/src\/main\.tsx/)).toBeInTheDocument();
+  });
+
+  it('renders approval required after transcript messages', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: 'D:/Working/ClawSharp',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Approval order',
+          summary: 'Testing approval placement',
+          status: 'waiting_approval',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'I can fix this safely.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      inboxItems: [
+        {
+          id: 'approval-1',
+          type: 'review',
+          title: 'Approval required',
+          summary: 'Approve the git rewrite.',
+          timestamp: '2026-04-10T10:00:20Z',
+          read: false,
+          projectId: 'proj-1',
+          threadId: 'thread-1',
+          approvalId: 'approval-1',
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const transcriptMessage = screen.getByText('I can fix this safely.');
+    const approvalSummary = screen.getByText('Approve the git rewrite.');
+    expect(screen.getByRole('button', { name: 'Always Allow This Session' })).toBeInTheDocument();
+
+    expect(
+      transcriptMessage.compareDocumentPosition(approvalSummary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

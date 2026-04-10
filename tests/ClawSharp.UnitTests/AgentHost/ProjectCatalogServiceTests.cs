@@ -1,3 +1,4 @@
+using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.AgentHost.Sessions;

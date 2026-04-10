@@ -37,6 +37,27 @@ public class QueryMissingToolResultRecoveryTests
     }
 
     [Fact]
+    public void CreateMissingToolResultMessagesForUnmatchedToolUses_Only_Emits_For_Tool_Uses_Without_Results()
+    {
+        var matchedToolUse = ChatMessageFactory.CreateToolUse(
+            [("tooluse-read", "Read", "file.txt")]);
+        var matchedToolResult = ChatMessageFactory.CreateToolResult(
+            "tooluse-read",
+            "Read",
+            "ok");
+        var unmatchedToolUse = ChatMessageFactory.CreateToolUse(
+            [("tooluse-bash", "Bash", "echo hello")]);
+
+        var recovered = QueryMissingToolResultRecovery.CreateMissingToolResultMessagesForUnmatchedToolUses(
+            [matchedToolUse, matchedToolResult, unmatchedToolUse],
+            "runtime failed");
+
+        var recoveredMessage = Assert.Single(recovered);
+        Assert.Equal("tooluse-bash", recoveredMessage.ContentBlocks[0].Metadata?["toolUseId"]);
+        Assert.Equal("runtime failed", recoveredMessage.ContentBlocks[0].Value);
+    }
+
+    [Fact]
     public async Task QueryEngine_Recovers_Missing_Tool_Result_Messages_When_Runtime_Fails_After_Tool_Use()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-recovery-tests", Guid.NewGuid().ToString("N"));

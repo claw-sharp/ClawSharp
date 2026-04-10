@@ -79,6 +79,15 @@ export const InboxPanel = () => {
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
+                      void resolveApproval(item.approvalId!, 'always_allow');
+                    }}
+                    className="rounded bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/15"
+                  >
+                    Always allow this session
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
                       void resolveApproval(item.approvalId!, 'rejected');
                     }}
                     className="rounded bg-status-failed/15 px-2 py-1 text-[10px] font-medium text-status-failed hover:bg-status-failed/20"

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClawSharp.AgentHost.Contracts;
 
@@ -111,14 +112,6 @@ internal sealed class ThreadTranscriptPageReader
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     contentParts.Add(text);
-                }
-            }
-            else if (blockType == "tool_result")
-            {
-                var content = block["content"]?.GetValue<string>();
-                if (!string.IsNullOrWhiteSpace(content))
-                {
-                    contentParts.Add(content);
                 }
             }
         }

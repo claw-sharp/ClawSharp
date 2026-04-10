@@ -775,7 +775,7 @@ export class BrowserAgentHostClient {
     };
   }
 
-  async resolveApproval(approvalId: string, decision: 'approved' | 'rejected'): Promise<ResolveApprovalResponse> {
+  async resolveApproval(approvalId: string, decision: 'approved' | 'always_allow' | 'rejected'): Promise<ResolveApprovalResponse> {
     const next = this.approvals.find((approval) => approval.id === approvalId);
     if (!next) {
       throw new Error(`Approval '${approvalId}' was not found in browser preview mode.`);

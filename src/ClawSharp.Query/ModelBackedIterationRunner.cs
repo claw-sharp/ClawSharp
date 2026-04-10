@@ -91,10 +91,10 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
             }
             catch (Exception exception)
             {
-                var errorMessage = ChatMessageFactory.CreateAssistantApiErrorMessage(exception.Message);
+                var errorMessage = CreateAssistantApiErrorMessage(exception);
                 await emitEvent(new QueryMessageRuntimeEvent(errorMessage), CancellationToken.None);
 
-                return new QueryTerminalIterationResult(
+                var terminalResult = new QueryTerminalIterationResult(
                     new QueryLoopTerminal(
                         QueryTerminalReason.ModelError,
                         ErrorMessage: exception.Message),
@@ -102,6 +102,20 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
                     {
                         Messages = currentState.Messages.Concat([errorMessage]).ToArray()
                     });
+
+                if (exception is QueryModelApiException)
+                {
+                    return await ApplyApiErrorTerminalClassificationAsync(
+                        request,
+                        currentState,
+                        terminalResult,
+                        session,
+                        settings,
+                        emitEvent,
+                        cancellationToken);
+                }
+
+                return terminalResult;
             }
 
             switch (attemptResult?.Outcome)
@@ -354,6 +368,18 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
         var classifiedTerminal = QueryApiErrorTerminalClassifier.Classify(
             terminalResult.State.Messages.LastOrDefault(),
             priorState);
+
+        if (TryRecoverFromMissingToolResultApiError(
+                request,
+                priorState,
+                terminalResult,
+                emitEvent,
+                cancellationToken,
+                out var recoveredResult))
+        {
+            return await recoveredResult.ConfigureAwait(false);
+        }
+
         if (classifiedTerminal is null)
         {
             return terminalResult;
@@ -381,6 +407,65 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
         }
 
         return classifiedResult;
+    }
+
+    private static bool TryRecoverFromMissingToolResultApiError(
+        QueryTurnRequest request,
+        QueryLoopState priorState,
+        QueryTerminalIterationResult terminalResult,
+        Func<QueryRuntimeEvent, CancellationToken, Task> emitEvent,
+        CancellationToken cancellationToken,
+        out Task<QueryIterationResult> recoveredResult)
+    {
+        recoveredResult = Task.FromResult<QueryIterationResult>(terminalResult);
+        var apiErrorMessage = terminalResult.State.Messages.LastOrDefault();
+        if (!IsMissingToolResultApiErrorMessage(apiErrorMessage))
+        {
+            return false;
+        }
+
+        var recoveredMessages = QueryMissingToolResultRecovery.CreateMissingToolResultMessagesForUnmatchedToolUses(
+            priorState.Messages,
+            "Tool execution interrupted before emitting a tool result. Recovered automatically so the request can continue.");
+        if (recoveredMessages.Count == 0)
+        {
+            return false;
+        }
+
+        recoveredResult = RecoverMissingToolResultsAndRetryAsync(
+            request,
+            priorState,
+            recoveredMessages,
+            emitEvent,
+            cancellationToken);
+        return true;
+    }
+
+    private static async Task<QueryIterationResult> RecoverMissingToolResultsAndRetryAsync(
+        QueryTurnRequest request,
+        QueryLoopState priorState,
+        IReadOnlyList<ChatMessage> recoveredMessages,
+        Func<QueryRuntimeEvent, CancellationToken, Task> emitEvent,
+        CancellationToken cancellationToken)
+    {
+        foreach (var recoveredMessage in recoveredMessages)
+        {
+            await emitEvent(new QueryMessageRuntimeEvent(recoveredMessage), cancellationToken);
+        }
+
+        return new QueryContinueIterationResult(
+            new QueryLoopTransition(QueryContinueReason.NextTurn),
+            request,
+            priorState with
+            {
+                Messages = priorState.Messages.Concat(recoveredMessages).ToArray(),
+                PendingToolUseSummary = null,
+                MaxOutputTokensRecoveryCount = 0,
+                HasAttemptedReactiveCompact = false,
+                MaxOutputTokensOverride = null,
+                StopHookActive = null,
+                Transition = new QueryLoopTransition(QueryContinueReason.NextTurn)
+            });
     }
 
     private static bool TryGetWithheldMaxOutputTokensMessage(
@@ -722,6 +807,30 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
                string.Equals(isApiError, bool.TrueString, StringComparison.OrdinalIgnoreCase) &&
                block.Metadata.TryGetValue("apiError", out var apiError) &&
                string.Equals(apiError, "max_output_tokens", StringComparison.Ordinal);
+    }
+
+    private static bool IsMissingToolResultApiErrorMessage(ChatMessage? message)
+    {
+        if (!IsAssistantApiErrorMessage(message))
+        {
+            return false;
+        }
+
+        return message!.Content.Contains("No tool output found for function call", StringComparison.Ordinal);
+    }
+
+    private static ChatMessage CreateAssistantApiErrorMessage(Exception exception)
+    {
+        if (exception is QueryModelApiException apiException)
+        {
+            return ChatMessageFactory.CreateAssistantApiErrorMessage(
+                apiException.Message,
+                apiError: "invalid_request_error",
+                error: "invalid_request_error",
+                errorDetails: apiException.ResponseBody);
+        }
+
+        return ChatMessageFactory.CreateAssistantApiErrorMessage(exception.Message);
     }
 
     private static int GetPriorSessionOutputTokens(IReadOnlyList<ChatMessage> messages)

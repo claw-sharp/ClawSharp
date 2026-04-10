@@ -21,14 +21,28 @@ public sealed class ThreadCatalogService
         WorkspaceApplicationRegistry applicationRegistry,
         RecentProjectStore recentProjectStore,
         ThreadStateStore threadStateStore,
-        ISessionLogStore? sessionLogStore = null,
-        ThreadTranscriptPageReader? threadTranscriptPageReader = null)
+        ISessionLogStore? sessionLogStore = null)
+        : this(
+            applicationRegistry,
+            recentProjectStore,
+            threadStateStore,
+            sessionLogStore,
+            new ThreadTranscriptPageReader())
+    {
+    }
+
+    internal ThreadCatalogService(
+        WorkspaceApplicationRegistry applicationRegistry,
+        RecentProjectStore recentProjectStore,
+        ThreadStateStore threadStateStore,
+        ISessionLogStore? sessionLogStore,
+        ThreadTranscriptPageReader threadTranscriptPageReader)
     {
         _applicationRegistry = applicationRegistry;
         _recentProjectStore = recentProjectStore;
         _threadStateStore = threadStateStore;
         _sessionLogStore = sessionLogStore ?? new DiskSessionLogStore();
-        _threadTranscriptPageReader = threadTranscriptPageReader ?? new ThreadTranscriptPageReader();
+        _threadTranscriptPageReader = threadTranscriptPageReader;
     }
 
     public ThreadCatalogService(
@@ -90,7 +104,12 @@ public sealed class ThreadCatalogService
 
         if (!string.IsNullOrWhiteSpace(request.ProjectId))
         {
-            return await GetThreadForProjectAsync(request.ProjectId, request.ThreadId, cancellationToken);
+            return await GetThreadForProjectAsync(
+                request.ProjectId,
+                request.ThreadId,
+                request.BeforeMessageId,
+                request.PageSize,
+                cancellationToken);
         }
 
         var recentProjects = await _recentProjectStore.ListAsync(cancellationToken);
@@ -182,6 +201,8 @@ public sealed class ThreadCatalogService
     private async Task<GetThreadResponse> GetThreadForProjectAsync(
         string projectId,
         string threadId,
+        string? beforeMessageId,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
         var projectPath = await ResolveProjectPathAsync(projectId, cancellationToken);
@@ -199,8 +220,8 @@ public sealed class ThreadCatalogService
         var detail = await ReadThreadDetailPageAsync(
             projectId,
             thread,
-            request.BeforeMessageId,
-            request.PageSize,
+            beforeMessageId,
+            pageSize,
             cancellationToken);
         return new GetThreadResponse(project, detail);
     }

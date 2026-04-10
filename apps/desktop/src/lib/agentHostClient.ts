@@ -144,7 +144,7 @@ class AgentHostClient {
     return await this.request('listPendingApprovals', { threadId: threadId ?? null });
   }
 
-  async resolveApproval(approvalId: string, decision: 'approved' | 'rejected'): Promise<ResolveApprovalResponse> {
+  async resolveApproval(approvalId: string, decision: 'approved' | 'always_allow' | 'rejected'): Promise<ResolveApprovalResponse> {
     return await this.request('resolveApproval', { approvalId, decision });
   }
 

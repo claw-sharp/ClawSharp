@@ -124,6 +124,460 @@ describe('useAppStore', () => {
     mockClient.listPendingApprovals.mockResolvedValue({ approvals: [] });
   });
 
+  it('keeps tool output on the assistant message after the final response arrives', async () => {
+    let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
+
+    mockClient.subscribe.mockImplementation(async (eventHandler) => {
+      onEvent = eventHandler;
+      return () => undefined;
+    });
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+      ],
+    });
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+      ],
+    });
+    mockClient.getThread.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [],
+      },
+    });
+    mockClient.startRun.mockResolvedValue({
+      runId: 'run-1',
+      threadId: 'thread-1',
+      acceptedAt: '2026-04-08T10:02:00.000Z',
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+    await useAppStore.getState().sendPrompt('thread-1', 'Check this repo');
+
+    onEvent?.({
+      event: 'RunStarted',
+      timestamp: '2026-04-08T10:02:00.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        projectId: 'proj-1',
+        prompt: 'Check this repo',
+        timestamp: '2026-04-08T10:02:00.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunToolProgress',
+      timestamp: '2026-04-08T10:02:01.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolUseId: 'tool-1',
+        toolName: 'functions.exec_command',
+        label: 'Ran `rg --files`',
+        detail: null,
+        stage: 'tool',
+        timestamp: '2026-04-08T10:02:01.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunToolResult',
+      timestamp: '2026-04-08T10:02:02.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolUseId: 'tool-1',
+        toolName: 'functions.exec_command',
+        success: true,
+        content: 'src/App.tsx\nsrc/main.tsx',
+        timestamp: '2026-04-08T10:02:02.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunMessageCompleted',
+      timestamp: '2026-04-08T10:02:03.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        timestamp: '2026-04-08T10:02:03.000Z',
+        message: {
+          id: 'assistant-final',
+          threadId: 'thread-1',
+          role: 'assistant',
+          content: 'I found the relevant files.',
+          timestamp: '2026-04-08T10:02:03.000Z',
+        },
+      },
+    });
+
+    const assistantMessage = useAppStore.getState().messages['thread-1'].find((message) => message.role === 'assistant');
+    expect(assistantMessage?.content).toBe('I found the relevant files.');
+    expect(assistantMessage?.toolProgress).toHaveLength(1);
+    expect(assistantMessage?.toolProgress?.[0]?.toolName).toBe('functions.exec_command');
+    expect(assistantMessage?.toolProgress?.[0]?.detail).toBe('src/App.tsx\nsrc/main.tsx');
+  });
+
+  it('deduplicates an optimistic user message when the same persisted message is rehydrated', async () => {
+    let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
+    let getThreadCallCount = 0;
+
+    mockClient.subscribe.mockImplementation(async (eventHandler) => {
+      onEvent = eventHandler;
+      return () => undefined;
+    });
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+      ],
+    });
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+      ],
+    });
+    mockClient.getThread.mockImplementation(async () => {
+      getThreadCallCount += 1;
+      return {
+        project: {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+        thread: {
+          thread: {
+            id: 'thread-1',
+            projectId: 'proj-1',
+            title: 'Thread One',
+            summary: 'Summary',
+            lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+            messageCount: getThreadCallCount === 1 ? 0 : 2,
+            transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+            worktree: {
+              repoRoot: '/repo',
+              worktreePath: '/repo',
+            },
+          },
+          messages: getThreadCallCount === 1
+            ? []
+            : [
+                {
+                  id: 'persisted-user-1',
+                  threadId: 'thread-1',
+                  role: 'user',
+                  content: 'hi',
+                  timestamp: '2026-04-08T10:02:00.100Z',
+                },
+                {
+                  id: 'persisted-assistant-1',
+                  threadId: 'thread-1',
+                  role: 'assistant',
+                  content: 'Hi there',
+                  timestamp: '2026-04-08T10:02:01.000Z',
+                },
+              ],
+        },
+      };
+    });
+    mockClient.startRun.mockResolvedValue({
+      runId: 'run-1',
+      threadId: 'thread-1',
+      acceptedAt: '2026-04-08T10:02:00.000Z',
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-08T10:02:00.000Z'));
+    await useAppStore.getState().sendPrompt('thread-1', 'hi');
+    vi.useRealTimers();
+
+    onEvent?.({
+      event: 'RunCompleted',
+      timestamp: '2026-04-08T10:02:02.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        reason: 'Completed',
+        timestamp: '2026-04-08T10:02:02.000Z',
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const messages = useAppStore.getState().messages['thread-1'];
+    expect(messages.filter((message) => message.role === 'user' && message.content === 'hi')).toHaveLength(1);
+    expect(messages.map((message) => message.id)).toContain('persisted-user-1');
+    expect(messages.map((message) => message.id)).not.toContain('local-user-1712570520000');
+  });
+
+  it('preserves tool output when a persisted assistant message replaces the temporary run assistant message', async () => {
+    let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
+    let getThreadCallCount = 0;
+
+    mockClient.subscribe.mockImplementation(async (eventHandler) => {
+      onEvent = eventHandler;
+      return () => undefined;
+    });
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+      ],
+    });
+    mockClient.listThreads.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          messageCount: 0,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+      ],
+    });
+    mockClient.getThread.mockImplementation(async () => {
+      getThreadCallCount += 1;
+      return {
+        project: {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          lastOpenedAt: '2026-04-08T10:00:00.000Z',
+          lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+          threadCount: 1,
+          gitBranch: 'main',
+        },
+        thread: {
+          thread: {
+            id: 'thread-1',
+            projectId: 'proj-1',
+            title: 'Thread One',
+            summary: 'Summary',
+            lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+            messageCount: getThreadCallCount === 1 ? 0 : 2,
+            transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+            worktree: {
+              repoRoot: '/repo',
+              worktreePath: '/repo',
+            },
+          },
+          messages: getThreadCallCount === 1
+            ? []
+            : [
+                {
+                  id: 'persisted-user-1',
+                  threadId: 'thread-1',
+                  role: 'user',
+                  content: 'revert, thn add to gitignore',
+                  timestamp: '2026-04-08T10:02:00.000Z',
+                },
+                {
+                  id: 'persisted-assistant-1',
+                  threadId: 'thread-1',
+                  role: 'assistant',
+                  content: 'I can fix this, but it now requires rewriting the last local commit to remove `projects/` from history and add `.gitignore`.',
+                  timestamp: '2026-04-08T10:02:04.000Z',
+                },
+              ],
+        },
+      };
+    });
+    mockClient.startRun.mockResolvedValue({
+      runId: 'run-1',
+      threadId: 'thread-1',
+      acceptedAt: '2026-04-08T10:02:00.000Z',
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+    await useAppStore.getState().sendPrompt('thread-1', 'revert, thn add to gitignore');
+
+    onEvent?.({
+      event: 'RunStarted',
+      timestamp: '2026-04-08T10:02:00.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        projectId: 'proj-1',
+        prompt: 'revert, thn add to gitignore',
+        timestamp: '2026-04-08T10:02:00.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunToolProgress',
+      timestamp: '2026-04-08T10:02:01.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolUseId: 'tool-read',
+        toolName: 'Read',
+        label: 'Read failed',
+        detail: 'Invalid pages parameter: "".',
+        stage: 'tool',
+        timestamp: '2026-04-08T10:02:01.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunToolResult',
+      timestamp: '2026-04-08T10:02:02.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolUseId: 'tool-bash',
+        toolName: 'Bash',
+        success: true,
+        content: '{"command":"git reset --soft HEAD~1"}',
+        timestamp: '2026-04-08T10:02:02.000Z',
+      },
+    });
+    onEvent?.({
+      event: 'RunMessageCompleted',
+      timestamp: '2026-04-08T10:02:03.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        timestamp: '2026-04-08T10:02:03.000Z',
+        message: {
+          id: 'assistant-final',
+          threadId: 'thread-1',
+          role: 'assistant',
+          content: 'I can fix this, but it now requires rewriting the last local commit to remove `projects/` from history and add `.gitignore`.',
+          timestamp: '2026-04-08T10:02:03.000Z',
+        },
+      },
+    });
+    onEvent?.({
+      event: 'RunCompleted',
+      timestamp: '2026-04-08T10:02:04.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        reason: 'Completed',
+        timestamp: '2026-04-08T10:02:04.000Z',
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const assistantMessage = useAppStore.getState().messages['thread-1']
+      .find((message) => message.id === 'persisted-assistant-1');
+
+    expect(assistantMessage?.content).toContain('remove `projects/` from history');
+    expect(assistantMessage?.toolProgress).toHaveLength(2);
+    expect(assistantMessage?.toolProgress?.map((event) => event.toolName)).toEqual(['Read', 'Bash']);
+  });
+
   it('initializes from recent projects and loads the first thread detail in the background', async () => {
     mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
     mockClient.listRecentProjects.mockResolvedValue({

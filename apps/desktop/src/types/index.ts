@@ -32,10 +32,12 @@ export interface Thread {
 export interface ToolProgressEvent {
   id: string;
   type: 'reading' | 'planning' | 'editing' | 'reviewing' | 'finalizing' | 'searching' | 'testing' | 'running' | 'waiting' | 'tool';
+  toolName?: string;
   label: string;
   detail?: string;
   timestamp: string;
   completed: boolean;
+  status?: 'running' | 'completed' | 'failed';
 }
 
 export interface Message {

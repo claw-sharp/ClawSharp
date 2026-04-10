@@ -71,7 +71,7 @@ interface AppStore {
   retryThread: (threadId: string, fromMessageId?: string) => Promise<void>;
   cancelRun: () => Promise<void>;
   archiveThread: (threadId: string) => Promise<void>;
-  resolveApproval: (approvalId: string, decision: 'approved' | 'rejected') => Promise<void>;
+  resolveApproval: (approvalId: string, decision: 'approved' | 'always_allow' | 'rejected') => Promise<void>;
   openExternalEditor: (request: OpenExternalEditorRequest) => Promise<void>;
   toggleLeftSidebar: () => void;
   toggleBottomDrawer: () => void;
@@ -1564,29 +1564,33 @@ function handleRunToolProgress(
       {
         id: payload.parentToolUseId ?? payload.toolUseId,
         type: mapToolProgressType(payload.stage, payload.toolName),
+        toolName: payload.toolName,
         label: payload.label,
         detail: payload.detail ?? undefined,
         timestamp: payload.timestamp,
         completed: false,
+        status: 'running',
       },
     );
 
     const messageId = `run-${payload.runId}-assistant`;
     const currentMessages = state.messages[payload.threadId] ?? [];
     const existing = currentMessages.find((message) => message.id === messageId);
+    const assistantMessage: Message = existing
+      ? {
+          ...existing,
+          timestamp: payload.timestamp,
+          toolProgress: progress,
+        }
+      : createToolActivityMessage(payload.threadId, payload.runId, payload.timestamp, progress);
 
     return {
       threads: state.threads.map((thread) =>
         thread.id === payload.threadId ? { ...thread, status: 'running', lastUpdated: payload.timestamp } : thread),
-      messages: existing
-        ? {
-            ...state.messages,
-            [payload.threadId]: upsertMessage(currentMessages, {
-              ...existing,
-              toolProgress: progress,
-            }),
-          }
-        : state.messages,
+      messages: {
+        ...state.messages,
+        [payload.threadId]: upsertMessage(currentMessages, assistantMessage),
+      },
       logs: appendLogEntry(state.logs, payload.threadId, {
         id: `run-tool-${payload.toolUseId}-${payload.timestamp}`,
         threadId: payload.threadId,
@@ -1613,19 +1617,33 @@ function handleRunToolResult(
   payload: RunToolResultEvent,
 ) {
   set((state) => {
-    const progress = state.run.activeRunId === payload.runId
-      ? payload.success
-        ? state.run.toolProgress.map((entry) =>
-            entry.id === payload.toolUseId
-              ? {
-                  ...entry,
-                  completed: true,
-                  detail: payload.content,
-                }
-              : entry)
-        : state.run.toolProgress.filter((entry) => entry.id !== payload.toolUseId)
-      : state.run.toolProgress;
+    const currentProgress = state.run.activeRunId === payload.runId ? state.run.toolProgress : [];
+    const updatedEntry: ToolProgressEvent = {
+      id: payload.toolUseId,
+      type: mapToolProgressType('tool', payload.toolName),
+      toolName: payload.toolName,
+      label: payload.success ? `${payload.toolName} completed` : `${payload.toolName} failed`,
+      detail: payload.content,
+      timestamp: payload.timestamp,
+      completed: payload.success,
+      status: payload.success ? 'completed' : 'failed',
+    };
+    const progress = mergeToolProgress(currentProgress, updatedEntry);
+    const messageId = `run-${payload.runId}-assistant`;
+    const currentMessages = state.messages[payload.threadId] ?? [];
+    const existing = currentMessages.find((message) => message.id === messageId);
+    const assistantMessage: Message = existing
+      ? {
+          ...existing,
+          timestamp: payload.timestamp,
+          toolProgress: progress,
+        }
+      : createToolActivityMessage(payload.threadId, payload.runId, payload.timestamp, progress);
     return {
+      messages: {
+        ...state.messages,
+        [payload.threadId]: upsertMessage(currentMessages, assistantMessage),
+      },
       logs: appendLogEntry(state.logs, payload.threadId, {
         id: `run-tool-result-${payload.toolUseId}-${payload.timestamp}`,
         threadId: payload.threadId,
@@ -1650,22 +1668,33 @@ function handleRunMessageCompleted(
   payload: RunMessageCompletedEvent,
 ) {
   const nextMessage = mapMessage(payload.message);
-  set((state) => ({
-    messages: {
-      ...state.messages,
-      [payload.threadId]: upsertMessage(
-        state.messages[payload.threadId] ?? [],
-        {
-          ...nextMessage,
-          isStreaming: false,
-          toolProgress: nextMessage.role === 'assistant' && state.run.activeRunId === payload.runId
-            ? state.run.toolProgress
-            : nextMessage.toolProgress,
-        },
-        `run-${payload.runId}-assistant`,
-      ),
-    },
-  }));
+  set((state) => {
+    const currentMessages = state.messages[payload.threadId] ?? [];
+    const existing = currentMessages.find((message) =>
+      message.id === `run-${payload.runId}-assistant` || message.id === nextMessage.id);
+    const mergedToolProgress = nextMessage.role === 'assistant'
+      ? mergeToolProgressCollections(
+          existing?.toolProgress ?? [],
+          state.run.activeRunId === payload.runId ? state.run.toolProgress : [],
+          nextMessage.toolProgress ?? [],
+        )
+      : nextMessage.toolProgress;
+
+    return {
+      messages: {
+        ...state.messages,
+        [payload.threadId]: upsertMessage(
+          currentMessages,
+          {
+            ...nextMessage,
+            isStreaming: false,
+            toolProgress: mergedToolProgress,
+          },
+          `run-${payload.runId}-assistant`,
+        ),
+      },
+    };
+  });
 }
 
 async function handleRunCompleted(
@@ -1791,9 +1820,32 @@ function upsertMessage(messages: Message[], nextMessage: Message, replaceId?: st
   return [...remaining, nextMessage].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
 }
 
+function createToolActivityMessage(
+  threadId: string,
+  runId: string,
+  timestamp: string,
+  toolProgress: ToolProgressEvent[],
+): Message {
+  return {
+    id: `run-${runId}-assistant`,
+    threadId,
+    role: 'assistant',
+    content: '',
+    timestamp,
+    isStreaming: true,
+    toolProgress,
+  };
+}
+
 function mergeToolProgress(entries: ToolProgressEvent[], nextEntry: ToolProgressEvent): ToolProgressEvent[] {
   const remaining = entries.filter((entry) => entry.id !== nextEntry.id);
   return [...remaining, nextEntry].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function mergeToolProgressCollections(...collections: ToolProgressEvent[][]): ToolProgressEvent[] {
+  return collections
+    .flat()
+    .reduce<ToolProgressEvent[]>((merged, entry) => mergeToolProgress(merged, entry), []);
 }
 
 function appendLogEntry(
@@ -1809,13 +1861,83 @@ function appendLogEntry(
 }
 
 function mergeHydratedMessages(existing: Message[], incoming: Message[]): Message[] {
+  const mergedIncoming = incoming.map((message) => ({ ...message }));
   const incomingIds = new Set(incoming.map((message) => message.id));
-  const optimisticMessages = existing.filter((message) =>
-    !incomingIds.has(message.id) &&
-    (message.id.startsWith('local-') || message.isStreaming));
+  const incomingMatchesAvailable = incoming.map(() => true);
+  const existingAssistantToolMessages = existing
+    .filter((message) => message.role === 'assistant' && (message.toolProgress?.length ?? 0) > 0)
+    .map((message) => ({ ...message, matched: false }));
 
-  return [...incoming, ...optimisticMessages]
+  for (const incomingMessage of mergedIncoming) {
+    if (incomingMessage.role !== 'assistant') {
+      continue;
+    }
+
+    const exactExisting = existing.find((message) => message.id === incomingMessage.id);
+    const exactToolProgress = exactExisting?.toolProgress ?? [];
+    if (exactToolProgress.length > 0 || (incomingMessage.toolProgress?.length ?? 0) > 0) {
+      incomingMessage.toolProgress = mergeToolProgressCollections(
+        exactToolProgress,
+        incomingMessage.toolProgress ?? [],
+      );
+      if (exactExisting) {
+        const exactMatch = existingAssistantToolMessages.find((message) => message.id === exactExisting.id);
+        if (exactMatch) {
+          exactMatch.matched = true;
+        }
+      }
+      continue;
+    }
+
+    const heuristicMatch = existingAssistantToolMessages.find((candidate) =>
+      !candidate.matched &&
+      areTimestampsNear(candidate.timestamp, incomingMessage.timestamp) &&
+      (candidate.content === incomingMessage.content ||
+        candidate.id.startsWith('run-') ||
+        candidate.content.length === 0));
+    if (!heuristicMatch) {
+      continue;
+    }
+
+    heuristicMatch.matched = true;
+    incomingMessage.toolProgress = mergeToolProgressCollections(
+      heuristicMatch.toolProgress ?? [],
+      incomingMessage.toolProgress ?? [],
+    );
+  }
+
+  const optimisticMessages = existing.filter((message) => {
+    if (incomingIds.has(message.id)) {
+      return false;
+    }
+
+    if (message.id.startsWith('local-user-')) {
+      const matchIndex = incoming.findIndex((candidate, index) =>
+        incomingMatchesAvailable[index] &&
+        candidate.role === 'user' &&
+        candidate.content === message.content &&
+        areTimestampsNear(candidate.timestamp, message.timestamp));
+      if (matchIndex >= 0) {
+        incomingMatchesAvailable[matchIndex] = false;
+        return false;
+      }
+    }
+
+    return message.id.startsWith('local-') || message.isStreaming;
+  });
+
+  return [...mergedIncoming, ...optimisticMessages]
     .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+}
+
+function areTimestampsNear(left: string, right: string, maxDeltaMs = 2 * 60 * 1000): boolean {
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+    return false;
+  }
+
+  return Math.abs(leftTime - rightTime) <= maxDeltaMs;
 }
 
 function mergeOlderMessages(existing: Message[], older: Message[]): Message[] {

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   Send, Square, Bot, User, FileCode,
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
+  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle,
 } from 'lucide-react';
 import type { Message, ToolProgressEvent } from '@/types';
 
@@ -199,6 +200,20 @@ export const ThreadView = () => {
             </div>
           </div>
         )}
+        {isBrowserPreview && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Browser preview is using mock AgentHost data. Run <code>npm run dev</code> for the real desktop shell, or <code>npm run dev:codex</code> to force the Codex dev path.
+          </div>
+        )}
+        {threadMessages.map(msg => (
+          <MessageBubble key={msg.id} message={msg} />
+        ))}
+        {run.isRunning && run.isStreaming && (
+          <div className="flex items-center gap-2 text-xs text-status-running py-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>{run.progressLabel}</span>
+          </div>
+        )}
         {pendingApprovals.map((approval) => (
           <div
             key={approval.id}
@@ -221,6 +236,12 @@ export const ThreadView = () => {
                     Approve
                   </button>
                   <button
+                    onClick={() => void resolveApproval(approval.approvalId!, 'always_allow')}
+                    className="rounded bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
+                  >
+                    Always Allow This Session
+                  </button>
+                  <button
                     onClick={() => void resolveApproval(approval.approvalId!, 'rejected')}
                     className="rounded bg-status-failed/15 px-2.5 py-1.5 text-xs font-medium text-status-failed hover:bg-status-failed/20"
                   >
@@ -238,20 +259,6 @@ export const ThreadView = () => {
             </div>
           </div>
         ))}
-        {isBrowserPreview && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            Browser preview is using mock AgentHost data. Run <code>npm run dev</code> for the real desktop shell, or <code>npm run dev:codex</code> to force the Codex dev path.
-          </div>
-        )}
-        {threadMessages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-        {run.isRunning && run.isStreaming && (
-          <div className="flex items-center gap-2 text-xs text-status-running py-2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>{run.progressLabel}</span>
-          </div>
-        )}
       </div>
 
       {/* Composer */}
@@ -268,6 +275,7 @@ export const ThreadView = () => {
 
 const MessageBubble = ({ message }: { message: Message }) => {
   const isUser = message.role === 'user';
+  const hasText = message.content.trim().length > 0;
 
   return (
     <div className={cn('flex gap-3', isUser ? '' : '')}>
@@ -289,10 +297,12 @@ const MessageBubble = ({ message }: { message: Message }) => {
             </span>
           )}
         </div>
-        <div className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
-          {message.content}
-          {message.isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-stream-cursor" />}
-        </div>
+        {hasText && (
+          <div className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
+            {message.content}
+            {message.isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-stream-cursor" />}
+          </div>
+        )}
         {message.toolProgress && message.toolProgress.length > 0 && (
           <ToolProgressList events={message.toolProgress} />
         )}
@@ -303,37 +313,112 @@ const MessageBubble = ({ message }: { message: Message }) => {
 
 const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const summary = summarizeToolEvents(events);
 
   return (
-    <div className="mt-2 rounded-md border border-border bg-muted/30 overflow-hidden">
+    <div className="mt-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        <FileCode className="h-3 w-3" />
-        <span>{events.length} steps</span>
+        <FileCode className="h-3.5 w-3.5" />
+        <span className="font-medium text-foreground">{summary.title}</span>
+        <span className="text-[10px] text-muted-foreground">{summary.subtitle}</span>
         <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', collapsed && '-rotate-90')} />
       </button>
       {!collapsed && (
-        <div className="border-t border-border px-3 py-2 space-y-1">
+        <div className="space-y-2 border-t border-border/70 px-3 py-3">
           {events.map(e => (
-            <div key={e.id} className="flex items-center gap-2 text-xs">
-              {e.completed ? (
-                <CheckCircle2 className="h-3 w-3 text-status-completed shrink-0" />
-              ) : (
-                <Circle className="h-3 w-3 text-muted-foreground shrink-0" />
-              )}
-              <span className={cn('flex-1', e.completed ? 'text-muted-foreground' : 'text-foreground')}>
-                {e.label}
-              </span>
-              {e.detail && <span className="text-[10px] text-muted-foreground">{e.detail}</span>}
-            </div>
+            <ToolProgressCard key={e.id} event={e} />
           ))}
         </div>
       )}
     </div>
   );
 };
+
+const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
+  const Icon = iconForToolEvent(event);
+  const stateLabel = event.status ?? (event.completed ? 'completed' : 'running');
+  const toolName = event.toolName ?? event.label;
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2">
+      <div className="flex items-start gap-2">
+        <div className={cn(
+          'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+          stateLabel === 'failed'
+            ? 'bg-status-failed/15 text-status-failed'
+            : stateLabel === 'completed'
+              ? 'bg-status-completed/15 text-status-completed'
+              : 'bg-primary/10 text-primary',
+        )}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+              {toolName}
+            </span>
+            <span className={cn(
+              'text-[10px] uppercase tracking-wide',
+              stateLabel === 'failed'
+                ? 'text-status-failed'
+                : stateLabel === 'completed'
+                  ? 'text-status-completed'
+                  : 'text-muted-foreground',
+            )}>
+              {stateLabel}
+            </span>
+          </div>
+          <p className="text-xs text-foreground">{event.label}</p>
+          {event.detail && (
+            <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
+              {event.detail}
+            </pre>
+          )}
+        </div>
+        {stateLabel === 'failed' ? (
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-failed" />
+        ) : event.completed ? (
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-completed" />
+        ) : (
+          <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+      </div>
+    </div>
+  );
+};
+
+function summarizeToolEvents(events: ToolProgressEvent[]) {
+  const running = events.filter((event) => (event.status ?? (event.completed ? 'completed' : 'running')) === 'running').length;
+  const failed = events.filter((event) => (event.status ?? (event.completed ? 'completed' : 'running')) === 'failed').length;
+
+  return {
+    title: events.length === 1 ? 'Tool activity' : `${events.length} tool calls`,
+    subtitle: failed > 0
+      ? `${failed} failed`
+      : running > 0
+        ? `${running} running`
+        : 'all completed',
+  };
+}
+
+function iconForToolEvent(event: ToolProgressEvent) {
+  const toolName = (event.toolName ?? '').toLowerCase();
+  switch (event.type) {
+    case 'searching':
+      return Search;
+    case 'editing':
+      return PencilLine;
+    case 'testing':
+      return FlaskConical;
+    case 'waiting':
+      return Clock3;
+    default:
+      return toolName.includes('search') ? Search : TerminalSquare;
+  }
+}
 
 const PromptComposer = ({
   threadId,
