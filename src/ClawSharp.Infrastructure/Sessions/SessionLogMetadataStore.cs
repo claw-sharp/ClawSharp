@@ -22,11 +22,11 @@ public sealed class SessionLogMetadataStore
             return [];
         }
 
+        var logsBySessionId = new Dictionary<string, SessionLog>(StringComparer.Ordinal);
         var transcriptPaths = Directory.GetFiles(storageDirectory, "*.jsonl", SearchOption.TopDirectoryOnly)
             .Where(IsSessionTranscriptPath)
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToArray();
-        var logs = new List<SessionLog>(transcriptPaths.Length);
 
         foreach (var transcriptPath in transcriptPaths)
         {
@@ -47,10 +47,36 @@ public sealed class SessionLogMetadataStore
                 await UpsertAsync(log, cancellationToken);
             }
 
-            logs.Add(log);
+            logsBySessionId[sessionId] = log;
         }
 
-        return logs
+        var metadataPaths = Directory.GetFiles(storageDirectory, "*.session.json", SearchOption.TopDirectoryOnly)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ToArray();
+
+        foreach (var metadataPath in metadataPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var sessionId = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(metadataPath));
+            if (logsBySessionId.ContainsKey(sessionId))
+            {
+                continue;
+            }
+
+            var transcriptPath = SessionStoragePaths.GetTranscriptPath(projectDirectory, sessionId);
+            var log = await LoadMetadataOnlyAsync(
+                metadataPath,
+                projectDirectory,
+                transcriptPath,
+                cancellationToken);
+            if (log is not null)
+            {
+                logsBySessionId[sessionId] = log;
+            }
+        }
+
+        return logsBySessionId.Values
             .OrderByDescending(log => log.Modified)
             .ToArray();
     }
@@ -98,6 +124,45 @@ public sealed class SessionLogMetadataStore
         var json = JsonSerializer.Serialize(payload, SerializerOptions);
         await File.WriteAllTextAsync(tempPath, json, cancellationToken);
         File.Move(tempPath, metadataPath, overwrite: true);
+    }
+
+    private static async Task<SessionLog?> LoadMetadataOnlyAsync(
+        string metadataPath,
+        string projectDirectory,
+        string transcriptPath,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(metadataPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(metadataPath, cancellationToken);
+            var metadata = JsonSerializer.Deserialize<SessionLogMetadataDto>(json, SerializerOptions);
+            if (metadata is null ||
+                string.IsNullOrWhiteSpace(metadata.SessionId))
+            {
+                return null;
+            }
+
+            return new SessionLog(
+                metadata.SessionId,
+                string.IsNullOrWhiteSpace(metadata.TranscriptPath)
+                    ? transcriptPath
+                    : Path.GetFullPath(metadata.TranscriptPath),
+                string.IsNullOrWhiteSpace(metadata.ProjectDirectory)
+                    ? projectDirectory
+                    : metadata.ProjectDirectory,
+                metadata.Modified,
+                metadata.CustomTitle,
+                metadata.FirstUserMessage);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static async Task<SessionLog?> LoadFromMetadataAsync(

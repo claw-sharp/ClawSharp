@@ -323,12 +323,12 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to 
 
         if (enabledTools.Contains("Glob"))
         {
-            providedToolSubitems.Add("To search for files use Glob instead of find or ls.");
+            providedToolSubitems.Add("To search for files use Glob instead of find or ls. Glob requires a non-empty pattern such as \"**/*\", \"*.cs\", or \"src/**/*.ts\".");
         }
 
         if (enabledTools.Contains("Grep"))
         {
-            providedToolSubitems.Add("To search the content of files, use Grep instead of grep or rg.");
+            providedToolSubitems.Add("To search the content of files, use Grep instead of grep or rg. Grep requires a non-empty regex pattern such as \"foo\", \"TODO\", or \".*\"; use Glob when you need to list files.");
         }
 
         if (enabledTools.Contains("Bash"))

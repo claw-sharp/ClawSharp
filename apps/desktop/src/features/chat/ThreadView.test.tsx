@@ -262,6 +262,13 @@ describe('ThreadView', () => {
     render(<ThreadView />);
 
     expect(screen.getByText('Tool activity')).toBeInTheDocument();
+    expect(screen.queryByText('functions.exec_command')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ran `rg --files`')).not.toBeInTheDocument();
+    expect(screen.queryByText(/src\/App\.tsx/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/src\/main\.tsx/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /tool activity/i }));
+
     expect(screen.getByText('functions.exec_command')).toBeInTheDocument();
     expect(screen.getByText('Ran `rg --files`')).toBeInTheDocument();
     expect(screen.getByText(/src\/App\.tsx/)).toBeInTheDocument();

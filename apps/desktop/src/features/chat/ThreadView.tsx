@@ -315,7 +315,7 @@ const MessageBubble = ({ message }: { message: Message }) => {
 };
 
 const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const summary = summarizeToolEvents(events);
 
   return (

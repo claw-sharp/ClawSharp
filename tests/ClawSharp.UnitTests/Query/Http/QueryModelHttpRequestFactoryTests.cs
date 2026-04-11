@@ -205,6 +205,43 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Preserves_MinLength_For_Anthropic_String_Tool_Fields()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["pattern"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["minLength"] = 1
+                }
+            },
+            ["required"] = new JsonArray("pattern")
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-anthropic-min-length",
+                "claude-haiku-4-5-20251001",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("Glob", "Find files.", toolSchema, Strict: true, Type: "custom")],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig("https://api.anthropic.test", ApiKey: "anthropic-key"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        Assert.Equal(1, body["tools"]![0]!["input_schema"]!["properties"]!["pattern"]!["minLength"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task CreateStreamingRequest_Limits_Anthropic_Strict_Tools_To_Twenty()
     {
         var tools = Enumerable.Range(1, 25)
