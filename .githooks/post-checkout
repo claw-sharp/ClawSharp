@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+// Auto-setup hooks on first checkout
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+const gitConfigPath = path.join(__dirname, '..', '.git', 'config');
+
+try {
+  // Check if hooks are already configured
+  const output = execSync('git config core.hooksPath', { encoding: 'utf-8' }).trim();
+  
+  if (output !== '.githooks') {
+    console.log('Setting up git hooks...');
+    execSync('git config core.hooksPath .githooks');
+    console.log('✓ Git hooks configured successfully');
+  }
+} catch (error) {
+  // If git command fails, try to configure anyway
+  try {
+    execSync('git config core.hooksPath .githooks');
+    console.log('✓ Git hooks configured successfully');
+  } catch (err) {
+    console.warn('⚠ Could not auto-configure git hooks. Please run: git config core.hooksPath .githooks');
+  }
+}
