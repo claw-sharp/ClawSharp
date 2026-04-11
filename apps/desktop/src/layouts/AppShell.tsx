@@ -10,6 +10,7 @@ import { InboxPanel } from '@/features/inbox/InboxPanel';
 import { AutomationsPanel } from '@/features/automations/AutomationsPanel';
 import { SettingsDialog } from '@/features/settings/SettingsDialog';
 import { CommandPalette } from '@/components/CommandPalette';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 export const AppShell = () => {
   const { ui, initialize, toggleLeftSidebar, toggleBottomDrawer, toggleCommandPalette } = useAppStore();
@@ -43,22 +44,63 @@ export const AppShell = () => {
     <div className="flex flex-col h-screen overflow-hidden surface-1">
       <TopBar />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {renderCenter()}
-            </div>
-            {ui.activeView === 'threads' && (
-              <div className="w-80 shrink-0 hidden lg:flex">
-                <ReviewPanel />
+        {ui.leftSidebarCollapsed ? (
+          <>
+            <Sidebar />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex flex-1 overflow-hidden">
+                {ui.activeView === 'threads' ? (
+                  <ResizablePanelGroup direction="horizontal">
+                    <ResizablePanel defaultSize={72} minSize={45}>
+                      <div className="flex h-full flex-col overflow-hidden">
+                        {renderCenter()}
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle className="hidden lg:flex" />
+                    <ResizablePanel defaultSize={28} minSize={20} maxSize={45} className="hidden lg:flex">
+                      <ReviewPanel />
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : (
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {renderCenter()}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <div className="shrink-0" style={{ height: ui.bottomDrawerOpen ? '200px' : '36px' }}>
-            <BottomDrawer />
-          </div>
-        </div>
+              <div className="shrink-0" style={{ height: ui.bottomDrawerOpen ? '200px' : '36px' }}>
+                <BottomDrawer />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <Sidebar />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex flex-1 overflow-hidden">
+                {ui.activeView === 'threads' ? (
+                  <ResizablePanelGroup direction="horizontal">
+                    <ResizablePanel defaultSize={72} minSize={45}>
+                      <div className="flex h-full flex-col overflow-hidden">
+                        {renderCenter()}
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle className="hidden shrink-0 lg:flex" />
+                    <ResizablePanel defaultSize={28} minSize={20} maxSize={45} className="hidden lg:flex">
+                      <ReviewPanel />
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : (
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {renderCenter()}
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0" style={{ height: ui.bottomDrawerOpen ? '200px' : '36px' }}>
+                <BottomDrawer />
+              </div>
+            </div>
+          </>
+        )}
       </div>
       <SettingsDialog />
       <CommandPalette />
