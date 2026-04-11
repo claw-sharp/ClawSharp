@@ -103,13 +103,13 @@ describe('SettingsDialog', () => {
     expect(updateSettings).toHaveBeenCalledWith({
       defaultProvider: 'codex',
       defaultModel: 'gpt-5.4',
+      theme: 'dark',
       showDiagnostics: true,
       providerApiKey: 'codex-token',
       providerAccountId: 'acct-123',
     });
 
     expect(screen.queryByText('Density')).not.toBeInTheDocument();
-    expect(screen.queryByText('Theme')).not.toBeInTheDocument();
     expect(screen.queryByText('Streaming Speed')).not.toBeInTheDocument();
     expect(screen.queryByText('Compact Mode')).not.toBeInTheDocument();
   });
@@ -170,6 +170,7 @@ describe('SettingsDialog', () => {
     expect(updateSettings).toHaveBeenLastCalledWith({
       defaultProvider: 'codex',
       defaultModel: 'gpt-5.4',
+      theme: 'dark',
       showDiagnostics: true,
       useExternalProviderCredential: false,
     });
@@ -186,6 +187,7 @@ describe('SettingsDialog', () => {
     expect(updateSettings).toHaveBeenLastCalledWith({
       defaultProvider: 'codex',
       defaultModel: 'gpt-5.4',
+      theme: 'dark',
       showDiagnostics: true,
       providerApiKey: 'codex-token',
       providerAccountId: 'acct-123',
