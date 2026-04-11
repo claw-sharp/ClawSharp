@@ -26,4 +26,26 @@ public sealed class AttributionServiceTests
             "🤖 Generated with [ClawSharp](https://github.com/claw-sharp)",
             result.Pr);
     }
+
+    [Fact]
+    public void GetAttributionTexts_Can_Disable_Default_CoAuthor_Trailer_Via_Environment()
+    {
+        var original = Environment.GetEnvironmentVariable("CLAWSHARP_DISABLE_CO_AUTHORED_BY");
+        Environment.SetEnvironmentVariable("CLAWSHARP_DISABLE_CO_AUTHORED_BY", "true");
+
+        try
+        {
+            var service = new AttributionService();
+            var result = service.GetAttributionTexts(new ClawSharpSettings());
+
+            Assert.Equal(string.Empty, result.Commit);
+            Assert.Equal(
+                "🤖 Generated with [ClawSharp](https://github.com/claw-sharp)",
+                result.Pr);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAWSHARP_DISABLE_CO_AUTHORED_BY", original);
+        }
+    }
 }

@@ -8,6 +8,7 @@ namespace ClawSharp.Tools;
 public sealed class AttributionService
 {
     private const string ProductUrl = "https://github.com/claw-sharp";
+    private const string DisableCoAuthoredByEnvVar = "CLAWSHARP_DISABLE_CO_AUTHORED_BY";
     private const string ClawSharpCommitAttribution = "Co-authored-by: ClawSharp <clawsharp@oneway8x.com>";
     private static readonly string[] InternalModelRepos =
     [
@@ -57,19 +58,12 @@ public sealed class AttributionService
         "github.com/anthropics/mobile-apps"
     ];
 
-    private string? _repoClassCache; // "internal", "external", "none"
-
     public AttributionTexts GetAttributionTexts(ClawSharpSettings settings, string? remoteUrl = null)
     {
-        // Internal check
-        var isInternal = false;
-        if (!string.IsNullOrWhiteSpace(remoteUrl))
-        {
-            isInternal = InternalModelRepos.Any(repo => remoteUrl.Contains(repo));
-        }
-
         var defaultAttribution = $"🤖 Generated with [ClawSharp]({ProductUrl})";
-        var defaultCommit = ClawSharpCommitAttribution;
+        var defaultCommit = IsTruthy(Environment.GetEnvironmentVariable(DisableCoAuthoredByEnvVar))
+            ? string.Empty
+            : ClawSharpCommitAttribution;
 
         if (settings.Attribution is not null)
         {
@@ -312,6 +306,14 @@ public sealed class AttributionService
         if (modelName.Contains("haiku-4-5")) return "claude-haiku-4-5";
         if (modelName.Contains("haiku-3-5")) return "claude-haiku-3-5";
         return "claude";
+    }
+
+    private static bool IsTruthy(string? value)
+    {
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
     }
 }
 
