@@ -4,7 +4,13 @@ on:
   push:
     tags:
       - "desktop-v*"
+      - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to publish desktop assets to, such as v0.0.6 or desktop-v0.0.6
+        required: false
+        type: string
 
 env:
   DESKTOP_APP_PATH: apps/desktop
@@ -40,9 +46,12 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          if ([string]::IsNullOrWhiteSpace($tag)) {
-            $tag = ""
+          $eventName = "${{ github.event_name }}"
+          $tag = ""
+          if ($eventName -eq "push") {
+            $tag = "${{ github.ref_name }}"
+          } elseif (-not [string]::IsNullOrWhiteSpace("${{ inputs.release_tag }}")) {
+            $tag = "${{ inputs.release_tag }}"
           }
 
           $version = (& ./eng/get-desktop-version.ps1 -Tag $tag).Trim()
