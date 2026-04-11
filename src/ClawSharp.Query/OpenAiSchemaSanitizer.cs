@@ -13,6 +13,7 @@ internal static class OpenAiSchemaSanitizer
         "examples",
         "format",
         "if",
+        "maxItems",
         "maxLength",
         "maximum",
         "minLength",

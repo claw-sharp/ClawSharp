@@ -7,7 +7,8 @@ namespace ClawSharp.Tools;
 
 public sealed class AttributionService
 {
-    private const string ProductUrl = "https://claude.ai"; // Should be from constants but following parity goal
+    private const string ProductUrl = "https://github.com/claw-sharp";
+    private const string ClawSharpCommitAttribution = "Co-authored-by: ClawSharp <clawsharp@oneway8x.com>";
     private static readonly string[] InternalModelRepos =
     [
         "github.com:anthropics/claude-cli-internal",
@@ -67,13 +68,8 @@ public sealed class AttributionService
             isInternal = InternalModelRepos.Any(repo => remoteUrl.Contains(repo));
         }
 
-        var model = MainLoopModelResolver.Resolve(settings.Runtime.Model);
-        // In C# we use the resolved model directly.
-        // Parity: getPublicModelName(model) logic
-        var modelName = isInternal ? model : SanitizeModelName(model);
-
-        var defaultAttribution = $"🤖 Generated with [Claude Code]({ProductUrl})";
-        var defaultCommit = $"Co-Authored-By: {modelName} <noreply@anthropic.com>";
+        var defaultAttribution = $"🤖 Generated with [ClawSharp]({ProductUrl})";
+        var defaultCommit = ClawSharpCommitAttribution;
 
         if (settings.Attribution is not null)
         {
@@ -241,7 +237,7 @@ public sealed class AttributionService
         // Parity: getPublicModelName(model) logic
         var shortModelName = isInternal ? model : SanitizeModelName(model);
 
-        var defaultAttribution = $"🤖 Generated with [Claude Code]({ProductUrl})";
+        var defaultAttribution = $"🤖 Generated with [ClawSharp]({ProductUrl})";
 
         // If user has custom PR attribution, use that
         if (settings.Attribution?.Pr is not null)
@@ -270,7 +266,7 @@ public sealed class AttributionService
             ? $", {memoryAccessCount} {(memoryAccessCount == 1 ? "memory" : "memories")} recalled"
             : "";
 
-        return $"🤖 Generated with [Claude Code]({ProductUrl}) ({claudePercent}% {promptCount}-shotted by {shortModelName}{memSuffix})";
+        return $"🤖 Generated with [ClawSharp]({ProductUrl}) ({claudePercent}% {promptCount}-shotted by {shortModelName}{memSuffix})";
     }
 
     private static int CalculatePercent(int part, int total)

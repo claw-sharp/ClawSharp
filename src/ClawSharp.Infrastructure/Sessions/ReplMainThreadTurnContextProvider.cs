@@ -277,7 +277,8 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
             "Don't add features, refactor code, or make \"improvements\" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability. Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.",
             "Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.",
             "Don't create helpers, utilities, or abstractions for one-time operations. Don't design for hypothetical future requirements. The right amount of complexity is what the task actually requires - no speculative abstractions, but no half-finished implementations either. Three similar lines of code is better than a premature abstraction.",
-            "Before reporting a task complete, verify it actually works: run the test, execute the script, check the output. If you can't verify (no test exists, can't run the code), say so explicitly rather than claiming success."
+            "Before reporting a task complete, verify it actually works: run the test, execute the script, check the output. If you can't verify (no test exists, can't run the code), say so explicitly rather than claiming success.",
+            "When you create a git commit from ClawSharp, include this exact trailer at the end of the commit message so GitHub attributes the contribution correctly: Co-authored-by: ClawSharp <clawsharp@oneway8x.com>"
         };
 
         return string.Join("\n", new[] { "# Doing tasks" }.Concat(PrependBullets(items)));

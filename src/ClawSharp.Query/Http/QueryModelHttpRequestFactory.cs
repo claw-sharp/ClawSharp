@@ -10,6 +10,7 @@ namespace ClawSharp.Query;
 public static class QueryModelHttpRequestFactory
 {
     public const string AnthropicVersion = "2023-06-01";
+    public const int AnthropicStrictToolLimit = 20;
 
     public static HttpRequestMessage CreateStreamingRequest(
         QueryModelHttpClientConfig config,
@@ -180,7 +181,7 @@ public static class QueryModelHttpRequestFactory
             ["stream"] = true,
             ["messages"] = new JsonArray(request.Request.Messages.Select(ToAnthropicJson).ToArray()),
             ["system"] = new JsonArray(request.Request.System.Select(ToAnthropicJson).ToArray()),
-            ["tools"] = new JsonArray(request.Request.Tools.Select(ToAnthropicJson).ToArray()),
+            ["tools"] = new JsonArray(BuildAnthropicTools(request.Request.Tools).ToArray()),
             ["output_config"] = ToAnthropicJson(request.Request.OutputConfig)
         };
 
@@ -195,6 +196,21 @@ public static class QueryModelHttpRequestFactory
         }
 
         return body;
+    }
+
+    private static IEnumerable<JsonObject> BuildAnthropicTools(IReadOnlyList<QueryRequestTool> tools)
+    {
+        var strictToolsEmitted = 0;
+        foreach (var tool in tools)
+        {
+            var emitStrict = tool.Strict && strictToolsEmitted < AnthropicStrictToolLimit;
+            if (emitStrict)
+            {
+                strictToolsEmitted++;
+            }
+
+            yield return ToAnthropicJson(tool, emitStrict);
+        }
     }
 
     private static JsonObject CreateOpenAiRequestBody(
@@ -587,7 +603,7 @@ public static class QueryModelHttpRequestFactory
         return json;
     }
 
-    private static JsonObject ToAnthropicJson(QueryRequestTool tool)
+    private static JsonObject ToAnthropicJson(QueryRequestTool tool, bool emitStrict = true)
     {
         var json = new JsonObject();
         if (!string.IsNullOrEmpty(tool.Type))
@@ -600,10 +616,10 @@ public static class QueryModelHttpRequestFactory
 
         if (tool.InputSchema is not null)
         {
-            json["input_schema"] = tool.InputSchema.DeepClone();
+            json["input_schema"] = StripAnthropicUnsupportedSchemaKeywords(tool.InputSchema);
         }
 
-        if (tool.Strict)
+        if (tool.Strict && emitStrict)
         {
             json["strict"] = true;
         }
@@ -682,5 +698,43 @@ public static class QueryModelHttpRequestFactory
         }
 
         return json;
+    }
+
+    private static JsonNode? StripAnthropicUnsupportedSchemaKeywords(JsonNode? node)
+    {
+        return node switch
+        {
+            JsonObject obj => StripAnthropicUnsupportedSchemaKeywords(obj),
+            JsonArray array => new JsonArray(array.Select(StripAnthropicUnsupportedSchemaKeywords).ToArray()),
+            null => null,
+            _ => node.DeepClone()
+        };
+    }
+
+    private static JsonObject StripAnthropicUnsupportedSchemaKeywords(JsonObject obj)
+    {
+        var result = new JsonObject();
+        foreach (var pair in obj)
+        {
+            if (string.Equals(pair.Key, "maxItems", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "minimum", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "maximum", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(pair.Key, "minItems", StringComparison.Ordinal) &&
+                pair.Value is JsonValue minItemsValue &&
+                minItemsValue.TryGetValue<int>(out var minItems) &&
+                minItems > 1)
+            {
+                result[pair.Key] = 1;
+                continue;
+            }
+
+            result[pair.Key] = StripAnthropicUnsupportedSchemaKeywords(pair.Value);
+        }
+
+        return result;
     }
 }
