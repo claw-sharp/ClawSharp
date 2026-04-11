@@ -270,6 +270,221 @@ describe('useAppStore', () => {
     expect(assistantMessage?.toolProgress?.[0]?.detail).toBe('src/App.tsx\nsrc/main.tsx');
   });
 
+  it('skips ancillary refresh requests after a text-only run completes', async () => {
+    let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
+
+    mockClient.subscribe.mockImplementation(async (eventHandler) => {
+      onEvent = eventHandler;
+      return () => undefined;
+    });
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({ projects: [] });
+    mockClient.getThread.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:02:01.000Z',
+          messageCount: 2,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [
+          {
+            id: 'msg-user-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'hi',
+            timestamp: '2026-04-08T10:02:00.000Z',
+          },
+          {
+            id: 'msg-assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'Hi there',
+            timestamp: '2026-04-08T10:02:01.000Z',
+          },
+        ],
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    mockClient.getThread.mockClear();
+    mockClient.listChangedFiles.mockClear();
+    mockClient.listDiagnostics.mockClear();
+    mockClient.listPendingApprovals.mockClear();
+
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'running',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+      run: {
+        activeRunId: 'run-1',
+        activeThreadId: 'thread-1',
+        isRunning: true,
+        isStreaming: true,
+        pendingApproval: false,
+        progressLabel: '',
+        changedFilesCount: 0,
+        toolProgress: [],
+        errorMessage: null,
+      },
+    });
+
+    onEvent?.({
+      event: 'RunCompleted',
+      timestamp: '2026-04-08T10:02:01.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        reason: 'Completed',
+        timestamp: '2026-04-08T10:02:01.000Z',
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockClient.getThread).toHaveBeenCalledTimes(1);
+    expect(mockClient.listChangedFiles).not.toHaveBeenCalled();
+    expect(mockClient.listDiagnostics).not.toHaveBeenCalled();
+    expect(mockClient.listPendingApprovals).not.toHaveBeenCalled();
+  });
+
+  it('keeps ancillary refresh requests for runs that used tools', async () => {
+    let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
+
+    mockClient.subscribe.mockImplementation(async (eventHandler) => {
+      onEvent = eventHandler;
+      return () => undefined;
+    });
+    mockClient.connect.mockResolvedValue({ hostName: 'ClawSharp.AgentHost' });
+    mockClient.listRecentProjects.mockResolvedValue({ projects: [] });
+    mockClient.getThread.mockResolvedValue({
+      project: {
+        id: 'proj-1',
+        name: 'ClawSharp',
+        path: '/repo',
+        lastOpenedAt: '2026-04-08T10:00:00.000Z',
+        lastUpdatedAt: '2026-04-08T10:01:00.000Z',
+        threadCount: 1,
+        gitBranch: 'main',
+      },
+      thread: {
+        thread: {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdatedAt: '2026-04-08T10:02:01.000Z',
+          messageCount: 2,
+          transcriptPath: '/repo/.clawsharp/thread-1.jsonl',
+          worktree: {
+            repoRoot: '/repo',
+            worktreePath: '/repo',
+          },
+        },
+        messages: [],
+      },
+    });
+
+    const { useAppStore } = await import('@/store');
+    await useAppStore.getState().initialize();
+
+    mockClient.getThread.mockClear();
+    mockClient.listChangedFiles.mockClear();
+    mockClient.listDiagnostics.mockClear();
+    mockClient.listPendingApprovals.mockClear();
+
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Thread One',
+          summary: 'Summary',
+          lastUpdated: '2026-04-08T10:01:00.000Z',
+          status: 'running',
+          changedFilesCount: 0,
+          target: 'local',
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          pinned: false,
+        },
+      ],
+      run: {
+        activeRunId: 'run-1',
+        activeThreadId: 'thread-1',
+        isRunning: true,
+        isStreaming: true,
+        pendingApproval: false,
+        progressLabel: 'Read completed',
+        changedFilesCount: 0,
+        toolProgress: [
+          {
+            id: 'tool-1',
+            type: 'tool',
+            toolName: 'Read',
+            label: 'Read completed',
+            timestamp: '2026-04-08T10:02:00.500Z',
+            completed: true,
+            status: 'completed',
+          },
+        ],
+        errorMessage: null,
+      },
+    });
+
+    onEvent?.({
+      event: 'RunCompleted',
+      timestamp: '2026-04-08T10:02:01.000Z',
+      payload: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        reason: 'Completed',
+        timestamp: '2026-04-08T10:02:01.000Z',
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockClient.getThread).toHaveBeenCalledTimes(1);
+    expect(mockClient.listChangedFiles).toHaveBeenCalledTimes(1);
+    expect(mockClient.listDiagnostics).toHaveBeenCalledTimes(1);
+    expect(mockClient.listPendingApprovals).toHaveBeenCalledTimes(1);
+  });
+
   it('deduplicates an optimistic user message when the same persisted message is rehydrated', async () => {
     let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
     let getThreadCallCount = 0;

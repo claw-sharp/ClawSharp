@@ -78,6 +78,11 @@ public sealed class MemoryStorageService
         return sb.ToString();
     }
 
+    public string GetMemoryEntrypointPath(string projectDirectory)
+    {
+        return _pathResolver.GetMemoryEntrypoint(projectDirectory);
+    }
+
     public EntrypointTruncation TruncateEntrypointContent(string raw)
     {
         var trimmed = raw.Trim();

@@ -8,6 +8,10 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class ClawSharpApplication
 {
+    private readonly Func<CancellationToken, Task<ClawSharpApplicationRuntime>>? _runtimeFactory;
+    private readonly object _runtimeSyncRoot = new();
+    private Task<ClawSharpApplicationRuntime>? _runtimeTask;
+
     public ClawSharpApplication(
         ISessionFactory sessionFactory,
         ISessionLogStore sessionLogStore,
@@ -24,16 +28,11 @@ public sealed class ClawSharpApplication
         McpResourceCatalog mcpResourceCatalog,
         McpCommandResourceRegistrationService mcpCommandResourceRegistrationService,
         IClawSharpAppStateStore appStateStore,
-        ClawSharpSettings settings,
         ISettingsStore settingsStore,
         IEventSink eventSink,
         IQueuedCommandQueue queuedCommandQueue,
-        CommandRegistry commands,
-        ToolRegistry tools,
-        TaskRegistry tasks,
-        QueryEngine queryEngine,
-        TerminalShell terminalShell,
-        IQueryModelTurnContextProvider? modelTurnContextProvider = null)
+        ClawSharpApplicationRuntime? runtime = null,
+        Func<CancellationToken, Task<ClawSharpApplicationRuntime>>? runtimeFactory = null)
     {
         SessionFactory = sessionFactory;
         SessionLogStore = sessionLogStore;
@@ -50,16 +49,16 @@ public sealed class ClawSharpApplication
         McpResourceCatalog = mcpResourceCatalog;
         McpCommandResourceRegistrationService = mcpCommandResourceRegistrationService;
         AppStateStore = appStateStore;
-        Settings = settings;
         SettingsStore = settingsStore;
         EventSink = eventSink;
         QueuedCommandQueue = queuedCommandQueue;
-        Commands = commands;
-        Tools = tools;
-        Tasks = tasks;
-        QueryEngine = queryEngine;
-        TerminalShell = terminalShell;
-        ModelTurnContextProvider = modelTurnContextProvider;
+
+        if (runtime is not null)
+        {
+            _runtimeTask = Task.FromResult(runtime);
+        }
+
+        _runtimeFactory = runtimeFactory;
     }
 
     public ISessionFactory SessionFactory { get; }
@@ -78,14 +77,61 @@ public sealed class ClawSharpApplication
     public McpCommandResourceRegistrationService McpCommandResourceRegistrationService { get; }
     public IClawSharpAppStateStore AppStateStore { get; }
     public ClawSharpAppState AppState => AppStateStore.GetState();
-    public ClawSharpSettings Settings { get; }
+    public ClawSharpSettings Settings => AppStateStore.GetState().Settings;
     public ISettingsStore SettingsStore { get; }
     public IEventSink EventSink { get; }
     public IQueuedCommandQueue QueuedCommandQueue { get; }
-    public CommandRegistry Commands { get; }
-    public ToolRegistry Tools { get; }
-    public TaskRegistry Tasks { get; }
-    public QueryEngine QueryEngine { get; }
-    public TerminalShell TerminalShell { get; }
-    public IQueryModelTurnContextProvider? ModelTurnContextProvider { get; }
+    public bool IsRuntimeInitialized
+    {
+        get
+        {
+            lock (_runtimeSyncRoot)
+            {
+                return _runtimeTask?.IsCompletedSuccessfully == true;
+            }
+        }
+    }
+
+    public CommandRegistry Commands => GetRuntimeValue(static runtime => runtime.Commands);
+    public ToolRegistry Tools => GetRuntimeValue(static runtime => runtime.Tools);
+    public TaskRegistry Tasks => GetRuntimeValue(static runtime => runtime.Tasks);
+    public QueryEngine QueryEngine => GetRuntimeValue(static runtime => runtime.QueryEngine);
+    public TerminalShell TerminalShell => GetRuntimeValue(static runtime => runtime.TerminalShell);
+    public IQueryModelTurnContextProvider? ModelTurnContextProvider => GetRuntimeValue(static runtime => runtime.ModelTurnContextProvider);
+
+    public async Task<ClawSharpApplicationRuntime> EnsureRuntimeAsync(CancellationToken cancellationToken = default)
+    {
+        Task<ClawSharpApplicationRuntime> runtimeTask;
+        lock (_runtimeSyncRoot)
+        {
+            _runtimeTask ??= _runtimeFactory?.Invoke(CancellationToken.None)
+                ?? throw new InvalidOperationException("Application runtime is not configured.");
+            runtimeTask = _runtimeTask;
+        }
+
+        try
+        {
+            return await runtimeTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (runtimeTask.IsFaulted || runtimeTask.IsCanceled)
+            {
+                lock (_runtimeSyncRoot)
+                {
+                    if (ReferenceEquals(_runtimeTask, runtimeTask))
+                    {
+                        _runtimeTask = null;
+                    }
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private T GetRuntimeValue<T>(Func<ClawSharpApplicationRuntime, T> selector)
+    {
+        return selector(EnsureRuntimeAsync().GetAwaiter().GetResult());
+    }
 }

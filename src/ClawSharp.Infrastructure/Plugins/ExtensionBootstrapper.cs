@@ -33,7 +33,7 @@ public sealed class ExtensionBootstrapper
         _builtInPluginRegistry = builtInPluginRegistry ?? new BuiltInPluginRegistry();
     }
 
-    public Task<ExtensionBootstrapResult> LoadAsync(
+    public async Task<ExtensionBootstrapResult> LoadAsync(
         string workspaceRoot,
         StartupEnvironment startupEnvironment,
         ClawSharpSettings settings,
@@ -41,10 +41,13 @@ public sealed class ExtensionBootstrapper
     {
         var stopwatch = Stopwatch.StartNew();
         cancellationToken.ThrowIfCancellationRequested();
+        var workspaceSearchPaths = await WorkspaceSearchPathResolver.ResolveAsync(
+            workspaceRoot,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var pluginInstallations = LoadInstalledPlugins();
         var plugins = LoadPlugins(pluginInstallations, settings, cancellationToken);
-        var skills = LoadSkills(workspaceRoot, startupEnvironment, plugins);
+        var skills = LoadSkills(workspaceSearchPaths, startupEnvironment, plugins);
         var hooks = LoadHooks(settings, plugins);
         stopwatch.Stop();
 
@@ -64,7 +67,7 @@ public sealed class ExtensionBootstrapper
             });
         ClawSharpTelemetry.RecordMetric("extension.bootstrap.duration_ms", stopwatch.Elapsed.TotalMilliseconds);
 
-        return Task.FromResult(new ExtensionBootstrapResult(pluginInstallations, plugins, skills, hooks));
+        return new ExtensionBootstrapResult(pluginInstallations, plugins, skills, hooks);
     }
 
     private IReadOnlyList<DiscoveredPluginInstallation> LoadInstalledPlugins()
@@ -359,7 +362,7 @@ public sealed class ExtensionBootstrapper
     }
 
     private IReadOnlyList<DiscoveredSkill> LoadSkills(
-        string workspaceRoot,
+        WorkspaceSearchPaths workspaceSearchPaths,
         StartupEnvironment startupEnvironment,
         IReadOnlyList<DiscoveredPlugin> plugins)
     {
@@ -378,7 +381,7 @@ public sealed class ExtensionBootstrapper
 
         AddSkillsFromDirectory(Path.Combine(_userConfigHomeDir, "skills"), "userSettings", discoveredSkills, seenPaths);
 
-        foreach (var projectSkillsDirectory in GetProjectSkillDirectoriesUpToHome(workspaceRoot))
+        foreach (var projectSkillsDirectory in workspaceSearchPaths.GetProjectConfigDirectories("skills").Where(Directory.Exists))
         {
             AddSkillsFromDirectory(projectSkillsDirectory, "projectSettings", discoveredSkills, seenPaths);
         }
@@ -496,44 +499,6 @@ public sealed class ExtensionBootstrapper
         }
 
         discoveredSkills.Add(new DiscoveredSkill(Path.GetFileName(entryPath), identity, Path.GetFullPath(entryPath), source));
-    }
-
-    private IReadOnlyList<string> GetProjectSkillDirectoriesUpToHome(string workspaceRoot)
-    {
-        var homeDirectory = Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
-            .Normalize(NormalizationForm.FormC);
-        var gitRoot = TryGetCanonicalGitRoot(workspaceRoot);
-        var current = Path.GetFullPath(workspaceRoot);
-        var directories = new List<string>();
-
-        while (true)
-        {
-            if (PathsEqual(current, homeDirectory))
-            {
-                break;
-            }
-
-            var skillsDirectory = Path.Combine(current, ".clawsharp", "skills");
-            if (Directory.Exists(skillsDirectory))
-            {
-                directories.Add(skillsDirectory);
-            }
-
-            if (gitRoot is not null && PathsEqual(current, gitRoot))
-            {
-                break;
-            }
-
-            var parent = Directory.GetParent(current)?.FullName;
-            if (string.IsNullOrWhiteSpace(parent) || PathsEqual(parent, current))
-            {
-                break;
-            }
-
-            current = parent;
-        }
-
-        return directories;
     }
 
     private static IReadOnlyDictionary<HookEvent, IReadOnlyList<HookMatcherDefinition>> ParseHooks(
@@ -923,46 +888,6 @@ public sealed class ExtensionBootstrapper
         return options;
     }
 
-    private static string? TryGetCanonicalGitRoot(string workspaceRoot)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            Arguments = "rev-parse --show-toplevel",
-            WorkingDirectory = workspaceRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-
-        using var process = new Process { StartInfo = startInfo };
-        try
-        {
-            if (!process.Start())
-            {
-                return null;
-            }
-        }
-        catch
-        {
-            return null;
-        }
-
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            return null;
-        }
-
-        var output = process.StandardOutput.ReadToEnd().Trim();
-        return string.IsNullOrWhiteSpace(output)
-            ? null
-            : Path.GetFullPath(output).Normalize(NormalizationForm.FormC);
-    }
-
     private void AddVersion1Installation(List<DiscoveredPluginInstallation> installations, JsonProperty pluginProperty)
     {
         if (pluginProperty.Value.ValueKind != JsonValueKind.Object)
@@ -1018,14 +943,6 @@ public sealed class ExtensionBootstrapper
                 LastUpdated: TryGetString(installationElement, "lastUpdated"),
                 GitCommitSha: TryGetString(installationElement, "gitCommitSha")));
         }
-    }
-
-    private static bool PathsEqual(string left, string right)
-    {
-        return string.Equals(
-            Path.GetFullPath(left).Normalize(NormalizationForm.FormC),
-            Path.GetFullPath(right).Normalize(NormalizationForm.FormC),
-            GetPathComparison());
     }
 
     private static StringComparer GetPathComparer()

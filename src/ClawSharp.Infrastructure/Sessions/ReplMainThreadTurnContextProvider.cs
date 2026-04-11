@@ -11,6 +11,16 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
 {
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(5);
     private bool? _gitPresenceHint;
+    private readonly object _cacheSyncRoot = new();
+    private Task<bool>? _gitRepositoryTask;
+    private readonly Dictionary<string, Task<string?>> _gitStatusSnapshotsBySessionId = new(StringComparer.Ordinal);
+    private string? _cachedToolsSection;
+    private bool _autoMemorySectionCached;
+    private string? _cachedAutoMemorySection;
+    private DateTime _cachedAutoMemoryLastWriteUtc;
+    private string? _cachedEnvInfoModel;
+    private bool _cachedEnvInfoIsGit;
+    private string? _cachedEnvInfoSection;
     private readonly string _workspaceRoot;
     private readonly ClawSharpSettings _settings;
     private readonly ToolRegistry? _toolRegistry;
@@ -84,16 +94,14 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
     {
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] build-system-prompt-start workspace={_workspaceRoot}");
-        var enabledTools = new HashSet<string>(
-            (_toolRegistry?.All ?? Array.Empty<ToolDescriptor>()).Select(static tool => tool.Name),
-            StringComparer.Ordinal);
-
+        var toolsSection = GetUsingToolsSection();
         ClawSharpTelemetry.LogDebug(
-            $"[ReplMainThreadTurnContextProvider] build-system-prompt-tools count={enabledTools.Count}");
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-tools count={_toolRegistry?.All.Count ?? 0}");
         var autoMemorySection = await BuildAutoMemorySectionAsync(cancellationToken);
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] build-system-prompt-memory loaded={!string.IsNullOrWhiteSpace(autoMemorySection)}");
-        var envInfoSection = await ComputeSimpleEnvInfoAsync(cancellationToken);
+        var isGit = await IsGitRepositoryAsync(cancellationToken);
+        var envInfoSection = await ComputeSimpleEnvInfoAsync(isGit, cancellationToken);
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] build-system-prompt-env ready");
         var sections = new List<string?>
@@ -102,7 +110,7 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             GetSimpleSystemSection(),
             GetSimpleDoingTasksSection(),
             GetActionsSection(),
-            GetUsingYourToolsSection(enabledTools),
+            toolsSection,
             QueryRequestBuilder.SystemPromptDynamicBoundary,
             autoMemorySection,
             envInfoSection,
@@ -135,20 +143,51 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             return null;
         }
 
+        var entrypointPath = _memoryStorageService.GetMemoryEntrypointPath(_workspaceRoot);
+        var lastWriteUtc = File.Exists(entrypointPath)
+            ? File.GetLastWriteTimeUtc(entrypointPath)
+            : DateTime.MinValue;
+
+        lock (_cacheSyncRoot)
+        {
+            if (_autoMemorySectionCached && _cachedAutoMemoryLastWriteUtc == lastWriteUtc)
+            {
+                ClawSharpTelemetry.LogDebug(
+                    "[ReplMainThreadTurnContextProvider] auto-memory-cache-hit");
+                return _cachedAutoMemorySection;
+            }
+        }
+
         var memoryPrompt = await _memoryStorageService.LoadMemoryPromptAsync(_workspaceRoot, cancellationToken);
+        lock (_cacheSyncRoot)
+        {
+            _cachedAutoMemorySection = memoryPrompt;
+            _cachedAutoMemoryLastWriteUtc = lastWriteUtc;
+            _autoMemorySectionCached = true;
+        }
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] auto-memory-complete loaded={!string.IsNullOrWhiteSpace(memoryPrompt)}");
         return memoryPrompt;
     }
 
-    private async Task<string> ComputeSimpleEnvInfoAsync(CancellationToken cancellationToken)
+    private async Task<string> ComputeSimpleEnvInfoAsync(bool isGit, CancellationToken cancellationToken)
     {
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] env-info-start workspace={_workspaceRoot}");
         var settings = _appStateStore?.GetState().Settings ?? _settings;
         var resolvedModel = MainLoopModelResolver.Resolve(settings.Runtime.Model);
         var modelDescription = $"You are powered by the model named {MainLoopModelResolver.RenderSetting(resolvedModel)}. The exact model ID is {resolvedModel}.";
-        var isGit = await IsGitRepositoryAsync(cancellationToken);
+        lock (_cacheSyncRoot)
+        {
+            if (string.Equals(_cachedEnvInfoModel, resolvedModel, StringComparison.Ordinal) &&
+                _cachedEnvInfoIsGit == isGit &&
+                !string.IsNullOrWhiteSpace(_cachedEnvInfoSection))
+            {
+                ClawSharpTelemetry.LogDebug(
+                    "[ReplMainThreadTurnContextProvider] env-info-cache-hit");
+                return _cachedEnvInfoSection!;
+            }
+        }
         var osVersion = Environment.OSVersion.VersionString;
 
         var envItems = new List<string>
@@ -161,13 +200,21 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             modelDescription
         };
 
-        return string.Join(
+        var section = string.Join(
             "\n",
             new[]
             {
                 "# Environment",
                 "You have been invoked in the following environment: "
             }.Concat(PrependBullets(envItems)));
+        lock (_cacheSyncRoot)
+        {
+            _cachedEnvInfoModel = resolvedModel;
+            _cachedEnvInfoIsGit = isGit;
+            _cachedEnvInfoSection = section;
+        }
+
+        return section;
     }
 
     private async Task<bool> IsGitRepositoryAsync(CancellationToken cancellationToken)
@@ -179,22 +226,74 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             return false;
         }
 
-        var result = await RunProcessAsync(
-            "git",
-            "rev-parse --is-inside-work-tree",
-            cancellationToken);
-        return result.ExitCode == 0 &&
-               string.Equals(result.StandardOutput.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        Task<bool> detectionTask;
+        lock (_cacheSyncRoot)
+        {
+            _gitRepositoryTask ??= DetectGitRepositoryAsync();
+            detectionTask = _gitRepositoryTask;
+        }
+
+        return await detectionTask.WaitAsync(cancellationToken);
+
+        async Task<bool> DetectGitRepositoryAsync()
+        {
+            var result = await RunProcessAsync(
+                "git",
+                "rev-parse --is-inside-work-tree",
+                CancellationToken.None);
+            return result.ExitCode == 0 &&
+                   string.Equals(result.StandardOutput.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private async Task<string?> TryBuildGitStatusSnapshotAsync(CancellationToken cancellationToken)
     {
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] git-status-start workspace={_workspaceRoot}");
+        var sessionId = _appStateStore?.GetState().ActiveSessionId ?? "__workspace__";
+        Task<string?> snapshotTask;
+        lock (_cacheSyncRoot)
+        {
+            if (!_gitStatusSnapshotsBySessionId.TryGetValue(sessionId, out snapshotTask!))
+            {
+                snapshotTask = BuildGitStatusSnapshotCoreAsync(sessionId, CancellationToken.None);
+                _gitStatusSnapshotsBySessionId[sessionId] = snapshotTask;
+            }
+            else
+            {
+                ClawSharpTelemetry.LogDebug(
+                    $"[ReplMainThreadTurnContextProvider] git-status-cache-hit sessionId={sessionId}");
+            }
+        }
+
+        try
+        {
+            return await snapshotTask.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            if (snapshotTask.IsFaulted || snapshotTask.IsCanceled)
+            {
+                lock (_cacheSyncRoot)
+                {
+                    if (_gitStatusSnapshotsBySessionId.TryGetValue(sessionId, out var existing) &&
+                        ReferenceEquals(existing, snapshotTask))
+                    {
+                        _gitStatusSnapshotsBySessionId.Remove(sessionId);
+                    }
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private async Task<string?> BuildGitStatusSnapshotCoreAsync(string sessionId, CancellationToken cancellationToken)
+    {
         if (!await IsGitRepositoryAsync(cancellationToken))
         {
             ClawSharpTelemetry.LogDebug(
-                "[ReplMainThreadTurnContextProvider] git-status-skip reason=not-git");
+                $"[ReplMainThreadTurnContextProvider] git-status-skip reason=not-git sessionId={sessionId}");
             return null;
         }
 
@@ -345,6 +444,28 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to 
         items.Add("You can call multiple tools in a single response. If you intend to call multiple tools and there are no dependencies between them, make all independent tool calls in parallel. However, if some tool calls depend on previous calls to inform dependent values, call them sequentially instead.");
 
         return string.Join("\n", new[] { "# Using your tools" }.Concat(PrependBullets(items)));
+    }
+
+    private string GetUsingToolsSection()
+    {
+        lock (_cacheSyncRoot)
+        {
+            if (!string.IsNullOrWhiteSpace(_cachedToolsSection))
+            {
+                return _cachedToolsSection!;
+            }
+        }
+
+        var enabledTools = new HashSet<string>(
+            (_toolRegistry?.All ?? Array.Empty<ToolDescriptor>()).Select(static tool => tool.Name),
+            StringComparer.Ordinal);
+        var section = GetUsingYourToolsSection(enabledTools);
+        lock (_cacheSyncRoot)
+        {
+            _cachedToolsSection = section;
+        }
+
+        return section;
     }
 
     private static string GetSimpleToneAndStyleSection()

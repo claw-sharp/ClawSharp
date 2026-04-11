@@ -21,7 +21,9 @@ try
     var runtimeState = new HostRuntimeState();
     var eventDispatcher = new AgentHostEventDispatcher();
     var permissionPrompter = new AgentHostApprovalPermissionPrompter(eventDispatcher);
-    var factoryOptions = new ClawSharpApplicationFactoryOptions(permissionPrompter);
+    var factoryOptions = new ClawSharpApplicationFactoryOptions(
+        permissionPrompter,
+        ClawSharpApplicationInitializationMode.LazyRuntime);
     var recentProjectStore = new RecentProjectStore();
     var applicationRegistry = new WorkspaceApplicationRegistry(factoryOptions);
     var threadStateStore = new ThreadStateStore();

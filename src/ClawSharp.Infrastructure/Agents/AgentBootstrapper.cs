@@ -7,7 +7,6 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class AgentBootstrapper
 {
-    private static readonly TimeSpan GitCommandTimeout = TimeSpan.FromSeconds(5);
     private const long SlowAgentFileThresholdMs = 250;
     private readonly string _managedFilePath;
     private readonly string _userConfigHomeDir;
@@ -22,7 +21,7 @@ public sealed class AgentBootstrapper
         _managedFilePath = managedFilePath ?? ClaudeConfigPaths.GetManagedFilePath();
         _userConfigHomeDir = userConfigHomeDir ?? SessionStoragePaths.GetClaudeConfigHomeDir();
         _yamlDeserializer = new DeserializerBuilder().Build();
-        _canonicalGitRootResolver = canonicalGitRootResolver ?? TryGetCanonicalGitRootAsync;
+        _canonicalGitRootResolver = canonicalGitRootResolver ?? WorkspaceSearchPathResolver.TryGetCanonicalGitRootAsync;
     }
 
     public async Task<AgentDefinitionsCatalog> LoadAsync(
@@ -245,43 +244,18 @@ public sealed class AgentBootstrapper
     {
         var stopwatch = Stopwatch.StartNew();
         LogInfo("project-directories", $"start workspace={workspaceRoot}");
-        var homeDirectory = Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        var gitRoot = await ResolveCanonicalGitRootAsync(workspaceRoot, cancellationToken);
-        var current = Path.GetFullPath(workspaceRoot);
-        var directories = new List<string>();
-
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (PathsEqual(current, homeDirectory))
-            {
-                break;
-            }
-
-            var agentsDirectory = Path.Combine(current, ".clawsharp", "agents");
-            if (Directory.Exists(agentsDirectory))
-            {
-                directories.Add(agentsDirectory);
-            }
-
-            if (gitRoot is not null && PathsEqual(current, gitRoot))
-            {
-                break;
-            }
-
-            var parent = Directory.GetParent(current)?.FullName;
-            if (string.IsNullOrWhiteSpace(parent) || PathsEqual(parent, current))
-            {
-                break;
-            }
-
-            current = parent;
-        }
+        var searchPaths = await WorkspaceSearchPathResolver.ResolveAsync(
+            workspaceRoot,
+            _canonicalGitRootResolver,
+            cancellationToken).ConfigureAwait(false);
+        var directories = searchPaths.GetProjectConfigDirectories("agents")
+            .Where(Directory.Exists)
+            .ToArray();
 
         stopwatch.Stop();
         LogInfo(
             "project-directories",
-            $"complete workspace={workspaceRoot} directoryCount={directories.Count} gitRoot={gitRoot ?? "<none>"} elapsedMs={stopwatch.ElapsedMilliseconds}");
+            $"complete workspace={workspaceRoot} directoryCount={directories.Length} gitRoot={searchPaths.GitRoot ?? "<none>"} elapsedMs={stopwatch.ElapsedMilliseconds}");
         return directories;
     }
 
@@ -415,115 +389,9 @@ public sealed class AgentBootstrapper
         return values.TryGetValue(key, out var raw) ? raw : null;
     }
 
-    private static async Task<string?> TryGetCanonicalGitRootAsync(string workspaceRoot, CancellationToken cancellationToken)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            Arguments = "rev-parse --show-toplevel",
-            WorkingDirectory = workspaceRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-
-        using var process = new Process { StartInfo = startInfo };
-        try
-        {
-            if (!process.Start())
-            {
-                return null;
-            }
-        }
-        catch
-        {
-            return null;
-        }
-
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(GitCommandTimeout);
-
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            TryKillProcess(process);
-            await AwaitExitQuietlyAsync(process).ConfigureAwait(false);
-            _ = await standardOutputTask.ConfigureAwait(false);
-            var timeoutError = await standardErrorTask.ConfigureAwait(false);
-            LogWarn("git-root", $"timeout workspace={workspaceRoot} timeoutMs={GitCommandTimeout.TotalMilliseconds} stderr={TrimForLog(timeoutError)}");
-            return null;
-        }
-
-        var output = (await standardOutputTask.ConfigureAwait(false)).Trim();
-        var error = (await standardErrorTask.ConfigureAwait(false)).Trim();
-        if (process.ExitCode != 0)
-        {
-            LogWarn("git-root", $"non-zero-exit workspace={workspaceRoot} exitCode={process.ExitCode} stderr={TrimForLog(error)}");
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(output) ? null : Path.GetFullPath(output);
-    }
-
-    private static async Task AwaitExitQuietlyAsync(Process process)
-    {
-        try
-        {
-            await process.WaitForExitAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-            // Best-effort cleanup only.
-        }
-    }
-
-    private static void TryKillProcess(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
-            // Best-effort cleanup only.
-        }
-    }
-
-    private static string TrimForLog(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "<empty>";
-        }
-
-        var singleLine = value.ReplaceLineEndings(" ").Trim();
-        return singleLine.Length > 240 ? singleLine[..240] : singleLine;
-    }
-
-    private static bool PathsEqual(string left, string right)
-    {
-        return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), GetPathComparison());
-    }
-
     private static StringComparer GetPathComparer()
     {
         return OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-    }
-
-    private static StringComparison GetPathComparison()
-    {
-        return OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     }
 
     private static void LogInfo(string category, string message)

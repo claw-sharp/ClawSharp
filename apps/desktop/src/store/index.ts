@@ -117,6 +117,7 @@ type SelectProjectOptions = {
 
 type SelectThreadOptions = {
   showLoading?: boolean;
+  loadAncillary?: boolean;
 };
 
 const defaultSettings: SettingsState = {
@@ -464,6 +465,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     const threadTitle = get().threads.find((thread) => thread.id === id)?.title ?? id;
     const showLoading = options?.showLoading ?? true;
+    const loadAncillary = options?.loadAncillary ?? true;
     const loadingRequestId = showLoading
       ? startNavigationLoading(
           set,
@@ -474,11 +476,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       : null;
 
     try {
-      const ancillaryPromise = Promise.allSettled([
-        agentHostClient.listChangedFiles(projectId, id),
-        agentHostClient.listDiagnostics(projectId, id),
-        agentHostClient.listPendingApprovals(id),
-      ]);
+      const ancillaryPromise = loadAncillary
+        ? Promise.allSettled([
+            agentHostClient.listChangedFiles(projectId, id),
+            agentHostClient.listDiagnostics(projectId, id),
+            agentHostClient.listPendingApprovals(id),
+          ])
+        : null;
       const response = await agentHostClient.getThread(projectId, id, { pageSize: threadMessagePageSize });
 
       const detail = response.thread;
@@ -512,7 +516,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         },
       }));
 
-      void ancillaryPromise.then(([changedFilesResponse, diagnosticsResponse, approvalsResponse]) => {
+      void ancillaryPromise?.then(([changedFilesResponse, diagnosticsResponse, approvalsResponse]) => {
         const changedFiles = changedFilesResponse.status === 'fulfilled'
           ? changedFilesResponse.value.files.map(mapChangedFile)
           : [];
@@ -1706,6 +1710,7 @@ async function handleRunCompleted(
   get: () => AppStore,
   payload: RunCompletedEvent,
 ) {
+  const runSnapshot = get().run;
   set((state) => ({
     threads: state.threads.map((thread) =>
       thread.id === payload.threadId
@@ -1734,7 +1739,13 @@ async function handleRunCompleted(
   const selectedProjectId = get().selectedProjectId;
   if (selectedProjectId) {
     try {
-      await get().selectThread(payload.threadId);
+      const shouldLoadAncillary = Boolean(payload.errorMessage) ||
+        runSnapshot.pendingApproval ||
+        runSnapshot.toolProgress.length > 0;
+      await get().selectThread(payload.threadId, {
+        showLoading: false,
+        loadAncillary: shouldLoadAncillary,
+      });
     } catch {
       // Keep streamed local state if refresh fails.
     }

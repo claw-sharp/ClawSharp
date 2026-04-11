@@ -217,6 +217,7 @@ public sealed class RunCoordinator
                 new RunStartedEvent(runId, session.Id, projectId, prompt, DateTimeOffset.UtcNow),
                 CancellationToken.None);
 
+            await app.EnsureRuntimeAsync(runCts.Token);
             var turnExecutor = new ConversationTurnExecutor(
                 app.QueryEngine,
                 app.TranscriptStore,

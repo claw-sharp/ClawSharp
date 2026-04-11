@@ -77,7 +77,7 @@ public sealed class AgentRuntimeFoundationTests
     }
 
     [Fact]
-    public async Task AgentBootstrapper_LoadAsync_Logs_GitRoot_And_Directory_Substeps()
+    public async Task AgentBootstrapper_LoadAsync_Logs_ProjectDirectory_Substeps()
     {
         var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalDebug = Environment.GetEnvironmentVariable("DEBUG");
@@ -111,9 +111,9 @@ public sealed class AgentRuntimeFoundationTests
                 new StartupEnvironment(userConfigHomeDir, BareMode: false, DisablePolicySkills: false));
 
             var debugLog = ReadAllTextShared(ClawSharpTelemetry.GetDebugLogPath());
-            Assert.Contains("[AgentBootstrapper:git-root] start", debugLog, StringComparison.Ordinal);
-            Assert.Contains("[AgentBootstrapper:git-root] complete", debugLog, StringComparison.Ordinal);
+            Assert.Contains("[AgentBootstrapper:project-directories] start", debugLog, StringComparison.Ordinal);
             Assert.Contains("[AgentBootstrapper:project-directories] complete", debugLog, StringComparison.Ordinal);
+            Assert.Contains("gitRoot=", debugLog, StringComparison.Ordinal);
             Assert.Contains("source=projectSettings", debugLog, StringComparison.Ordinal);
         }
         finally
