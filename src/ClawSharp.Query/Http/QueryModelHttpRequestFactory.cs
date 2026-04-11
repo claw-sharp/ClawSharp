@@ -38,7 +38,8 @@ public static class QueryModelHttpRequestFactory
         QueryModelHttpStreamingRequest request)
     {
         var target = $"{config.BaseUrl.TrimEnd('/')}/v1/messages";
-        var httpRequest = CreateJsonRequest(target, CreateAnthropicRequestBody(request));
+        var body = CreateAnthropicRequestBody(request);
+        var httpRequest = CreateJsonRequest(target, body);
 
         httpRequest.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
         if (!string.IsNullOrWhiteSpace(config.ApiKey))
@@ -55,6 +56,7 @@ public static class QueryModelHttpRequestFactory
             httpRequest.Headers.TryAddWithoutValidation("anthropic-beta", string.Join(",", request.Request.Betas));
         }
 
+        MaybeDumpDebugRequest("anthropic", httpRequest, body);
         return httpRequest;
     }
 
@@ -80,6 +82,7 @@ public static class QueryModelHttpRequestFactory
             }
         }
 
+        MaybeDumpDebugRequest("openai", httpRequest, body);
         return httpRequest;
     }
 
@@ -200,16 +203,9 @@ public static class QueryModelHttpRequestFactory
 
     private static IEnumerable<JsonObject> BuildAnthropicTools(IReadOnlyList<QueryRequestTool> tools)
     {
-        var strictToolsEmitted = 0;
         foreach (var tool in tools)
         {
-            var emitStrict = tool.Strict && strictToolsEmitted < AnthropicStrictToolLimit;
-            if (emitStrict)
-            {
-                strictToolsEmitted++;
-            }
-
-            yield return ToAnthropicJson(tool, emitStrict);
+            yield return ToAnthropicJson(tool, emitStrict: false);
         }
     }
 
@@ -548,17 +544,18 @@ public static class QueryModelHttpRequestFactory
 
         if (block.Text is not null)
         {
-            json["text"] = block.Text;
+            json[string.Equals(block.Type, "tool_result", StringComparison.Ordinal) ? "content" : "text"] = block.Text;
         }
 
-        if (block.Name is not null)
+        if (block.Name is not null &&
+            !string.Equals(block.Type, "tool_result", StringComparison.Ordinal))
         {
             json["name"] = block.Name;
         }
 
         if (block.ToolUseId is not null)
         {
-            json["tool_use_id"] = block.ToolUseId;
+            json[string.Equals(block.Type, "tool_use", StringComparison.Ordinal) ? "id" : "tool_use_id"] = block.ToolUseId;
         }
 
         if (block.Input is not null)
@@ -566,7 +563,8 @@ public static class QueryModelHttpRequestFactory
             json["input"] = JsonNode.Parse(block.Input);
         }
 
-        if (block.StructuredOutput is not null)
+        if (block.StructuredOutput is not null &&
+            !string.Equals(block.Type, "tool_result", StringComparison.Ordinal))
         {
             json["structured_output"] = JsonNode.Parse(block.StructuredOutput);
         }
@@ -689,13 +687,9 @@ public static class QueryModelHttpRequestFactory
             ["type"] = "function",
             ["name"] = tool.Name,
             ["description"] = tool.Description,
-            ["parameters"] = OpenAiSchemaSanitizer.EnforceCodexStrictSchema(tool.InputSchema)
+            ["parameters"] = OpenAiSchemaSanitizer.EnforceCodexStrictSchema(tool.InputSchema),
+            ["strict"] = true
         };
-
-        if (tool.Strict)
-        {
-            json["strict"] = true;
-        }
 
         return json;
     }

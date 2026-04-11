@@ -60,8 +60,9 @@ internal static class OpenAiSchemaSanitizer
     {
         var record = SanitizeForOpenAiCompat(schema);
 
-        if (string.Equals(record["type"]?.GetValue<string>(), "object", StringComparison.Ordinal))
+        if (IsObjectSchema(record))
         {
+            record["type"] = "object";
             record["additionalProperties"] = false;
 
             if (record["properties"] is JsonObject properties)
@@ -131,12 +132,36 @@ internal static class OpenAiSchemaSanitizer
         return record;
     }
 
+    public static JsonObject NormalizeAnthropicOptionalProperties(JsonNode? schema)
+    {
+        var stripped = StripIncompatibleKeywordsForAnthropic(schema);
+        if (stripped is not JsonObject record)
+        {
+            return [];
+        }
+
+        var result = (JsonObject)record.DeepClone();
+        NormalizeAnthropicOptionalPropertiesCore(result);
+        return result;
+    }
+
     private static JsonNode? StripIncompatibleKeywords(JsonNode? node)
     {
         return node switch
         {
             JsonObject obj => StripObject(obj),
             JsonArray array => new JsonArray(array.Select(StripIncompatibleKeywords).ToArray()),
+            null => null,
+            _ => node.DeepClone()
+        };
+    }
+
+    private static JsonNode? StripIncompatibleKeywordsForAnthropic(JsonNode? node)
+    {
+        return node switch
+        {
+            JsonObject obj => StripAnthropicObject(obj),
+            JsonArray array => new JsonArray(array.Select(StripIncompatibleKeywordsForAnthropic).ToArray()),
             null => null,
             _ => node.DeepClone()
         };
@@ -153,6 +178,33 @@ internal static class OpenAiSchemaSanitizer
             }
 
             result[pair.Key] = StripIncompatibleKeywords(pair.Value);
+        }
+
+        return result;
+    }
+
+    private static JsonObject StripAnthropicObject(JsonObject obj)
+    {
+        var result = new JsonObject();
+        foreach (var pair in obj)
+        {
+            if (string.Equals(pair.Key, "maxItems", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "minimum", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "maximum", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(pair.Key, "minItems", StringComparison.Ordinal) &&
+                pair.Value is JsonValue minItemsValue &&
+                minItemsValue.TryGetValue<int>(out var minItems) &&
+                minItems > 1)
+            {
+                result[pair.Key] = 1;
+                continue;
+            }
+
+            result[pair.Key] = StripIncompatibleKeywordsForAnthropic(pair.Value);
         }
 
         return result;
@@ -392,7 +444,7 @@ internal static class OpenAiSchemaSanitizer
 
     private static bool IsEmptyStrictObject(JsonObject schema)
     {
-        return string.Equals(schema["type"]?.GetValue<string>(), "object", StringComparison.Ordinal) &&
+        return IsObjectSchema(schema) &&
                schema["additionalProperties"]?.GetValue<bool?>() == false &&
                schema["properties"] is JsonObject properties &&
                properties.Count == 0;
@@ -400,8 +452,9 @@ internal static class OpenAiSchemaSanitizer
 
     private static void EnforceOpenAiStrictSchemaCore(JsonObject record)
     {
-        if (string.Equals(record["type"]?.GetValue<string>(), "object", StringComparison.Ordinal))
+        if (IsObjectSchema(record))
         {
+            record["type"] = "object";
             var originalRequired = record["required"] is JsonArray requiredArray
                 ? new HashSet<string>(
                     requiredArray
@@ -493,6 +546,109 @@ internal static class OpenAiSchemaSanitizer
         }
     }
 
+    private static void NormalizeAnthropicOptionalPropertiesCore(JsonObject record)
+    {
+        if (IsObjectSchema(record))
+        {
+            record["type"] = "object";
+            var originalRequired = record["required"] is JsonArray requiredArray
+                ? new HashSet<string>(
+                    requiredArray
+                        .Select(static item => item?.GetValue<string>())
+                        .Where(static item => !string.IsNullOrWhiteSpace(item))
+                        .Cast<string>(),
+                    StringComparer.Ordinal)
+                : [];
+
+            if (record["properties"] is JsonObject properties)
+            {
+                var normalizedProperties = new JsonObject();
+                foreach (var pair in properties.ToList())
+                {
+                    if (pair.Value is null)
+                    {
+                        continue;
+                    }
+
+                    JsonNode normalizedNode = pair.Value.DeepClone();
+                    if (normalizedNode is JsonObject propertySchema)
+                    {
+                        NormalizeAnthropicOptionalPropertiesCore(propertySchema);
+
+                        if (!originalRequired.Contains(pair.Key))
+                        {
+                            normalizedNode = EnsureNullable(propertySchema);
+                        }
+                        else
+                        {
+                            normalizedNode = propertySchema;
+                        }
+                    }
+
+                    normalizedProperties[pair.Key] = normalizedNode;
+                }
+
+                record["properties"] = normalizedProperties;
+                record["required"] = new JsonArray(
+                    normalizedProperties
+                        .Select(static pair => JsonValue.Create(pair.Key))
+                        .ToArray());
+            }
+            else if (record["properties"] is null)
+            {
+                record["required"] = new JsonArray();
+            }
+        }
+
+        if (record["items"] is JsonArray itemArray)
+        {
+            var normalizedItems = new JsonArray();
+            foreach (var item in itemArray)
+            {
+                if (item?.DeepClone() is JsonObject itemSchema)
+                {
+                    NormalizeAnthropicOptionalPropertiesCore(itemSchema);
+                    normalizedItems.Add(itemSchema);
+                }
+                else
+                {
+                    normalizedItems.Add(item?.DeepClone());
+                }
+            }
+
+            record["items"] = normalizedItems;
+        }
+        else if (record["items"]?.DeepClone() is JsonObject itemSchema)
+        {
+            NormalizeAnthropicOptionalPropertiesCore(itemSchema);
+            record["items"] = itemSchema;
+        }
+
+        foreach (var key in new[] { "anyOf", "oneOf", "allOf" })
+        {
+            if (record[key] is not JsonArray alternatives)
+            {
+                continue;
+            }
+
+            var normalizedAlternatives = new JsonArray();
+            foreach (var alternative in alternatives)
+            {
+                if (alternative?.DeepClone() is JsonObject alternativeSchema)
+                {
+                    NormalizeAnthropicOptionalPropertiesCore(alternativeSchema);
+                    normalizedAlternatives.Add(alternativeSchema);
+                }
+                else
+                {
+                    normalizedAlternatives.Add(alternative?.DeepClone());
+                }
+            }
+
+            record[key] = normalizedAlternatives;
+        }
+    }
+
     private static JsonObject EnsureNullable(JsonObject schema)
     {
         if (AllowsNull(schema))
@@ -535,5 +691,11 @@ internal static class OpenAiSchemaSanitizer
         }
 
         return false;
+    }
+
+    private static bool IsObjectSchema(JsonObject record)
+    {
+        return string.Equals(record["type"]?.GetValue<string>(), "object", StringComparison.Ordinal) ||
+               record["properties"] is JsonObject;
     }
 }

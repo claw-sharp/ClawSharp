@@ -193,14 +193,15 @@ public sealed class QueryModelHttpRequestFactoryTests
 
         var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
         var inputSchema = body["tools"]![0]!["input_schema"]!.AsObject();
+        var optionsSchema = inputSchema["properties"]!["options"]!.AsObject();
+        var nestedChoicesSchema = inputSchema["properties"]!["nested"]!["properties"]!["choices"]!.AsObject();
 
         Assert.False(inputSchema.ToJsonString().Contains("maxItems", StringComparison.Ordinal));
         Assert.False(inputSchema.ToJsonString().Contains("minimum", StringComparison.Ordinal));
         Assert.False(inputSchema.ToJsonString().Contains("maximum", StringComparison.Ordinal));
-        Assert.Equal(1, inputSchema["properties"]!["options"]!["minItems"]?.GetValue<int>());
-        Assert.Equal(
-            1,
-            inputSchema["properties"]!["nested"]!["properties"]!["choices"]!["minItems"]?.GetValue<int>());
+        Assert.Equal(1, optionsSchema["minItems"]?.GetValue<int>());
+        Assert.Equal(1, nestedChoicesSchema["minItems"]?.GetValue<int>());
+        Assert.Null(inputSchema["required"]);
         Assert.Equal("custom", body["tools"]![0]!["type"]?.GetValue<string>());
     }
 
@@ -242,7 +243,7 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
-    public async Task CreateStreamingRequest_Limits_Anthropic_Strict_Tools_To_Twenty()
+    public async Task CreateStreamingRequest_Does_Not_Emit_Anthropic_Strict_Tools()
     {
         var tools = Enumerable.Range(1, 25)
             .Select(index => new QueryRequestTool(
@@ -284,8 +285,8 @@ public sealed class QueryModelHttpRequestFactoryTests
         var strictCount = requestTools.Count(tool => tool?["strict"]?.GetValue<bool>() == true);
 
         Assert.Equal(25, requestTools.Count);
-        Assert.Equal(QueryModelHttpRequestFactory.AnthropicStrictToolLimit, strictCount);
-        Assert.Null(requestTools[24]!["strict"]);
+        Assert.Equal(0, strictCount);
+        Assert.All(requestTools, static tool => Assert.Null(tool!["strict"]));
     }
 
     [Fact]
@@ -379,6 +380,121 @@ public sealed class QueryModelHttpRequestFactoryTests
         Assert.False(codexParameters.ToJsonString().Contains("pattern", StringComparison.Ordinal));
         Assert.False(codexParameters.ToJsonString().Contains("format", StringComparison.Ordinal));
         Assert.False(codexParameters.ToJsonString().Contains("maxItems", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Always_Uses_Strict_Mode_For_Codex_Tools()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["title"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["description"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["priority"] = new JsonObject
+                {
+                    ["type"] = "integer"
+                }
+            },
+            ["required"] = new JsonArray("title")
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-strict-tool",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("mcp__linear__save_issue", "Create or update a Linear issue.", toolSchema, Strict: false)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var tool = codexBody["tools"]![0]!.AsObject();
+        var parameters = tool["parameters"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal(true, tool["strict"]?.GetValue<bool>());
+        Assert.Equal(["title", "description", "priority"], required);
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Normalizes_Malformed_Codex_Object_Schemas()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["properties"] = new JsonObject
+            {
+                ["title"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["details"] = new JsonObject
+                {
+                    ["properties"] = new JsonObject
+                    {
+                        ["status"] = new JsonObject
+                        {
+                            ["type"] = "string"
+                        },
+                        ["priority"] = new JsonObject
+                        {
+                            ["type"] = "integer"
+                        }
+                    }
+                }
+            }
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-malformed-schema",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("mcp__linear__save_issue", "Create or update a Linear issue.", toolSchema, Strict: false)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
+        var nested = parameters["properties"]!["details"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        var nestedRequired = nested["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal("object", parameters["type"]?.GetValue<string>());
+        Assert.Equal(false, parameters["additionalProperties"]?.GetValue<bool>());
+        Assert.Equal(["title", "details"], required);
+        Assert.Equal("object", nested["type"]?.GetValue<string>());
+        Assert.Equal(false, nested["additionalProperties"]?.GetValue<bool>());
+        Assert.Equal(["status", "priority"], nestedRequired);
     }
 
     [Fact]
@@ -532,12 +648,16 @@ public sealed class QueryModelHttpRequestFactoryTests
 
         Assert.Equal("tool_use", assistantToolUse["type"]?.GetValue<string>());
         Assert.Equal("Read", assistantToolUse["name"]?.GetValue<string>());
-        Assert.Equal("tooluse-read", assistantToolUse["tool_use_id"]?.GetValue<string>());
+        Assert.Equal("tooluse-read", assistantToolUse["id"]?.GetValue<string>());
+        Assert.Null(assistantToolUse["tool_use_id"]);
         Assert.Equal("note.txt", assistantToolUse["input"]?["file_path"]?.GetValue<string>());
 
         Assert.Equal("tool_result", userToolResult["type"]?.GetValue<string>());
         Assert.Equal("tooluse-read", userToolResult["tool_use_id"]?.GetValue<string>());
-        Assert.Equal("success", userToolResult["structured_output"]?["status"]?.GetValue<string>());
+        Assert.Equal("hello", userToolResult["content"]?.GetValue<string>());
+        Assert.Null(userToolResult["text"]);
+        Assert.Null(userToolResult["name"]);
+        Assert.Null(userToolResult["structured_output"]);
     }
 
     private static QueryModelHttpStreamingRequest CreateStreamingRequest()
