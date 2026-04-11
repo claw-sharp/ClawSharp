@@ -32,10 +32,12 @@ export interface Thread {
 export interface ToolProgressEvent {
   id: string;
   type: 'reading' | 'planning' | 'editing' | 'reviewing' | 'finalizing' | 'searching' | 'testing' | 'running' | 'waiting' | 'tool';
+  toolName?: string;
   label: string;
   detail?: string;
   timestamp: string;
   completed: boolean;
+  status?: 'running' | 'completed' | 'failed';
 }
 
 export interface Message {
@@ -46,6 +48,12 @@ export interface Message {
   timestamp: string;
   toolProgress?: ToolProgressEvent[];
   isStreaming?: boolean;
+}
+
+export interface ThreadHistoryState {
+  hasMoreMessages: boolean;
+  nextBeforeMessageId: string | null;
+  isLoadingOlder: boolean;
 }
 
 export interface ChangedFile {
@@ -123,6 +131,15 @@ export interface ProviderOption {
   description: string;
 }
 
+export interface ProviderCredentialState {
+  hasApiKey: boolean;
+  hasAuthToken: boolean;
+  accountId?: string | null;
+  source: 'none' | 'saved' | 'external';
+  hasExternalCredential: boolean;
+  externalCredentialPath?: string | null;
+}
+
 export interface Automation {
   id: string;
   projectId: string;
@@ -161,12 +178,21 @@ export interface SettingsState {
   providerValidationWarnings: string[];
   providerValidationErrors: string[];
   availableProviders: ProviderOption[];
+  providerCredentials: ProviderCredentialState;
+  hasAnyConfiguredProviderCredential: boolean;
   showDiagnostics: boolean;
   streamingSpeed: 'slow' | 'normal' | 'fast';
   compactMode: boolean;
   reducedMotion: boolean;
   notifications: boolean;
   editorPath: string;
+}
+
+export interface NavigationLoadingState {
+  requestId: string;
+  kind: 'project' | 'thread';
+  title: string;
+  description: string;
 }
 
 export interface UIState {
@@ -179,6 +205,7 @@ export interface UIState {
   selectedChangedFile: string | null;
   selectedInboxItem: string | null;
   activeView: 'threads' | 'inbox' | 'automations' | 'settings';
+  navigationLoading: NavigationLoadingState | null;
 }
 
 export interface RunState {

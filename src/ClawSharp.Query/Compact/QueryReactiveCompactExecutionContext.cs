@@ -11,7 +11,8 @@ public sealed record QueryReactiveCompactExecutionContext(
     ClawSharpSettings Settings,
     IReadOnlyList<QueryRequestTool> Tools,
     int? EstimatedPreCompactTokenCount = null,
-    int? ResolvedMaxTokens = null);
+    int? ResolvedMaxTokens = null,
+    string Trigger = "manual");
 
 public sealed record QueryReactiveCompactPromptBuildResult(
     IReadOnlyList<ChatMessage> MessagesToCompact,

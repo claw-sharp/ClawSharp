@@ -28,7 +28,7 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Prints_Query_Runtime_Gap_For_Plain_Prompts()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
         var originalUseOpenAi = Environment.GetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI");
         var originalOpenAiModel = Environment.GetEnvironmentVariable("OPENAI_MODEL");
@@ -36,7 +36,7 @@ public class ClawSharpApplicationIntegrationTests
         var originalOpenAiApiBase = Environment.GetEnvironmentVariable("OPENAI_API_BASE");
         var originalCodexApiKey = Environment.GetEnvironmentVariable("CODEX_API_KEY");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
         Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", string.Empty);
         Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", null);
         Environment.SetEnvironmentVariable("OPENAI_MODEL", null);
@@ -68,7 +68,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", originalApiKey);
             Environment.SetEnvironmentVariable("CLAUDE_CODE_USE_OPENAI", originalUseOpenAi);
             Environment.SetEnvironmentVariable("OPENAI_MODEL", originalOpenAiModel);
@@ -85,9 +85,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Joins_Backslash_Continued_Input_Into_Single_Turn()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -112,7 +112,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -123,9 +123,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Does_Not_Treat_Bash_Mode_Input_As_Slash_Command()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -142,7 +142,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -153,9 +153,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Drains_Queued_Task_Notifications_Into_Output_And_Transcript()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -184,7 +184,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -195,9 +195,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Replays_Resumed_Session_History_At_Startup()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -222,7 +222,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -233,9 +233,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Resume_Command_Switches_Session_And_Replays_History()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -258,7 +258,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -269,9 +269,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Replay_Groups_Consecutive_Assistant_Messages()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -297,7 +297,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -308,9 +308,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Prints_Status_Footer_For_Active_Session_Model_And_Mode()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -336,7 +336,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -347,9 +347,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Prints_Approved_DeepLink_Draft_Note_At_Startup()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -371,7 +371,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -382,9 +382,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Prints_Background_Task_Summary_In_Footer()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -416,7 +416,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -427,9 +427,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Tasks_Command_Prints_Background_Task_List()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -469,7 +469,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -480,9 +480,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Tasks_Command_Prints_Task_Detail_For_Id()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -518,7 +518,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -529,9 +529,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task Bootstrapper_Name_Persists_Custom_Title_On_First_Transcript_Write()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -554,7 +554,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -565,9 +565,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Resume_Command_Resolves_By_Exact_Custom_Title()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -591,7 +591,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -602,9 +602,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Rename_Command_Persists_Title_And_Resume_Uses_It()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -633,7 +633,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -644,9 +644,9 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task TerminalShell_Synchronizes_Active_Session_State_On_Rename()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -662,7 +662,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -673,10 +673,10 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task QueryEngine_Snapshot_Emits_File_Updated_Notification_For_Changed_Tracked_File()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-file-history-notify", Guid.NewGuid().ToString("N"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
         Directory.CreateDirectory(workspaceRoot);
 
         try
@@ -727,7 +727,7 @@ public class ClawSharpApplicationIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 DeleteDirectoryWithRetry(tempConfigDir);
@@ -743,13 +743,13 @@ public class ClawSharpApplicationIntegrationTests
     [Fact]
     public async Task Factory_Loads_Settings_From_Claude_Config_And_Project_Paths()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-integration-config", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-settings-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempConfigDir);
         Directory.CreateDirectory(workspaceRoot);
-        Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         await File.WriteAllTextAsync(
             Path.Combine(tempConfigDir, "settings.json"),
@@ -764,7 +764,7 @@ public class ClawSharpApplicationIntegrationTests
             }
             """);
         await File.WriteAllTextAsync(
-            Path.Combine(workspaceRoot, ".claude", "settings.json"),
+            Path.Combine(workspaceRoot, ".clawsharp", "settings.json"),
             """
             {
               "runtime": {
@@ -793,7 +793,7 @@ public class ClawSharpApplicationIntegrationTests
         finally
         {
             Directory.SetCurrentDirectory(originalDirectory);
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
 
             DeleteDirectoryWithRetry(tempConfigDir);
             DeleteDirectoryWithRetry(workspaceRoot);

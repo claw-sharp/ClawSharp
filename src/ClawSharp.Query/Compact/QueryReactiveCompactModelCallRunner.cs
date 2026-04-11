@@ -69,7 +69,7 @@ public sealed class QueryReactiveCompactModelCallRunner : IQueryReactiveCompactM
         }
 
         var boundaryMarker = ChatMessageFactory.CreateCompactBoundaryMessage(
-            trigger: "manual",
+            trigger: context.Trigger,
             preTokens: context.EstimatedPreCompactTokenCount.Value,
             lastPreCompactMessageUuid: prompt.MessagesToCompact.LastOrDefault()?.Id,
             userContext: null,

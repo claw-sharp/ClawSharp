@@ -19,12 +19,12 @@ These artifacts are filesystem-local. They are intended for development, parity 
 
 ## Default Storage Location
 
-All telemetry output is rooted at `CLAUDE_CONFIG_DIR` when that variable is set.
+All telemetry output is rooted at `CLAWSHARP_CONFIG_DIR` when that variable is set.
 
-If `CLAUDE_CONFIG_DIR` is not set, ClawSharp uses:
+If `CLAWSHARP_CONFIG_DIR` is not set, ClawSharp uses:
 
-- Windows: `%USERPROFILE%\.claude`
-- macOS/Linux: `~/.claude`
+- Windows: `%USERPROFILE%\.clawsharp`
+- macOS/Linux: `~/.clawsharp`
 
 Within that directory, the current implementation writes:
 
@@ -139,13 +139,13 @@ dotnet run --project .\src\ClawSharp.Cli -- repl
 After running a session, inspect:
 
 ```powershell
-Get-ChildItem "$env:USERPROFILE\.claude\telemetry"
+Get-ChildItem "$env:USERPROFILE\.clawsharp\telemetry"
 ```
 
 Or if you want a temporary isolated location:
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR = "D:\temp\clawsharp"
+$env:CLAWSHARP_CONFIG_DIR = "D:\temp\clawsharp"
 dotnet run --project .\src\ClawSharp.Cli -- repl
 ```
 
@@ -306,7 +306,7 @@ Current behavior:
 ### Recipe 1: Isolated Local Debug Session
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR = "D:\temp\clawsharp-debug"
+$env:CLAWSHARP_CONFIG_DIR = "D:\temp\clawsharp-debug"
 $env:CLAUDE_CODE_DEBUG_LOG_LEVEL = "verbose"
 dotnet run --project .\src\ClawSharp.Cli -- repl --debug
 ```
@@ -321,7 +321,7 @@ Get-ChildItem D:\temp\clawsharp-debug\telemetry
 ### Recipe 2: Startup Investigation
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR = "D:\temp\clawsharp-startup"
+$env:CLAWSHARP_CONFIG_DIR = "D:\temp\clawsharp-startup"
 $env:CLAUDE_CODE_PROFILE_STARTUP = "1"
 dotnet run --project .\src\ClawSharp.Cli -- repl
 ```
@@ -336,7 +336,7 @@ Get-Content D:\temp\clawsharp-startup\startup-perf\*.txt
 ### Recipe 3: Trace A Query And Tool Run
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR = "D:\temp\clawsharp-trace"
+$env:CLAWSHARP_CONFIG_DIR = "D:\temp\clawsharp-trace"
 $env:CLAUDE_CODE_PERFETTO_TRACE = "1"
 $env:OTEL_LOG_USER_PROMPTS = "1"
 dotnet run --project .\src\ClawSharp.Cli -- repl
@@ -349,7 +349,7 @@ Then open:
 ### Recipe 4: Debug Bridge Behavior
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR = "D:\temp\clawsharp-bridge"
+$env:CLAWSHARP_CONFIG_DIR = "D:\temp\clawsharp-bridge"
 dotnet run --project .\src\ClawSharp.Cli -- repl --debug=bridge
 ```
 

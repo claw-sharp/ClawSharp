@@ -13,8 +13,15 @@ This started as a vibe-coded side project, but I’m treating it as a real tool 
 - **Single binary** — no Node.js runtime after install
 - **Cross-platform** — Windows, Linux, and macOS on x64 and ARM64
 - **Multi-provider** — Anthropic, Gemini, OpenAI, Codex, GitHub Models, Bedrock, Vertex, Foundry, and Ollama
+- **Desktop App** — A beautiful, integrated GUI for those who prefer windows over terminals
 - **Persistent sessions** — resume chats, keep transcripts, and retain file history
 - **Extensible** — supports plugins, hooks, agents, skills, and MCP servers
+
+## The Desktop Experience
+
+ClawSharp now ships with a full **Desktop Application** built with Tauri. It gives you a rich, multi-window interface for your coding sessions while keeping the core AI engine native and fast.
+
+You get the same power as the CLI, but with side-by-side file views, interactive tools, and a more comfortable workspace for long-form coding.
 
 ## Current status
 
@@ -29,14 +36,46 @@ A few open projects in a similar space that I’ve looked at for reference and i
 
 ## Install
 
+### Preferred: Package Managers
+
+The easiest way to stay up to date is through your favorite package manager:
+
+**macOS (Homebrew)**
+```bash
+brew tap claw-sharp/tap
+brew install --cask clawsharp
+```
+
+**Windows (WinGet or Scoop)**
+```powershell
+# Using WinGet
+winget install ClawSharp
+
+# Using Scoop
+scoop bucket add claw-sharp https://github.com/claw-sharp/scoop-bucket
+scoop install clawsharp
+```
+
+### Standalone CLI
+If you only want the terminal agent as a global command:
 ```bash
 npm install -g clawsharp
 clawsharp --help
-````
+```
 
-*Note: Node.js is only needed for the npm-based install; GitHub Releases provide standalone binaries.*
+### Direct Download
+Don't like package managers? Snag the latest `.exe`, `.dmg`, or `.tar.gz` directly from our [GitHub Releases](https://github.com/claw-sharp/ClawSharp/releases).
 
-Or download a self-contained binary directly from [GitHub Releases](https://github.com/claw-sharp/ClawSharp/releases).
+---
+
+## A Note on Security (Gatekeeper & SmartScreen)
+
+Since ClawSharp is an independent open-source project, our releases are currently **unsigned**. This helps us stay at zero recurring platform cost, but it does mean your OS will be a bit suspicious at first:
+
+*   **Windows**: You'll see a blue "SmartScreen" box. Click **"More info"** and then **"Run anyway"**.
+*   **macOS**: When you first open the app, it might be blocked. **Right-click** the app icon in your Applications folder and choose **Open**, or go to System Settings > Privacy & Security and click **"Open Anyway"**.
+
+We treat your code and privacy with the highest respect—the app is fully open-source, so you can always audit what’s happening under the hood.
 
 ## Update
 

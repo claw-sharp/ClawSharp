@@ -9,11 +9,11 @@ public sealed class StartupProfilerTests
     [Fact]
     public void Report_Writes_Detailed_Profile_When_Enabled()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalProfileStartup = Environment.GetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP");
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-startup-profiler", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
         Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", "1");
         StartupProfiler.ResetForTesting();
 
@@ -37,7 +37,7 @@ public sealed class StartupProfilerTests
         {
             StartupProfiler.ResetForTesting();
             ClawSharpTelemetry.ResetForTesting();
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", originalProfileStartup);
 
             if (Directory.Exists(configDir))
@@ -50,11 +50,11 @@ public sealed class StartupProfilerTests
     [Fact]
     public void Report_Does_Not_Write_File_When_Profiling_Is_Disabled()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalProfileStartup = Environment.GetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP");
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-startup-profiler", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
         Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", null);
         StartupProfiler.ResetForTesting();
 
@@ -70,7 +70,7 @@ public sealed class StartupProfilerTests
         {
             StartupProfiler.ResetForTesting();
             ClawSharpTelemetry.ResetForTesting();
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", originalProfileStartup);
 
             if (Directory.Exists(configDir))

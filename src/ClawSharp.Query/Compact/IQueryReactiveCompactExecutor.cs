@@ -11,5 +11,6 @@ public interface IQueryReactiveCompactExecutor
         QueryTerminalIterationResult terminalResult,
         ConversationSession session,
         ClawSharpSettings settings,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string trigger = "manual");
 }

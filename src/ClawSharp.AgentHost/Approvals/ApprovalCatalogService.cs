@@ -41,6 +41,7 @@ public sealed class ApprovalCatalogService
         var decision = request.Decision.Trim().ToLowerInvariant() switch
         {
             "approved" or "approve" => ApprovalDecision.Approved,
+            "always_allow" or "always-allow" or "approve_for_session" or "approved_for_session" => ApprovalDecision.ApprovedForSession,
             "rejected" or "reject" => ApprovalDecision.Rejected,
             _ => throw new AgentHostException("invalid_request", $"Unsupported approval decision '{request.Decision}'.")
         };

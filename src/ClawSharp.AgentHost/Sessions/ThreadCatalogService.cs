@@ -4,23 +4,45 @@ using ClawSharp.AgentHost.Mapping;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 
 namespace ClawSharp.AgentHost.Sessions;
 
 public sealed class ThreadCatalogService
 {
+    private const int DefaultThreadPageSize = 50;
     private readonly WorkspaceApplicationRegistry _applicationRegistry;
     private readonly RecentProjectStore _recentProjectStore;
     private readonly ThreadStateStore _threadStateStore;
+    private readonly ISessionLogStore _sessionLogStore;
+    private readonly ThreadTranscriptPageReader _threadTranscriptPageReader;
 
     public ThreadCatalogService(
         WorkspaceApplicationRegistry applicationRegistry,
         RecentProjectStore recentProjectStore,
-        ThreadStateStore threadStateStore)
+        ThreadStateStore threadStateStore,
+        ISessionLogStore? sessionLogStore = null)
+        : this(
+            applicationRegistry,
+            recentProjectStore,
+            threadStateStore,
+            sessionLogStore,
+            new ThreadTranscriptPageReader())
+    {
+    }
+
+    internal ThreadCatalogService(
+        WorkspaceApplicationRegistry applicationRegistry,
+        RecentProjectStore recentProjectStore,
+        ThreadStateStore threadStateStore,
+        ISessionLogStore? sessionLogStore,
+        ThreadTranscriptPageReader threadTranscriptPageReader)
     {
         _applicationRegistry = applicationRegistry;
         _recentProjectStore = recentProjectStore;
         _threadStateStore = threadStateStore;
+        _sessionLogStore = sessionLogStore ?? new DiskSessionLogStore();
+        _threadTranscriptPageReader = threadTranscriptPageReader;
     }
 
     public ThreadCatalogService(
@@ -82,23 +104,31 @@ public sealed class ThreadCatalogService
 
         if (!string.IsNullOrWhiteSpace(request.ProjectId))
         {
-            return await GetThreadForProjectAsync(request.ProjectId, request.ThreadId, cancellationToken);
+            return await GetThreadForProjectAsync(
+                request.ProjectId,
+                request.ThreadId,
+                request.BeforeMessageId,
+                request.PageSize,
+                cancellationToken);
         }
 
         var recentProjects = await _recentProjectStore.ListAsync(cancellationToken);
         foreach (var recentProject in recentProjects)
         {
-            var app = await _applicationRegistry.GetOrCreateAsync(recentProject.Path, cancellationToken);
-            var session = await app.SessionFactory.ResumeAsync(request.ThreadId, cancellationToken);
-            if (session is null)
+            var threads = await ListThreadsByPathAsync(recentProject.Path, cancellationToken);
+            var thread = threads.FirstOrDefault(item => item.Id == request.ThreadId);
+            if (thread is null)
             {
                 continue;
             }
 
-            var threads = await ListThreadsByPathAsync(recentProject.Path, cancellationToken);
             var project = DesktopContractMapper.MapProject(recentProject.Path, threads, recentProject.LastOpenedAt);
-            var lastUpdatedAt = threads.FirstOrDefault(thread => thread.Id == request.ThreadId)?.LastUpdatedAt ?? DateTimeOffset.UtcNow;
-            var detail = DesktopContractMapper.MapThreadDetail(project.Id, session, lastUpdatedAt);
+            var detail = await ReadThreadDetailPageAsync(
+                project.Id,
+                thread,
+                request.BeforeMessageId,
+                request.PageSize,
+                cancellationToken);
             return new GetThreadResponse(project, detail);
         }
 
@@ -159,9 +189,8 @@ public sealed class ThreadCatalogService
         string projectPath,
         CancellationToken cancellationToken = default)
     {
-        var app = await _applicationRegistry.GetOrCreateAsync(projectPath, cancellationToken);
         var projectId = DesktopContractMapper.CreateProjectId(projectPath);
-        var logs = await app.SessionLogStore.LoadProjectLogsAsync(projectPath, cancellationToken);
+        var logs = await _sessionLogStore.LoadProjectLogsAsync(projectPath, cancellationToken);
         return logs
             .Select(log => DesktopContractMapper.MapThreadSummary(projectId, log))
             .Where(thread => !_threadStateStore.IsArchived(projectId, thread.Id))
@@ -172,24 +201,49 @@ public sealed class ThreadCatalogService
     private async Task<GetThreadResponse> GetThreadForProjectAsync(
         string projectId,
         string threadId,
+        string? beforeMessageId,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
         var projectPath = await ResolveProjectPathAsync(projectId, cancellationToken);
-        var app = await _applicationRegistry.GetOrCreateAsync(projectPath, cancellationToken);
-        var session = await app.SessionFactory.ResumeAsync(threadId, cancellationToken);
-        if (session is null)
+        var threads = await ListThreadsByPathAsync(projectPath, cancellationToken);
+        var thread = threads.FirstOrDefault(item => item.Id == threadId);
+        if (thread is null)
         {
             throw new AgentHostException("thread_not_found", $"Thread '{threadId}' was not found in project '{projectId}'.");
         }
 
-        var threads = await ListThreadsByPathAsync(projectPath, cancellationToken);
         var project = DesktopContractMapper.MapProject(
             projectPath,
             threads,
             (await _recentProjectStore.FindByIdAsync(projectId, cancellationToken))?.LastOpenedAt);
-        var lastUpdatedAt = threads.FirstOrDefault(thread => thread.Id == threadId)?.LastUpdatedAt ?? DateTimeOffset.UtcNow;
-        var detail = DesktopContractMapper.MapThreadDetail(projectId, session, lastUpdatedAt);
+        var detail = await ReadThreadDetailPageAsync(
+            projectId,
+            thread,
+            beforeMessageId,
+            pageSize,
+            cancellationToken);
         return new GetThreadResponse(project, detail);
+    }
+
+    private async Task<ThreadDetailDto> ReadThreadDetailPageAsync(
+        string projectId,
+        ThreadSummaryDto thread,
+        string? beforeMessageId,
+        int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var page = await _threadTranscriptPageReader.ReadPageAsync(
+            thread.TranscriptPath,
+            thread.Id,
+            beforeMessageId,
+            pageSize ?? DefaultThreadPageSize,
+            cancellationToken);
+        return new ThreadDetailDto(
+            thread,
+            page.Messages,
+            page.HasMoreMessages,
+            page.NextBeforeMessageId);
     }
 
     private async Task<string> ResolveProjectPathAsync(string projectId, CancellationToken cancellationToken)

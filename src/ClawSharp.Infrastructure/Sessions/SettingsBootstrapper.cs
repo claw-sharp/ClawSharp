@@ -11,7 +11,7 @@ public sealed class SettingsBootstrapper
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip,
         Converters =
         {
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
@@ -103,6 +103,8 @@ public sealed class SettingsBootstrapper
             ApiKeyHelper = next.ApiKeyHelper ?? current.ApiKeyHelper,
             AwsCredentialExport = next.AwsCredentialExport ?? current.AwsCredentialExport,
             AwsAuthRefresh = next.AwsAuthRefresh ?? current.AwsAuthRefresh,
+            Agent = next.Agent ?? current.Agent,
+            Attribution = next.Attribution ?? current.Attribution,
             Permissions = Merge(current.Permissions, next.Permissions),
             AllowManagedPermissionRulesOnly = next.AllowManagedPermissionRulesOnly ?? current.AllowManagedPermissionRulesOnly,
             Hooks = MergeHooks(current.Hooks, next.Hooks),
@@ -133,6 +135,7 @@ public sealed class SettingsBootstrapper
         {
             PermissionMode = next.PermissionMode ?? current.PermissionMode,
             Model = next.Model ?? current.Model,
+            FallbackModel = next.FallbackModel ?? current.FallbackModel,
             EnableTelemetry = next.EnableTelemetry ?? current.EnableTelemetry,
             FileCheckpointingEnabled = next.FileCheckpointingEnabled ?? current.FileCheckpointingEnabled,
             AutoMemoryEnabled = next.AutoMemoryEnabled ?? current.AutoMemoryEnabled,
@@ -189,6 +192,7 @@ public sealed class SettingsBootstrapper
             {
                 PermissionMode = partial.Runtime?.PermissionMode ?? defaults.Runtime.PermissionMode,
                 Model = partial.Runtime?.Model ?? defaults.Runtime.Model,
+                FallbackModel = partial.Runtime?.FallbackModel ?? defaults.Runtime.FallbackModel,
                 EnableTelemetry = partial.Runtime?.EnableTelemetry ?? defaults.Runtime.EnableTelemetry,
                 FileCheckpointingEnabled = partial.Runtime?.FileCheckpointingEnabled ?? defaults.Runtime.FileCheckpointingEnabled,
                 AutoMemoryEnabled = partial.Runtime?.AutoMemoryEnabled ?? defaults.Runtime.AutoMemoryEnabled,
@@ -211,6 +215,8 @@ public sealed class SettingsBootstrapper
             ApiKeyHelper = partial.ApiKeyHelper ?? defaults.ApiKeyHelper,
             AwsCredentialExport = partial.AwsCredentialExport ?? defaults.AwsCredentialExport,
             AwsAuthRefresh = partial.AwsAuthRefresh ?? defaults.AwsAuthRefresh,
+            Agent = partial.Agent ?? defaults.Agent,
+            Attribution = partial.Attribution ?? defaults.Attribution,
             Permissions = new PermissionSettings
             {
                 Allow = partial.Permissions?.Allow ?? defaults.Permissions.Allow,
@@ -403,6 +409,8 @@ public sealed class SettingsBootstrapper
         public string? ApiKeyHelper { get; init; }
         public string? AwsCredentialExport { get; init; }
         public string? AwsAuthRefresh { get; init; }
+        public string? Agent { get; init; }
+        public AttributionSettings? Attribution { get; init; }
         public PartialPermissionSettings? Permissions { get; init; }
         public bool? AllowManagedPermissionRulesOnly { get; init; }
         public IReadOnlyDictionary<HookEvent, IReadOnlyList<HookMatcherDefinition>>? Hooks { get; init; }
@@ -420,6 +428,7 @@ public sealed class SettingsBootstrapper
     {
         public PermissionMode? PermissionMode { get; init; }
         public string? Model { get; init; }
+        public string? FallbackModel { get; init; }
         public bool? EnableTelemetry { get; init; }
         public bool? FileCheckpointingEnabled { get; init; }
         public bool? AutoMemoryEnabled { get; init; }

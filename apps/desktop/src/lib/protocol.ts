@@ -65,6 +65,8 @@ export interface CreateThreadResponse {
 export interface GetThreadRequest {
   threadId: string;
   projectId?: string | null;
+  beforeMessageId?: string | null;
+  pageSize?: number | null;
 }
 
 export interface GetThreadResponse {
@@ -161,11 +163,24 @@ export interface UpdateSettingsRequest {
   fallbackModel?: string | null;
   enableTelemetry?: boolean | null;
   fileCheckpointingEnabled?: boolean | null;
+  apiKey?: string | null;
+  authToken?: string | null;
+  accountId?: string | null;
+  clearApiKey?: boolean | null;
+  clearAuthToken?: boolean | null;
+  clearAccountId?: boolean | null;
+  useExternalCredential?: boolean | null;
 }
 
 export interface ValidateProviderConfigRequest {
+  projectId?: string | null;
   provider: string;
   model?: string | null;
+  liveCheck?: boolean | null;
+  apiKey?: string | null;
+  authToken?: string | null;
+  accountId?: string | null;
+  useExternalCredential?: boolean | null;
 }
 
 export interface ListPendingApprovalsRequest {
@@ -174,7 +189,7 @@ export interface ListPendingApprovalsRequest {
 
 export interface ResolveApprovalRequest {
   approvalId: string;
-  decision: 'approved' | 'rejected';
+  decision: 'approved' | 'always_allow' | 'rejected';
 }
 
 export interface AgentHostProject {
@@ -217,6 +232,8 @@ export interface AgentHostThreadMessage {
 export interface AgentHostThreadDetail {
   thread: AgentHostThreadSummary;
   messages: AgentHostThreadMessage[];
+  hasMoreMessages?: boolean;
+  nextBeforeMessageId?: string | null;
 }
 
 export interface AgentHostChangedFile {
@@ -316,6 +333,8 @@ export interface AgentHostRuntimeSettings {
   transport: string;
   configPath: string;
   settingsIssues: string[];
+  credentials: AgentHostProviderCredentials;
+  hasAnyConfiguredProviderCredential?: boolean;
 }
 
 export interface GetSettingsResponse {
@@ -345,6 +364,15 @@ export interface AgentHostProviderValidation {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+}
+
+export interface AgentHostProviderCredentials {
+  hasApiKey: boolean;
+  hasAuthToken: boolean;
+  accountId?: string | null;
+  source: 'none' | 'saved' | 'external';
+  hasExternalCredential: boolean;
+  externalCredentialPath?: string | null;
 }
 
 export interface ValidateProviderConfigResponse {

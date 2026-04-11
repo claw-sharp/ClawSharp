@@ -6,6 +6,7 @@ namespace ClawSharp.Query;
 
 public sealed class ReactiveCompactPromptOverflowRecoveryRunner : IQueryPromptOverflowRecoveryRunner
 {
+    public const string ReactiveCompactStatusMessage = "Compacting conversation after hitting the model's context window...";
     private readonly IQueryReactiveCompactExecutor _executor;
 
     public ReactiveCompactPromptOverflowRecoveryRunner(IQueryReactiveCompactExecutor? executor = null)
@@ -27,6 +28,11 @@ public sealed class ReactiveCompactPromptOverflowRecoveryRunner : IQueryPromptOv
         {
             return null;
         }
+
+        await emitEvent(
+            new QueryMessageRuntimeEvent(
+                ChatMessageFactory.CreateSystemMessage(ReactiveCompactStatusMessage, "info")),
+            cancellationToken);
 
         var compacted = await _executor.TryReactiveCompactAsync(
             request,

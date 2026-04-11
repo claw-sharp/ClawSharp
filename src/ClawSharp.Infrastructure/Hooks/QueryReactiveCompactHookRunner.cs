@@ -88,7 +88,7 @@ public sealed class QueryReactiveCompactHookRunner : IQueryReactiveCompactHookRu
 
     private static string GetTrigger(QueryReactiveCompactExecutionContext context)
     {
-        return "manual";
+        return context.Trigger;
     }
 
     private static JsonObject CreatePreCompactHookInput(QueryReactiveCompactExecutionContext context)

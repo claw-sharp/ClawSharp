@@ -226,7 +226,7 @@ internal static class RemoteTriggerAuth
             }
         }
 
-        var fallbackPath = "/home/claude/.claude/remote/.oauth_token";
+        var fallbackPath = "/home/claude/.clawsharp/remote/.oauth_token";
         if (File.Exists(fallbackPath))
         {
             try
@@ -301,12 +301,12 @@ internal static class RemoteTriggerAuth
             return legacyPath;
         }
 
-        var configDirectory = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var configDirectory = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var parentDirectory = string.IsNullOrWhiteSpace(configDirectory)
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             : configDirectory;
 
-        return Path.Combine(parentDirectory, ".claude.json");
+        return Path.Combine(parentDirectory, ".clawsharp.json");
     }
 
     private static string? GetDescriptorPath(int descriptor)

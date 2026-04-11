@@ -3,8 +3,9 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parseArgs(argv) {
   const positional = [];
@@ -55,6 +56,19 @@ function readJson(jsonPath) {
 function writeJson(jsonPath, value) {
   fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
   fs.writeFileSync(jsonPath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeTextFile(textPath, content, options = {}) {
+  const { eol = "\n", finalNewline = true } = options;
+  fs.mkdirSync(path.dirname(textPath), { recursive: true });
+
+  let normalized = content.replace(/\r?\n/g, eol);
+  if (finalNewline) {
+    normalized = normalized.replace(new RegExp(`${eol}$`), "");
+    normalized += eol;
+  }
+
+  fs.writeFileSync(textPath, normalized, "utf8");
 }
 
 function sha256(filePath) {
@@ -276,7 +290,7 @@ function generateWingetManifests(options) {
   const packageIdentifier = options.packageIdentifier ?? "ClawSharp.ClawSharp";
   const publisher = options.publisher ?? "ClawSharp";
   const packageName = options.packageName ?? "ClawSharp";
-  const manifestVersion = options.manifestVersion ?? "1.9.0";
+  const manifestVersion = options.manifestVersion ?? "1.12.0";
   const installerFile = fs.readdirSync(assetsRoot).find((fileName) => /_windows_x64_setup\.exe$/.test(fileName));
   if (!installerFile) {
     throw new Error(`Could not find a Windows x64 NSIS installer under ${assetsRoot}`);
@@ -289,7 +303,7 @@ function generateWingetManifests(options) {
 
   const sharedHeader = `# yaml-language-server: $schema=https://aka.ms/winget-manifest.`;
   const date = new Date().toISOString().slice(0, 10);
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.yaml`),
     `${sharedHeader}version.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -298,9 +312,10 @@ DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.installer.yaml`),
     `${sharedHeader}installer.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -324,9 +339,10 @@ Installers:
 ManifestType: installer
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 
-  fs.writeFileSync(
+  writeTextFile(
     path.join(outputRoot, `${packageIdentifier}.locale.en-US.yaml`),
     `${sharedHeader}defaultLocale.${manifestVersion}.schema.json
 PackageIdentifier: ${packageIdentifier}
@@ -350,6 +366,7 @@ Tags:
 ManifestType: defaultLocale
 ManifestVersion: ${manifestVersion}
 `,
+    { eol: "\r\n" },
   );
 }
 
@@ -397,9 +414,12 @@ ${sections.join("\n")}
 
   caveats do
     <<~EOS
-      This release is unsigned and not notarized.
-      macOS may show Gatekeeper warnings the first time you open ClawSharp.
-      Future signed and notarized releases can replace this cask without changing the tap structure.
+      ClawSharp is currently unsigned and not notarized.
+      If you see a "damaged" error on macOS, run:
+
+        xattr -cr /Applications/ClawSharp.app
+
+      Then you can open it normally. Future signed releases will remove this requirement.
     EOS
   end
 end
@@ -407,11 +427,55 @@ end
   );
 }
 
+function generateScoopManifest(options) {
+  const version = normalizeVersion(requireOption(options, "version"));
+  const tag = options.tag ?? `desktop-v${version}`;
+  const owner = options.owner ?? "claw-sharp";
+  const repo = options.repo ?? "ClawSharp";
+  const assetsRoot = resolveRepoPath(requireOption(options, "assets-root"));
+  const outputPath = resolveRepoPath(options.output ?? "artifacts/desktop/scoop/clawsharp.json");
+  const installerFile = fs.readdirSync(assetsRoot).find((fileName) => /_windows_x64_setup\.exe$/.test(fileName));
+  if (!installerFile) {
+    throw new Error(`Could not find a Windows x64 NSIS installer under ${assetsRoot}`);
+  }
+
+  const installerPath = path.join(assetsRoot, installerFile);
+  const installerUrl = buildReleaseUrl(owner, repo, tag, installerFile);
+  const installerHash = sha256(installerPath);
+
+  const manifest = {
+    version,
+    description: "ClawSharp desktop app",
+    homepage: `https://github.com/${owner}/${repo}`,
+    license: "MIT",
+    architecture: {
+      "64bit": {
+        url: installerUrl,
+        hash: installerHash,
+      },
+    },
+    installer: {
+      script: 'Start-Process -FilePath "$dir\\$fname" -ArgumentList "/S" -Wait',
+    },
+    checkver: "github",
+    autoupdate: {
+      architecture: {
+        "64bit": {
+          url: `https://github.com/${owner}/${repo}/releases/download/${tag}/ClawSharp_$version_windows_x64_setup.exe`,
+        },
+      },
+    },
+  };
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  writeJson(outputPath, manifest);
+}
+
 function main() {
   const { positional, options } = parseArgs(process.argv.slice(2));
   const command = positional[0];
   if (!command) {
-    throw new Error("Missing command. Expected one of: get-version, validate-version, write-tauri-release-config, stage-desktop-release-assets, prepare-updater-metadata, generate-winget-manifests, generate-homebrew-cask");
+    throw new Error("Missing command. Expected one of: get-version, validate-version, write-tauri-release-config, stage-desktop-release-assets, prepare-updater-metadata, generate-winget-manifests, generate-homebrew-cask, generate-scoop-manifest");
   }
 
   switch (command) {
@@ -435,6 +499,9 @@ function main() {
       break;
     case "generate-homebrew-cask":
       generateHomebrewCask(options);
+      break;
+    case "generate-scoop-manifest":
+      generateScoopManifest(options);
       break;
     default:
       throw new Error(`Unsupported command '${command}'`);

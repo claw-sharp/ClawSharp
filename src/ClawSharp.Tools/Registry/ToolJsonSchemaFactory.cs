@@ -73,9 +73,24 @@ internal static class ToolJsonSchemaFactory
         return StrictObject(System.Array.Empty<(string Name, JsonNode Schema)>(), null, description);
     }
 
-    public static JsonObject String(string? description = null, bool? Required = null)
+    public static JsonObject String(
+        string? description = null,
+        bool? Required = null,
+        int? minLength = null,
+        int? maxLength = null)
     {
-        return Primitive("string", description);
+        var result = Primitive("string", description);
+        if (minLength is not null)
+        {
+            result["minLength"] = minLength.Value;
+        }
+
+        if (maxLength is not null)
+        {
+            result["maxLength"] = maxLength.Value;
+        }
+
+        return result;
     }
 
     public static JsonObject Number(

@@ -63,6 +63,8 @@ public sealed class AgentHostApprovalPermissionPrompter : IPermissionPrompter
             {
                 case ApprovalDecision.Approved:
                     return PromptPermissionDecision.Allow;
+                case ApprovalDecision.ApprovedForSession:
+                    return PromptPermissionDecision.AlwaysAllow;
                 case ApprovalDecision.Rejected:
                     return PromptPermissionDecision.Deny;
                 case ApprovalDecision.Pending:

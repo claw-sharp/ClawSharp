@@ -9,11 +9,11 @@ public static class SessionStoragePaths
 
     public static string GetClaudeConfigHomeDir()
     {
-        var configured = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var configured = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configHome = string.IsNullOrWhiteSpace(configured)
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".claude")
+                ".clawsharp")
             : configured;
 
         return configHome.Normalize(NormalizationForm.FormC);
@@ -32,6 +32,11 @@ public static class SessionStoragePaths
     public static string GetTranscriptPath(string projectDirectory, string sessionId)
     {
         return Path.Combine(GetProjectDir(projectDirectory), $"{sessionId}.jsonl");
+    }
+
+    public static string GetSessionLogMetadataPath(string projectDirectory, string sessionId)
+    {
+        return Path.Combine(GetProjectDir(projectDirectory), $"{sessionId}.session.json");
     }
 
     public static string GetMemoryDir(string projectDirectory)

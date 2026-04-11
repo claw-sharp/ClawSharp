@@ -65,6 +65,7 @@ public sealed class McpCommandResourceRegistrationService
         IReadOnlyList<McpServerConnection> connections,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(toolRegistry);
         var shouldRegisterResourceTools = false;
 
         foreach (var connection in connections)
@@ -89,7 +90,7 @@ public sealed class McpCommandResourceRegistrationService
                 // Also register resources into the ToolRegistry's MCP catalog if the caller provided one
                 try
                 {
-                    toolRegistry?.McpResources?.RegisterOrReplace(connected.Name, connected.Config, resources);
+                    toolRegistry.McpResources.RegisterOrReplace(connected.Name, connected.Config, resources);
                 }
                 catch
                 {
@@ -102,9 +103,10 @@ public sealed class McpCommandResourceRegistrationService
 
         if (shouldRegisterResourceTools)
         {
-            // Ensure registered tools have access to the lifecycle manager and resource catalog when executed
-            ListMcpResourcesTool.DefaultCatalog = toolRegistry.McpResources ?? _resourceCatalog;
-            ReadMcpResourceTool.DefaultCatalog = toolRegistry.McpResources ?? _resourceCatalog;
+            // Ensure registered tools have access to the lifecycle manager and resource catalog when executed.
+            var resourceCatalog = toolRegistry.McpResources;
+            ListMcpResourcesTool.DefaultCatalog = resourceCatalog;
+            ReadMcpResourceTool.DefaultCatalog = resourceCatalog;
             ReadMcpResourceTool.DefaultLifecycle = _lifecycleManager;
 
             toolRegistry.RegisterOrReplace(new ListMcpResourcesTool());

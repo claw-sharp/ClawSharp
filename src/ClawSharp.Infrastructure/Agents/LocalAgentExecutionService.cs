@@ -186,6 +186,8 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             toolCatalog: new ToolRegistryReactiveCompactToolCatalog(childTools),
             hookRunner: reactiveCompactHookRunner,
             modelCallRunner: reactiveCompactModelCallRunner);
+        var autoCompactRunner = new QueryAutoCompactRunner(
+            executor: reactiveCompactExecutor);
         var promptOverflowRecoveryRunner = new CompositeQueryPromptOverflowRecoveryRunner(
             new CompactBoundaryPromptOverflowRecoveryRunner(),
             new ReactiveCompactPromptOverflowRecoveryRunner(reactiveCompactExecutor));
@@ -200,6 +202,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             iterationRequestBuilder: iterationRequestBuilder,
             modelCallExecutor: _modelCallExecutor,
             promptOverflowRecoveryRunner: promptOverflowRecoveryRunner,
+            autoCompactRunner: autoCompactRunner,
             toolOrchestrator: toolOrchestrator,
             stopHookRunner: stopHookRunner);
         var queryTurnRunner = new ExplicitToolTurnRunner(

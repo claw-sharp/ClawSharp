@@ -18,10 +18,12 @@ public sealed class SearchToolTests
         Assert.Equal("object", glob.InputSchema?["type"]?.GetValue<string>());
         Assert.Equal("object", glob.OutputSchema?["type"]?.GetValue<string>());
         Assert.Equal("find files by name pattern or wildcard", glob.SearchHint);
+        Assert.Equal(1, glob.InputSchema?["properties"]?["pattern"]?["minLength"]?.GetValue<int>());
 
         Assert.Equal("object", grep.InputSchema?["type"]?.GetValue<string>());
         Assert.Equal("object", grep.OutputSchema?["type"]?.GetValue<string>());
-        Assert.Equal("search file contents with regex (ripgrep)", grep.SearchHint);
+        Assert.Equal("search file contents with a non-empty regex pattern (ripgrep); use Glob to list files", grep.SearchHint);
+        Assert.Equal(1, grep.InputSchema?["properties"]?["pattern"]?["minLength"]?.GetValue<int>());
     }
 
     [Fact]
@@ -119,5 +121,39 @@ public sealed class SearchToolTests
                 Directory.Delete(tempDir, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task GrepTool_Rejects_Empty_Pattern_With_Actionable_Message()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var session = new DefaultSessionFactory(Environment.CurrentDirectory).Create();
+
+        var result = await registry.ExecuteAsync(
+            "Grep",
+            """{"pattern":""}""",
+            session,
+            new ClawSharpSettings());
+
+        Assert.False(result.Success);
+        Assert.Contains("Grep requires a non-empty pattern.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("Use Glob to list files", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GlobTool_Rejects_Empty_Pattern_With_Actionable_Message()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var session = new DefaultSessionFactory(Environment.CurrentDirectory).Create();
+
+        var result = await registry.ExecuteAsync(
+            "Glob",
+            """{"pattern":""}""",
+            session,
+            new ClawSharpSettings());
+
+        Assert.False(result.Success);
+        Assert.Contains("Glob requires a non-empty pattern.", result.Output, StringComparison.Ordinal);
+        Assert.Contains("\"**/*\"", result.Output, StringComparison.Ordinal);
     }
 }

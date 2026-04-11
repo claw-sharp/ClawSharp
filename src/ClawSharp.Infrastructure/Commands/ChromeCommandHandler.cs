@@ -7,7 +7,7 @@ public sealed class ChromeCommandHandler : ICommandHandler
     private const string ChromeExtensionUrl = "https://claude.ai/chrome";
     private const string ChromePermissionsUrl = "https://clau.de/chrome/permissions";
     private const string ChromeReconnectUrl = "https://clau.de/chrome/reconnect";
-    private const string ChromeDocsUrl = "https://code.claude.com/docs/en/chrome";
+    private const string ChromeDocsUrl = "https://code.clawsharp.com/docs/en/chrome";
 
     public CommandDescriptor Descriptor { get; } =
         new(

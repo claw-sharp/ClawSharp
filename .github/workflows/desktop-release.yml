@@ -109,7 +109,7 @@ jobs:
             runtime_id: osx-arm64
             platform: darwin
             arch: aarch64
-          - runner: macos-13
+          - runner: macos-15-intel
             rust_target: x86_64-apple-darwin
             runtime_id: osx-x64
             platform: darwin
@@ -244,10 +244,46 @@ jobs:
             -Repo "${{ github.event.repository.name }}" `
             -Tag "${{ needs.validate.outputs.tag }}"
 
+      - name: Validate WinGet manifest line endings
+        shell: pwsh
+        run: |
+          $manifestRoot = Join-Path "artifacts/desktop/winget/ClawSharp.ClawSharp" "${{ needs.validate.outputs.version }}"
+          $manifestFiles = Get-ChildItem -Path $manifestRoot -Filter *.yaml -File
+          if ($manifestFiles.Count -eq 0) {
+            throw "No WinGet manifests found under $manifestRoot"
+          }
+
+          foreach ($file in $manifestFiles) {
+            $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.Length -lt 2 -or $bytes[$bytes.Length - 2] -ne 13 -or $bytes[$bytes.Length - 1] -ne 10) {
+              throw "Expected trailing CRLF in $($file.FullName)"
+            }
+
+            for ($index = 0; $index -lt $bytes.Length; $index++) {
+              if ($bytes[$index] -eq 10 -and ($index -eq 0 -or $bytes[$index - 1] -ne 13)) {
+                throw "Found lone LF in $($file.FullName)"
+              }
+
+              if ($bytes[$index] -eq 13 -and ($index + 1 -ge $bytes.Length -or $bytes[$index + 1] -ne 10)) {
+                throw "Found lone CR in $($file.FullName)"
+              }
+            }
+          }
+
       - name: Generate Homebrew cask
         shell: pwsh
         run: |
           ./eng/generate-homebrew-cask.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -AssetsRoot "${{ env.DESKTOP_RELEASE_ROOT }}" `
+            -Owner "${{ github.repository_owner }}" `
+            -Repo "${{ github.event.repository.name }}" `
+            -Tag "${{ needs.validate.outputs.tag }}"
+
+      - name: Generate Scoop manifest
+        shell: pwsh
+        run: |
+          ./eng/generate-scoop-manifest.ps1 `
             -Version "${{ needs.validate.outputs.version }}" `
             -AssetsRoot "${{ env.DESKTOP_RELEASE_ROOT }}" `
             -Owner "${{ github.repository_owner }}" `
@@ -266,12 +302,52 @@ jobs:
               "${DESKTOP_RELEASE_ROOT}"/* \
               artifacts/desktop/winget/ClawSharp.ClawSharp/${{ needs.validate.outputs.version }}/* \
               artifacts/desktop/homebrew/Casks/clawsharp.rb \
+              artifacts/desktop/scoop/clawsharp.json \
               --clobber
           else
             gh release create "$RELEASE_TAG" \
               "${DESKTOP_RELEASE_ROOT}"/* \
               artifacts/desktop/winget/ClawSharp.ClawSharp/${{ needs.validate.outputs.version }}/* \
               artifacts/desktop/homebrew/Casks/clawsharp.rb \
+              artifacts/desktop/scoop/clawsharp.json \
               --title "ClawSharp Desktop v${{ needs.validate.outputs.version }}" \
               --generate-notes
           fi
+
+      - name: Update Homebrew Tap
+        env:
+          TAP_NAME: "claw-sharp/homebrew-tap"
+          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${TAP_NAME}.git homebrew-tap
+          mkdir -p homebrew-tap/Casks
+          cp artifacts/desktop/homebrew/Casks/clawsharp.rb homebrew-tap/Casks/
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update ClawSharp to ${{ needs.validate.outputs.version }}"
+          git push
+
+      - name: Update Scoop Bucket
+        env:
+          BUCKET_NAME: "claw-sharp/scoop-bucket"
+          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${BUCKET_NAME}.git scoop-bucket
+          mkdir -p scoop-bucket/bucket
+          cp artifacts/desktop/scoop/clawsharp.json scoop-bucket/bucket/
+          cd scoop-bucket
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update ClawSharp to ${{ needs.validate.outputs.version }}"
+          git push
+
+      - name: Submit to WinGet
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: ClawSharp.ClawSharp
+          max-versions-to-keep: 5
+          installers-regex: '(?i)^ClawSharp_.*_windows_x64_setup\.exe$'
+          token: ${{ secrets.WINGET_GH_TOKEN }}

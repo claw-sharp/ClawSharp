@@ -12,12 +12,12 @@ public sealed class PerformanceRegressionTests
     [Fact]
     public async Task Application_Factory_Starts_Within_Regression_Budget()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configRoot = CreateTempDirectory("clawsharp-performance-config");
 
         try
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
             var stopwatch = Stopwatch.StartNew();
             _ = await ClawSharpApplicationFactory.CreateDefaultAsync();
@@ -29,7 +29,7 @@ public sealed class PerformanceRegressionTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectory(configRoot);
         }
     }

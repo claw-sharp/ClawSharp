@@ -1,24 +1,21 @@
-using System.Text.Json.Nodes;
 using ClawSharp.Core;
 
 namespace ClawSharp.Infrastructure;
 
 public sealed class DiskSessionLogStore : ISessionLogStore
 {
+    private readonly SessionLogMetadataStore _sessionLogMetadataStore;
+
+    public DiskSessionLogStore(SessionLogMetadataStore? sessionLogMetadataStore = null)
+    {
+        _sessionLogMetadataStore = sessionLogMetadataStore ?? new SessionLogMetadataStore();
+    }
+
     public async Task<IReadOnlyList<SessionLog>> LoadProjectLogsAsync(
         string projectDirectory,
         CancellationToken cancellationToken = default)
     {
-        var sessionDirectory = SessionStoragePaths.GetProjectDir(projectDirectory);
-        if (!Directory.Exists(sessionDirectory))
-        {
-            return [];
-        }
-
-        return await LoadSessionLogsFromStorageDirectoryAsync(
-            sessionDirectory,
-            projectDirectory,
-            cancellationToken);
+        return await _sessionLogMetadataStore.LoadProjectLogsAsync(projectDirectory, cancellationToken);
     }
 
     public async Task<IReadOnlyList<SessionLog>> LoadSameRepoLogsAsync(
@@ -70,8 +67,7 @@ public sealed class DiskSessionLogStore : ISessionLogStore
 
                 seenDirectories.Add(directoryName);
                 logs.AddRange(
-                    await LoadSessionLogsFromStorageDirectoryAsync(
-                        directory,
+                    await LoadProjectLogsAsync(
                         worktreePrefix.WorktreePath,
                         cancellationToken));
                 break;
@@ -140,117 +136,11 @@ public sealed class DiskSessionLogStore : ISessionLogStore
             .FirstOrDefault();
     }
 
-    private static async Task<IReadOnlyList<SessionLog>> LoadSessionLogsFromStorageDirectoryAsync(
-        string storageDirectory,
-        string projectDirectory,
-        CancellationToken cancellationToken)
-    {
-        var transcriptPaths = Directory.GetFiles(storageDirectory, "*.jsonl", SearchOption.TopDirectoryOnly)
-            .Where(IsSessionTranscriptPath)
-            .OrderByDescending(File.GetLastWriteTimeUtc)
-            .ToArray();
-
-        var logs = new List<SessionLog>(transcriptPaths.Length);
-        foreach (var transcriptPath in transcriptPaths)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            logs.Add(await LoadTranscriptLogAsync(projectDirectory, transcriptPath, cancellationToken));
-        }
-
-        return logs;
-    }
-
-    private static async Task<SessionLog> LoadTranscriptLogAsync(
-        string projectDirectory,
-        string transcriptPath,
-        CancellationToken cancellationToken)
-    {
-        var sessionId = Path.GetFileNameWithoutExtension(transcriptPath);
-        var modified = File.GetLastWriteTimeUtc(transcriptPath);
-        var lines = await File.ReadAllLinesAsync(transcriptPath, cancellationToken);
-
-        string? customTitle = null;
-        string? firstUserMessage = null;
-
-        foreach (var line in lines)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            var entry = JsonNode.Parse(line) as JsonObject;
-            if (entry is null)
-            {
-                continue;
-            }
-
-            var type = entry["type"]?.GetValue<string>();
-            if (type == "custom-title")
-            {
-                customTitle = entry["customTitle"]?.GetValue<string>() ?? customTitle;
-                continue;
-            }
-
-            if (type != "user" || firstUserMessage is not null)
-            {
-                continue;
-            }
-
-            firstUserMessage = TryExtractFirstUserMessage(entry);
-        }
-
-        return new SessionLog(
-            sessionId,
-            transcriptPath,
-            projectDirectory,
-            modified,
-            customTitle,
-            firstUserMessage);
-    }
-
-    private static string? TryExtractFirstUserMessage(JsonObject entry)
-    {
-        var message = entry["message"] as JsonObject;
-        var content = message?["content"] as JsonArray;
-        if (content is null)
-        {
-            return null;
-        }
-
-        foreach (var item in content)
-        {
-            if (item is not JsonObject block)
-            {
-                continue;
-            }
-
-            if (!string.Equals(block["type"]?.GetValue<string>(), "text", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var text = block["text"]?.GetValue<string>();
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return text;
-            }
-        }
-
-        return null;
-    }
-
     private static bool TitleMatches(string candidate, string title, bool exact)
     {
         return exact
             ? string.Equals(candidate.Trim(), title, StringComparison.OrdinalIgnoreCase)
             : candidate.Contains(title, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsSessionTranscriptPath(string path)
-    {
-        return Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "N", out _);
     }
 
     private static IReadOnlyList<SessionLog> DeduplicateBySessionId(IReadOnlyList<SessionLog> logs)

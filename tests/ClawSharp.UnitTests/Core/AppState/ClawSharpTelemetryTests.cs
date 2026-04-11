@@ -9,11 +9,11 @@ public sealed class ClawSharpTelemetryTests
     [Fact]
     public async Task LogEvent_RecordMetric_AndCaptureException_WriteTelemetryArtifacts()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-telemetry-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(configDir);
 
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
         ClawSharpTelemetry.ResetForTesting();
 
         try
@@ -36,7 +36,7 @@ public sealed class ClawSharpTelemetryTests
         finally
         {
             ClawSharpTelemetry.ResetForTesting();
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(configDir))
             {
                 Directory.Delete(configDir, recursive: true);
@@ -47,12 +47,12 @@ public sealed class ClawSharpTelemetryTests
     [Fact]
     public async Task StartSpans_WritesPerfettoTrace_WhenEnabled()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalPerfetto = Environment.GetEnvironmentVariable("CLAUDE_CODE_PERFETTO_TRACE");
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-perfetto-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(configDir);
 
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
         Environment.SetEnvironmentVariable("CLAUDE_CODE_PERFETTO_TRACE", "1");
         ClawSharpTelemetry.ResetForTesting();
 
@@ -75,7 +75,7 @@ public sealed class ClawSharpTelemetryTests
         finally
         {
             ClawSharpTelemetry.ResetForTesting();
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("CLAUDE_CODE_PERFETTO_TRACE", originalPerfetto);
             if (Directory.Exists(configDir))
             {
@@ -87,13 +87,13 @@ public sealed class ClawSharpTelemetryTests
     [Fact]
     public async Task StartupProfiler_LogsSampledStartupPerf_ForAntSessions()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var originalUserType = Environment.GetEnvironmentVariable("USER_TYPE");
         var originalProfileStartup = Environment.GetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP");
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-startup-telemetry-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(configDir);
 
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
         Environment.SetEnvironmentVariable("USER_TYPE", "ant");
         Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", null);
         ClawSharpTelemetry.ResetForTesting();
@@ -113,7 +113,7 @@ public sealed class ClawSharpTelemetryTests
         {
             StartupProfiler.ResetForTesting();
             ClawSharpTelemetry.ResetForTesting();
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("USER_TYPE", originalUserType);
             Environment.SetEnvironmentVariable("CLAUDE_CODE_PROFILE_STARTUP", originalProfileStartup);
             if (Directory.Exists(configDir))

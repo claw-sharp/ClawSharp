@@ -1,4 +1,5 @@
 // TS parity status: focused coverage for the streamed model-call executor boundary under the C# model-backed iteration runner; live API transport, fallback retry execution, and real assistant sampling remain intentionally unported.
+using System.Net;
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
@@ -506,6 +507,112 @@ public sealed class ModelBackedIterationRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_Recovers_Missing_Tool_Result_Api_Error_By_Appending_Synthetic_Result_And_Continuing()
+    {
+        var runner = new ModelBackedIterationRunner(
+            new PostSamplingHookRegistry(),
+            new QueryModelIterationRequestBuilder(),
+            new MissingToolResultApiErrorModelCallExecutor());
+        var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionRoot);
+        var session = new ConversationSession("session-model-missing-tool-result", sessionRoot, Path.Combine(sessionRoot, "session.jsonl"));
+        var priorAssistantToolUse = ChatMessageFactory.CreateToolUse(
+            [("call_missing", "Bash", "{\"command\":\"git status --short\"}")]);
+        var emittedEvents = new List<QueryRuntimeEvent>();
+
+        var result = await runner.RunAsync(
+            QueryTurnRequest.Create(session, "commit"),
+            QueryLoopStateFactory.CreateInitial(
+                [
+                    ChatMessageFactory.CreateText(MessageRole.User, "commit all changes"),
+                    priorAssistantToolUse
+                ]),
+            session,
+            new ClawSharpSettings(),
+            (runtimeEvent, _) =>
+            {
+                emittedEvents.Add(runtimeEvent);
+                return Task.CompletedTask;
+            });
+
+        var continuation = Assert.IsType<QueryContinueIterationResult>(result);
+        Assert.Equal(QueryContinueReason.NextTurn, continuation.Transition.Reason);
+        var recoveredToolResult = Assert.Single(
+            continuation.State.Messages,
+            message => message.Role == MessageRole.User &&
+                       message.ContentBlocks.Any(
+                           block => block.Kind == MessageContentKind.ToolResult &&
+                                    block.Metadata?["toolUseId"] == "call_missing"));
+        Assert.Contains(
+            "Recovered automatically so the request can continue.",
+            recoveredToolResult.Content,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            continuation.State.Messages,
+            message => message.Role == MessageRole.Assistant &&
+                       message.Content.Contains("No tool output found for function call", StringComparison.Ordinal));
+        Assert.Contains(
+            emittedEvents,
+            runtimeEvent => runtimeEvent is QueryMessageRuntimeEvent messageEvent &&
+                            messageEvent.Message.Id == recoveredToolResult.Id);
+    }
+
+    [Fact]
+    public async Task RunAsync_Recovers_Thrown_Missing_Tool_Result_Api_Error_By_Appending_Synthetic_Result_And_Continuing()
+    {
+        var runner = new ModelBackedIterationRunner(
+            new PostSamplingHookRegistry(),
+            new QueryModelIterationRequestBuilder(),
+            new ThrowingModelCallExecutor(
+                new QueryModelApiException(
+                    HttpStatusCode.BadRequest,
+                    new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal),
+                    """{ "error": { "message": "No tool output found for function call call_missing.", "type": "invalid_request_error" } }""")));
+        var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionRoot);
+        var session = new ConversationSession("session-model-thrown-missing-tool-result", sessionRoot, Path.Combine(sessionRoot, "session.jsonl"));
+        var priorAssistantToolUse = ChatMessageFactory.CreateToolUse(
+            [("call_missing", "Bash", "{\"command\":\"git status --short\"}")]);
+        var emittedEvents = new List<QueryRuntimeEvent>();
+
+        var result = await runner.RunAsync(
+            QueryTurnRequest.Create(session, "commit"),
+            QueryLoopStateFactory.CreateInitial(
+                [
+                    ChatMessageFactory.CreateText(MessageRole.User, "commit all changes"),
+                    priorAssistantToolUse
+                ]),
+            session,
+            new ClawSharpSettings(),
+            (runtimeEvent, _) =>
+            {
+                emittedEvents.Add(runtimeEvent);
+                return Task.CompletedTask;
+            });
+
+        var continuation = Assert.IsType<QueryContinueIterationResult>(result);
+        Assert.Equal(QueryContinueReason.NextTurn, continuation.Transition.Reason);
+        var recoveredToolResult = Assert.Single(
+            continuation.State.Messages,
+            message => message.Role == MessageRole.User &&
+                       message.ContentBlocks.Any(
+                           block => block.Kind == MessageContentKind.ToolResult &&
+                                    block.Metadata?["toolUseId"] == "call_missing"));
+        Assert.Contains(
+            "Recovered automatically so the request can continue.",
+            recoveredToolResult.Content,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            continuation.State.Messages,
+            message => message.Role == MessageRole.Assistant &&
+                       message.Content.Contains("No tool output found for function call", StringComparison.Ordinal));
+        Assert.Contains(
+            emittedEvents,
+            runtimeEvent => runtimeEvent is QueryMessageRuntimeEvent messageEvent &&
+                            messageEvent.Message.Id == recoveredToolResult.Id);
+    }
+
+    [Fact]
     public async Task RunAsync_Continues_With_CollapseDrainRetry_When_PromptOverflow_Recovery_Runner_Recovers()
     {
         var runner = new ModelBackedIterationRunner(
@@ -659,6 +766,48 @@ public sealed class ModelBackedIterationRunnerTests
         Assert.Equal("kept tail", continueResult.State.Messages[2].Content);
         Assert.Equal(string.Empty, continueResult.State.Messages[3].Content);
         Assert.Equal("hook-result", continueResult.State.Messages[4].Content);
+        var emittedMessages = emittedEvents.OfType<QueryMessageRuntimeEvent>().Select(e => e.Message).ToArray();
+        Assert.Contains(emittedMessages, message => message.Content == ReactiveCompactPromptOverflowRecoveryRunner.ReactiveCompactStatusMessage);
+        Assert.Equal(7, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
+    }
+
+    [Fact]
+    public async Task RunAsync_Uses_AutoCompact_PostCompactMessages_Before_Model_Call()
+    {
+        var runner = new ModelBackedIterationRunner(
+            new PostSamplingHookRegistry(),
+            new QueryModelIterationRequestBuilder(),
+            new PromptTooLongModelCallExecutor(),
+            autoCompactRunner: new StaticAutoCompactRunner());
+        var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionRoot);
+        var session = new ConversationSession("session-model-14a", sessionRoot, Path.Combine(sessionRoot, "session.jsonl"));
+        var state = QueryLoopStateFactory.CreateInitial([ChatMessageFactory.CreateText(MessageRole.User, "hello")]);
+        var emittedEvents = new List<QueryRuntimeEvent>();
+
+        var result = await runner.RunAsync(
+            QueryTurnRequest.Create(session, "hello"),
+            state,
+            session,
+            new ClawSharpSettings(),
+            (runtimeEvent, _) =>
+            {
+                emittedEvents.Add(runtimeEvent);
+                return Task.CompletedTask;
+            });
+
+        var continueResult = Assert.IsType<QueryContinueIterationResult>(result);
+        Assert.Equal(QueryContinueReason.AutoCompactRetry, continueResult.Transition.Reason);
+        Assert.NotNull(continueResult.State.AutoCompactTracking);
+        Assert.True(continueResult.State.AutoCompactTracking!.Compacted);
+        Assert.Equal(5, continueResult.State.Messages.Count);
+        Assert.Equal("Conversation compacted", continueResult.State.Messages[0].Content);
+        Assert.Equal("summary", continueResult.State.Messages[1].Content);
+        Assert.Equal("kept tail", continueResult.State.Messages[2].Content);
+        Assert.Equal(string.Empty, continueResult.State.Messages[3].Content);
+        Assert.Equal("hook-result", continueResult.State.Messages[4].Content);
+        var autoCompactMessages = emittedEvents.OfType<QueryMessageRuntimeEvent>().Select(e => e.Message).ToArray();
+        Assert.Contains(autoCompactMessages, message => message.Content == QueryAutoCompactRunner.AutoCompactStatusMessage);
         Assert.Equal(6, emittedEvents.OfType<QueryMessageRuntimeEvent>().Count());
     }
 
@@ -921,6 +1070,37 @@ public sealed class ModelBackedIterationRunnerTests
             _cancellationSource.Cancel();
             await Task.Delay(1, cancellationToken);
             yield break;
+        }
+    }
+
+    private sealed class MissingToolResultApiErrorModelCallExecutor : IQueryModelCallExecutor
+    {
+        public async IAsyncEnumerable<QueryModelCallUpdate> StreamAsync(
+            QueryModelHttpStreamingRequest streamingRequest,
+            QueryTurnRequest request,
+            QueryLoopState state,
+            ConversationSession session,
+            ClawSharpSettings settings,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var apiError = ChatMessageFactory.CreateAssistantApiErrorMessage(
+                "No tool output found for function call call_missing.",
+                apiError: "invalid_request_error",
+                error: "invalid_request_error",
+                errorDetails: """{"message":"No tool output found for function call call_missing."}""");
+            var completedState = state with
+            {
+                Messages = state.Messages.Concat([apiError]).ToArray()
+            };
+
+            yield return new QueryModelCallUpdate(
+                new QueryMessageRuntimeEvent(apiError));
+            yield return new QueryModelCallUpdate(
+                AttemptResult: QueryModelCallAttemptResult.Completed(
+                    new QueryTerminalIterationResult(
+                        new QueryLoopTerminal(QueryTerminalReason.Completed),
+                        completedState)));
+            await Task.CompletedTask;
         }
     }
 
@@ -1236,6 +1416,53 @@ public sealed class ModelBackedIterationRunnerTests
         }
     }
 
+    private sealed class StaticAutoCompactRunner : IQueryAutoCompactRunner
+    {
+        public async Task<QueryAutoCompactResult> TryCompactAsync(
+            QueryTurnRequest request,
+            QueryLoopState state,
+            ConversationSession session,
+            ClawSharpSettings settings,
+            Func<QueryRuntimeEvent, CancellationToken, Task> emitEvent,
+            CancellationToken cancellationToken = default)
+        {
+            await emitEvent(
+                new QueryMessageRuntimeEvent(
+                    ChatMessageFactory.CreateSystemMessage(QueryAutoCompactRunner.AutoCompactStatusMessage, "info")),
+                cancellationToken);
+            var boundary = ChatMessageFactory.CreateCompactBoundaryMessage("auto", 500);
+            var summary = ChatMessageFactory.CreateText(MessageRole.User, "summary");
+            var keptTail = ChatMessageFactory.CreateText(MessageRole.User, "kept tail");
+            var attachment = ChatMessageFactory.CreateOutputTokenUsageAttachmentMessage(50, 50, 100);
+            var hookResult = ChatMessageFactory.CreateText(MessageRole.System, "hook-result");
+            var postCompactMessages = new[]
+            {
+                boundary,
+                summary,
+                keptTail,
+                attachment,
+                hookResult
+            };
+
+            foreach (var message in postCompactMessages)
+            {
+                await emitEvent(new QueryMessageRuntimeEvent(message), cancellationToken);
+            }
+
+            return new QueryAutoCompactResult(
+                state with
+                {
+                    Messages = postCompactMessages,
+                    AutoCompactTracking = new QueryAutoCompactTrackingState(
+                        Compacted: true,
+                        TurnCounter: 0,
+                        TurnId: "auto-compact",
+                        ConsecutiveFailures: 0)
+                },
+                Compacted: true);
+        }
+    }
+
     private sealed class FakeReactiveCompactExecutor : IQueryReactiveCompactExecutor
     {
         public Task<QueryCompactionResult?> TryReactiveCompactAsync(
@@ -1244,7 +1471,8 @@ public sealed class ModelBackedIterationRunnerTests
             QueryTerminalIterationResult terminalResult,
             ConversationSession session,
             ClawSharpSettings settings,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string trigger = "manual")
         {
             var boundary = ChatMessageFactory.CreateCompactBoundaryMessage("auto", 500);
             var summary = ChatMessageFactory.CreateText(MessageRole.User, "summary");

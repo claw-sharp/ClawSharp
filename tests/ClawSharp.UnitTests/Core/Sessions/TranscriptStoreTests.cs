@@ -11,11 +11,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task RecordTranscript_Writes_Only_New_Messages_To_Jsonl()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -49,7 +49,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -65,11 +65,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task RecordTranscript_Persists_Structured_Tool_Result_Metadata()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-structured-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -108,7 +108,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -124,11 +124,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Tool_Result_And_Progress_Messages()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-roundtrip-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -186,7 +186,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -202,11 +202,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Metadata_Backed_System_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-system-message-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -240,7 +240,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -256,11 +256,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Metadata_Backed_Assistant_Api_Error_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-assistant-api-error-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -289,7 +289,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -305,11 +305,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Metadata_Backed_System_Api_Error_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-system-api-error-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -350,7 +350,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -366,11 +366,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Metadata_Backed_Compact_Boundary_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-compact-boundary-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -398,7 +398,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -414,11 +414,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_Metadata_Backed_Informational_System_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-informational-system-message-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -446,7 +446,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -462,11 +462,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_MaxTurnsReached_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-max-turns-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -492,7 +492,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -508,11 +508,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookStoppedContinuation_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-stopped-continuation-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -542,7 +542,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -558,11 +558,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_StructuredOutput_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-structured-output-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -586,7 +586,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -602,11 +602,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_OutputTokenUsage_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-output-token-usage-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -634,7 +634,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -650,11 +650,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookSystemMessage_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-system-message-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -684,7 +684,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -700,11 +700,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookPermissionDecision_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-permission-decision-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -732,7 +732,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -748,11 +748,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookAdditionalContext_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-additional-context-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -782,7 +782,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -798,11 +798,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookBlockingError_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-blocking-error-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -832,7 +832,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -848,11 +848,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookSuccess_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-success-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -892,7 +892,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -908,11 +908,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookCancelled_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-cancelled-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -944,7 +944,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -960,11 +960,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookErrorDuringExecution_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-error-during-execution-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -998,7 +998,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -1014,11 +1014,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_RoundTrips_HookNonBlockingError_Attachment_Message()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-hook-non-blocking-error-attachment-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -1056,7 +1056,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -1072,11 +1072,11 @@ public class TranscriptStoreTests
     [Fact]
     public async Task ReadTranscript_Restores_Custom_Title_And_File_History_Metadata()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-transcript-file-history-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -1105,7 +1105,7 @@ public class TranscriptStoreTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);

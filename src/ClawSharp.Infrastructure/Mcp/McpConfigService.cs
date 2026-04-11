@@ -424,7 +424,7 @@ public sealed class McpConfigService
                     filePath,
                     $"mcpServers.{name}",
                     "Windows requires 'cmd /c' wrapper to execute npx",
-                    "Change command to \"cmd\" with args [\"/c\", \"npx\", ...]. See: https://code.claude.com/docs/en/mcp#configure-mcp-servers",
+                    "Change command to \"cmd\" with args [\"/c\", \"npx\", ...]. See: https://code.clawsharp.com/docs/en/mcp#configure-mcp-servers",
                     new McpConfigErrorMetadata(scope, name, McpConfigErrorSeverity.Warning)));
             }
 

@@ -65,10 +65,10 @@ function createProviderCatalog(): AgentHostProviderOption[] {
       id: 'anthropic',
       displayName: 'Anthropic',
       defaultModel: 'claude-haiku-4-5-20251001',
-      models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5-20250929'],
+      models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5', 'claude-opus-4-1'],
       baseUrl: 'https://api.anthropic.com',
       requiresApiKey: true,
-      description: 'Claude provider over the Anthropic Messages transport.',
+      description: 'Claude default provider selection.',
     },
     {
       id: 'openai',
@@ -77,16 +77,43 @@ function createProviderCatalog(): AgentHostProviderOption[] {
       models: ['gpt-4.1', 'o3'],
       baseUrl: 'https://api.openai.com/v1',
       requiresApiKey: true,
-      description: 'OpenAI-compatible chat completions provider.',
+      description: 'OpenAI chat completions transport.',
     },
     {
       id: 'codex',
       displayName: 'Codex',
-      defaultModel: 'codexplan',
-      models: ['codexplan', 'gpt-5.3-codex', 'gpt-5.3-codex-spark', 'gpt-5.4'],
+      defaultModel: 'gpt-5.4',
+      models: ['gpt-5.4', 'gpt-5.4-mini', 'codexplan'],
       baseUrl: 'https://chatgpt.com/backend-api/codex',
+      requiresApiKey: true,
+      description: 'OpenAI Codex responses transport.',
+    },
+    {
+      id: 'gemini',
+      displayName: 'Gemini',
+      defaultModel: 'gemini-2.5-flash',
+      models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      requiresApiKey: true,
+      description: 'Gemini OpenAI-compatible transport.',
+    },
+    {
+      id: 'github',
+      displayName: 'GitHub Models',
+      defaultModel: 'github:copilot',
+      models: ['github:copilot', 'openai/gpt-4.1'],
+      baseUrl: 'https://models.github.ai/inference',
+      requiresApiKey: true,
+      description: 'GitHub-hosted models.',
+    },
+    {
+      id: 'ollama',
+      displayName: 'Ollama',
+      defaultModel: 'llama3.2',
+      models: ['llama3.2', 'qwen2.5-coder'],
+      baseUrl: 'http://localhost:11434/v1',
       requiresApiKey: false,
-      description: 'Codex-backed Responses transport via ChatGPT auth or explicit token.',
+      description: 'Local OpenAI-compatible provider.',
     },
   ];
 }
@@ -114,6 +141,15 @@ function createRuntimeSettings(providers: AgentHostProviderOption[]): AgentHostR
     settingsIssues: [
       'Browser preview uses mock AgentHost data. Run `npm run dev:codex` to exercise the real desktop runtime.',
     ],
+    credentials: {
+      hasApiKey: false,
+      hasAuthToken: false,
+      accountId: null,
+      source: 'none',
+      hasExternalCredential: false,
+      externalCredentialPath: null,
+    },
+    hasAnyConfiguredProviderCredential: false,
   };
 }
 
@@ -365,14 +401,34 @@ export class BrowserAgentHostClient {
     };
   }
 
-  async getThread(projectId: string, threadId: string): Promise<GetThreadResponse> {
+  async getThread(
+    projectId: string,
+    threadId: string,
+    options?: {
+      beforeMessageId?: string | null;
+      pageSize?: number | null;
+    },
+  ): Promise<GetThreadResponse> {
     const project = this.requireProject(projectId);
     const thread = this.requireThread(projectId, threadId);
+    const pageSize = Math.max(1, options?.pageSize ?? 50);
+    const messages = this.messagesByThread[threadId] ?? [];
+    const anchorIndex = options?.beforeMessageId
+      ? messages.findIndex((message) => message.id === options.beforeMessageId)
+      : messages.length;
+    const endIndex = anchorIndex >= 0 ? anchorIndex : messages.length;
+    const startIndex = Math.max(0, endIndex - pageSize);
+    const pageMessages = messages.slice(startIndex, endIndex);
+    const hasMoreMessages = startIndex > 0;
+    const nextBeforeMessageId = hasMoreMessages ? pageMessages[0]?.id ?? null : null;
+
     return {
       project: deepClone(project),
       thread: {
         thread: deepClone(thread),
-        messages: deepClone(this.messagesByThread[threadId] ?? []),
+        messages: deepClone(pageMessages),
+        hasMoreMessages,
+        nextBeforeMessageId,
       },
     };
   }
@@ -582,10 +638,72 @@ export class BrowserAgentHostClient {
   async updateSettings(request: UpdateSettingsRequest): Promise<UpdateSettingsResponse> {
     const provider = request.provider ?? this.settings.provider;
     const providerOption = this.providers.find((entry) => entry.id === provider) ?? this.providers[0];
+    const nextModel = request.model
+      ?? (request.provider && request.provider !== this.settings.provider ? providerOption.defaultModel : this.settings.model)
+      ?? providerOption.defaultModel;
+    const nextCredentials = request.provider && request.provider !== this.settings.provider
+      ? {
+          hasApiKey: false,
+          hasAuthToken: false,
+          accountId: null,
+          source: provider === 'codex' ? 'external' : 'none',
+          hasExternalCredential: provider === 'codex',
+          externalCredentialPath: provider === 'codex' ? '%USERPROFILE%\\.codex\\auth.json' : null,
+        }
+      : { ...this.settings.credentials };
+
+    if (request.useExternalCredential === true) {
+      nextCredentials.source = 'external';
+      nextCredentials.hasExternalCredential = true;
+      nextCredentials.externalCredentialPath = '%USERPROFILE%\\.codex\\auth.json';
+    } else if (request.useExternalCredential === false || (request.provider === 'codex' && nextCredentials.hasExternalCredential)) {
+      nextCredentials.source =
+        nextCredentials.hasApiKey || nextCredentials.hasAuthToken || Boolean(nextCredentials.accountId)
+          ? 'saved'
+          : 'external';
+    }
+
+    if (request.clearApiKey) {
+      nextCredentials.hasApiKey = false;
+    }
+
+    if (request.clearAuthToken) {
+      nextCredentials.hasAuthToken = false;
+    }
+
+    if (request.clearAccountId) {
+      nextCredentials.accountId = null;
+    }
+
+    if (request.apiKey !== undefined && request.apiKey !== null) {
+      nextCredentials.hasApiKey = request.apiKey.trim().length > 0;
+      if (nextCredentials.hasApiKey && !request.useExternalCredential) {
+        nextCredentials.source = 'saved';
+      }
+    }
+
+    if (request.authToken !== undefined && request.authToken !== null) {
+      nextCredentials.hasAuthToken = request.authToken.trim().length > 0;
+      if (nextCredentials.hasAuthToken && !request.useExternalCredential) {
+        nextCredentials.source = 'saved';
+      }
+    }
+
+    if (request.accountId !== undefined && request.accountId !== null) {
+      nextCredentials.accountId = request.accountId.trim() || null;
+      if (nextCredentials.accountId && !request.useExternalCredential) {
+        nextCredentials.source = 'saved';
+      }
+    }
+
+    if (!nextCredentials.hasApiKey && !nextCredentials.hasAuthToken && !nextCredentials.accountId) {
+      nextCredentials.source = nextCredentials.hasExternalCredential ? 'external' : 'none';
+    }
+
     this.settings = {
       ...this.settings,
       provider,
-      model: request.model ?? this.settings.model ?? providerOption.defaultModel,
+      model: nextModel,
       fallbackModel: request.fallbackModel ?? this.settings.fallbackModel,
       enableTelemetry: request.enableTelemetry ?? this.settings.enableTelemetry,
       baseUrl: providerOption.baseUrl,
@@ -594,6 +712,12 @@ export class BrowserAgentHostClient {
         : providerOption.id === 'codex'
           ? 'CodexResponses'
           : 'OpenAiChatCompletions',
+      credentials: nextCredentials,
+      hasAnyConfiguredProviderCredential:
+        nextCredentials.hasApiKey ||
+        nextCredentials.hasAuthToken ||
+        Boolean(nextCredentials.accountId) ||
+        nextCredentials.hasExternalCredential,
     };
 
     return {
@@ -607,7 +731,16 @@ export class BrowserAgentHostClient {
     };
   }
 
-  async validateProviderConfig(provider: string, model?: string | null): Promise<ValidateProviderConfigResponse> {
+  async validateProviderConfig(
+    request: {
+      projectId?: string | null;
+      provider: string;
+      model?: string | null;
+      liveCheck?: boolean | null;
+    },
+  ): Promise<ValidateProviderConfigResponse> {
+    const provider = request.provider;
+    const model = request.model ?? null;
     const normalizedProvider = provider.trim().toLowerCase();
     const providerOption = this.providers.find((entry) => entry.id === normalizedProvider);
     const warnings = ['Browser preview uses mock AgentHost data. Real provider auth is only exercised in `tauri dev`.'];
@@ -616,6 +749,11 @@ export class BrowserAgentHostClient {
       : [`Unknown provider '${provider}'.`];
     if (providerOption && model && !providerOption.models.includes(model)) {
       warnings.push(`Model '${model}' is not in the preview catalog for ${providerOption.displayName}.`);
+    }
+
+    // Browser preview cannot prove real credentials against a live provider API.
+    if (request.liveCheck) {
+      warnings.push('Live provider validation is unavailable in browser preview mode.');
     }
 
     return {
@@ -637,7 +775,7 @@ export class BrowserAgentHostClient {
     };
   }
 
-  async resolveApproval(approvalId: string, decision: 'approved' | 'rejected'): Promise<ResolveApprovalResponse> {
+  async resolveApproval(approvalId: string, decision: 'approved' | 'always_allow' | 'rejected'): Promise<ResolveApprovalResponse> {
     const next = this.approvals.find((approval) => approval.id === approvalId);
     if (!next) {
       throw new Error(`Approval '${approvalId}' was not found in browser preview mode.`);

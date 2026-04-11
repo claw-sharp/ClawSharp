@@ -9,11 +9,11 @@ public class ReplSessionBootstrapperTests
     [Fact]
     public async Task ResolveAsync_Applies_Name_To_Fresh_Session_Without_Creating_Metadata_Only_File()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-bootstrapper-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -36,7 +36,7 @@ public class ReplSessionBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -52,11 +52,11 @@ public class ReplSessionBootstrapperTests
     [Fact]
     public async Task ResolveAsync_Resumes_By_Exact_Custom_Title()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-bootstrapper-resume-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -84,7 +84,7 @@ public class ReplSessionBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -100,13 +100,13 @@ public class ReplSessionBootstrapperTests
     [Fact]
     public async Task ResolveAsync_Resumes_By_Same_Repo_Worktree_Title()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-bootstrapper-same-repo-title-tests", Guid.NewGuid().ToString("N"));
         var currentWorkspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"), "repo");
         var siblingWorkspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"), "repo-worktree");
         Directory.CreateDirectory(currentWorkspaceRoot);
         Directory.CreateDirectory(siblingWorkspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -135,7 +135,7 @@ public class ReplSessionBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);
@@ -152,11 +152,11 @@ public class ReplSessionBootstrapperTests
     [Fact]
     public async Task ResolveAsync_Allows_Debug_Passthrough_Arguments()
     {
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempConfigDir = Path.Combine(Path.GetTempPath(), "clawsharp-bootstrapper-debug-args-tests", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-workspace", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", tempConfigDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", tempConfigDir);
 
         try
         {
@@ -196,7 +196,7 @@ public class ReplSessionBootstrapperTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(tempConfigDir))
             {
                 Directory.Delete(tempConfigDir, recursive: true);

@@ -134,6 +134,162 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Strips_MaxItems_From_Anthropic_Tool_Schemas()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["options"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "string"
+                    },
+                    ["minItems"] = 4,
+                    ["maxItems"] = 4
+                },
+                ["nested"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["choices"] = new JsonObject
+                        {
+                            ["type"] = "array",
+                            ["items"] = new JsonObject
+                            {
+                                ["type"] = "string"
+                            },
+                            ["minItems"] = 2
+                        }
+                    }
+                },
+                ["timeout"] = new JsonObject
+                {
+                    ["type"] = "number",
+                    ["minimum"] = 0,
+                    ["maximum"] = 300000
+                }
+            }
+        };
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-anthropic-schema",
+                "claude-haiku-4-5-20251001",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("AskUserQuestion", "Asks follow-up questions.", toolSchema, Strict: true, Type: "custom")],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig("https://api.anthropic.test", ApiKey: "anthropic-key"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var inputSchema = body["tools"]![0]!["input_schema"]!.AsObject();
+        var optionsSchema = inputSchema["properties"]!["options"]!.AsObject();
+        var nestedChoicesSchema = inputSchema["properties"]!["nested"]!["properties"]!["choices"]!.AsObject();
+
+        Assert.False(inputSchema.ToJsonString().Contains("maxItems", StringComparison.Ordinal));
+        Assert.False(inputSchema.ToJsonString().Contains("minimum", StringComparison.Ordinal));
+        Assert.False(inputSchema.ToJsonString().Contains("maximum", StringComparison.Ordinal));
+        Assert.Equal(1, optionsSchema["minItems"]?.GetValue<int>());
+        Assert.Equal(1, nestedChoicesSchema["minItems"]?.GetValue<int>());
+        Assert.Null(inputSchema["required"]);
+        Assert.Equal("custom", body["tools"]![0]!["type"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Preserves_MinLength_For_Anthropic_String_Tool_Fields()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["pattern"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["minLength"] = 1
+                }
+            },
+            ["required"] = new JsonArray("pattern")
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-anthropic-min-length",
+                "claude-haiku-4-5-20251001",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("Glob", "Find files.", toolSchema, Strict: true, Type: "custom")],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig("https://api.anthropic.test", ApiKey: "anthropic-key"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        Assert.Equal(1, body["tools"]![0]!["input_schema"]!["properties"]!["pattern"]!["minLength"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Does_Not_Emit_Anthropic_Strict_Tools()
+    {
+        var tools = Enumerable.Range(1, 25)
+            .Select(index => new QueryRequestTool(
+                $"Tool{index}",
+                $"Tool {index}",
+                new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["value"] = new JsonObject
+                        {
+                            ["type"] = "string"
+                        }
+                    }
+                },
+                Strict: true,
+                Type: "custom"))
+            .ToArray();
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-anthropic-strict-limit",
+                "claude-haiku-4-5-20251001",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                tools,
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig("https://api.anthropic.test", ApiKey: "anthropic-key"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var requestTools = body["tools"]!.AsArray();
+        var strictCount = requestTools.Count(tool => tool?["strict"]?.GetValue<bool>() == true);
+
+        Assert.Equal(25, requestTools.Count);
+        Assert.Equal(0, strictCount);
+        Assert.All(requestTools, static tool => Assert.Null(tool!["strict"]));
+    }
+
+    [Fact]
     public async Task CreateStreamingRequest_Sanitizes_OpenAi_And_Codex_Tool_Schemas()
     {
         var toolSchema = new JsonObject
@@ -152,6 +308,15 @@ public sealed class QueryModelHttpRequestFactoryTests
                     ["type"] = "number",
                     ["minimum"] = 0,
                     ["maximum"] = 120
+                },
+                ["files"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "string"
+                    },
+                    ["maxItems"] = 4
                 },
                 ["maybe"] = new JsonObject
                 {
@@ -201,18 +366,135 @@ public sealed class QueryModelHttpRequestFactoryTests
         Assert.False(openAiParameters.ToJsonString().Contains("default", StringComparison.Ordinal));
         Assert.False(openAiParameters.ToJsonString().Contains("minimum", StringComparison.Ordinal));
         Assert.False(openAiParameters.ToJsonString().Contains("maximum", StringComparison.Ordinal));
+        Assert.False(openAiParameters.ToJsonString().Contains("maxItems", StringComparison.Ordinal));
         Assert.False(openAiParameters.ToJsonString().Contains("format", StringComparison.Ordinal));
         var openAiRequired = openAiParameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
-        Assert.Equal(["path", "timeout", "maybe"], openAiRequired);
+        Assert.Equal(["path", "timeout", "files", "maybe"], openAiRequired);
         Assert.True(openAiParameters["properties"]!["timeout"]!["anyOf"] is JsonArray);
         Assert.True(openAiParameters["properties"]!["maybe"]!["anyOf"] is JsonArray);
 
         var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
         var codexParameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
         Assert.Equal(false, codexParameters["additionalProperties"]?.GetValue<bool>());
-        Assert.Equal(3, codexParameters["required"]!.AsArray().Count);
+        Assert.Equal(4, codexParameters["required"]!.AsArray().Count);
         Assert.False(codexParameters.ToJsonString().Contains("pattern", StringComparison.Ordinal));
         Assert.False(codexParameters.ToJsonString().Contains("format", StringComparison.Ordinal));
+        Assert.False(codexParameters.ToJsonString().Contains("maxItems", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Always_Uses_Strict_Mode_For_Codex_Tools()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["title"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["description"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["priority"] = new JsonObject
+                {
+                    ["type"] = "integer"
+                }
+            },
+            ["required"] = new JsonArray("title")
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-strict-tool",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("mcp__linear__save_issue", "Create or update a Linear issue.", toolSchema, Strict: false)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var tool = codexBody["tools"]![0]!.AsObject();
+        var parameters = tool["parameters"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal(true, tool["strict"]?.GetValue<bool>());
+        Assert.Equal(["title", "description", "priority"], required);
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Normalizes_Malformed_Codex_Object_Schemas()
+    {
+        var toolSchema = new JsonObject
+        {
+            ["properties"] = new JsonObject
+            {
+                ["title"] = new JsonObject
+                {
+                    ["type"] = "string"
+                },
+                ["details"] = new JsonObject
+                {
+                    ["properties"] = new JsonObject
+                    {
+                        ["status"] = new JsonObject
+                        {
+                            ["type"] = "string"
+                        },
+                        ["priority"] = new JsonObject
+                        {
+                            ["type"] = "integer"
+                        }
+                    }
+                }
+            }
+        };
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-malformed-schema",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool("mcp__linear__save_issue", "Create or update a Linear issue.", toolSchema, Strict: false)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var parameters = codexBody["tools"]![0]!["parameters"]!.AsObject();
+        var nested = parameters["properties"]!["details"]!.AsObject();
+        var required = parameters["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        var nestedRequired = nested["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+
+        Assert.Equal("object", parameters["type"]?.GetValue<string>());
+        Assert.Equal(false, parameters["additionalProperties"]?.GetValue<bool>());
+        Assert.Equal(["title", "details"], required);
+        Assert.Equal("object", nested["type"]?.GetValue<string>());
+        Assert.Equal(false, nested["additionalProperties"]?.GetValue<bool>());
+        Assert.Equal(["status", "priority"], nestedRequired);
     }
 
     [Fact]
@@ -366,12 +648,16 @@ public sealed class QueryModelHttpRequestFactoryTests
 
         Assert.Equal("tool_use", assistantToolUse["type"]?.GetValue<string>());
         Assert.Equal("Read", assistantToolUse["name"]?.GetValue<string>());
-        Assert.Equal("tooluse-read", assistantToolUse["tool_use_id"]?.GetValue<string>());
+        Assert.Equal("tooluse-read", assistantToolUse["id"]?.GetValue<string>());
+        Assert.Null(assistantToolUse["tool_use_id"]);
         Assert.Equal("note.txt", assistantToolUse["input"]?["file_path"]?.GetValue<string>());
 
         Assert.Equal("tool_result", userToolResult["type"]?.GetValue<string>());
         Assert.Equal("tooluse-read", userToolResult["tool_use_id"]?.GetValue<string>());
-        Assert.Equal("success", userToolResult["structured_output"]?["status"]?.GetValue<string>());
+        Assert.Equal("hello", userToolResult["content"]?.GetValue<string>());
+        Assert.Null(userToolResult["text"]);
+        Assert.Null(userToolResult["name"]);
+        Assert.Null(userToolResult["structured_output"]);
     }
 
     private static QueryModelHttpStreamingRequest CreateStreamingRequest()

@@ -9,7 +9,7 @@ param(
     [string]$PackageIdentifier = "ClawSharp.ClawSharp",
     [string]$Publisher = "ClawSharp",
     [string]$PackageName = "ClawSharp",
-    [string]$ManifestVersion = "1.9.0"
+    [string]$ManifestVersion = "1.12.0"
 )
 
 $ErrorActionPreference = "Stop"

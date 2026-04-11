@@ -13,11 +13,11 @@ public sealed class FileOpenFileUpdateIntegrationTests
     public async Task DiagnosticTrackingNotifier_CapturesIdeDiagnosticsAfterQueryStart()
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-diagnostic-tracking-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(workspaceRoot, ".claude");
+        var configRoot = Path.Combine(workspaceRoot, ".clawsharp");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(configRoot, "ide"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         try
         {
@@ -46,7 +46,7 @@ public sealed class FileOpenFileUpdateIntegrationTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             if (Directory.Exists(workspaceRoot))
             {
                 Directory.Delete(workspaceRoot, recursive: true);

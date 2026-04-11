@@ -182,7 +182,7 @@ internal sealed class GlobTool : BaseTool
         var pattern = jsonObject["pattern"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(pattern))
         {
-            errorMessage = "Glob requires a non-empty pattern.";
+            errorMessage = "Glob requires a non-empty pattern. Provide a concrete glob such as \"**/*\", \"*.cs\", or \"src/**/*.ts\".";
             return false;
         }
 

@@ -74,8 +74,8 @@ public sealed class PermissionUpdatePersistenceTests
     {
         var workspaceRoot = CreateWorkspace();
         var configDir = CreateConfigDir();
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -117,7 +117,7 @@ public sealed class PermissionUpdatePersistenceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }
@@ -128,12 +128,12 @@ public sealed class PermissionUpdatePersistenceTests
     {
         var workspaceRoot = CreateWorkspace();
         var configDir = CreateConfigDir();
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             var projectSettingsPath = ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot);
             File.WriteAllText(
                 projectSettingsPath,
@@ -161,7 +161,7 @@ public sealed class PermissionUpdatePersistenceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }
@@ -172,12 +172,12 @@ public sealed class PermissionUpdatePersistenceTests
     {
         var workspaceRoot = CreateWorkspace();
         var configDir = CreateConfigDir();
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             var localSettingsPath = ClaudeConfigPaths.GetLocalSettingsFilePath(workspaceRoot);
             var service = new PermissionUpdatePersistenceService();
 
@@ -198,7 +198,7 @@ public sealed class PermissionUpdatePersistenceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }
@@ -209,8 +209,8 @@ public sealed class PermissionUpdatePersistenceTests
     {
         var workspaceRoot = CreateWorkspace();
         var configDir = CreateConfigDir();
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -231,7 +231,7 @@ public sealed class PermissionUpdatePersistenceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }

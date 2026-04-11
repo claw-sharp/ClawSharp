@@ -139,7 +139,7 @@ public sealed class TerminalShell
                     await WriteTranscriptMessageAsync(notificationMessage, output, previousRole: null);
                 }
 
-                lastFooterLines = await WriteFooterIfChangedAsync(output, lastFooterLines);
+                lastFooterLines = await WriteFooterIfChangedAsync(output, session, lastFooterLines);
                 var submission = await _promptInputReader.ReadSubmissionAsync(input, output, cancellationToken);
                 if (submission is null)
                 {
@@ -509,9 +509,9 @@ public sealed class TerminalShell
         return submission.Value.Trim();
     }
 
-    private async Task<string[]> WriteFooterIfChangedAsync(TextWriter output, string[] lastFooterLines)
+    private async Task<string[]> WriteFooterIfChangedAsync(TextWriter output, ConversationSession session, string[] lastFooterLines)
     {
-        var footerLines = _terminalFooterRenderer.Render(_appStateStore.GetState()).ToArray();
+        var footerLines = _terminalFooterRenderer.Render(_appStateStore.GetState(), session).ToArray();
         if (footerLines.SequenceEqual(lastFooterLines, StringComparer.Ordinal))
         {
             return lastFooterLines;

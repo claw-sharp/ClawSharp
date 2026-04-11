@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
-import { Search, Settings, Bell, ChevronDown } from 'lucide-react';
+import { Search, Settings, Bell, ChevronDown, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 export const TopBar = () => {
@@ -75,7 +75,10 @@ export const TopBar = () => {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground font-mono mr-2">{connection.statusLabel}</span>
+        <div className="mr-2 flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+          {connection.isBootstrapping && <Loader2 className="h-3 w-3 animate-spin" />}
+          <span>{connection.statusLabel}</span>
+        </div>
 
         <button
           onClick={() => setActiveView('inbox')}

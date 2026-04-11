@@ -8,6 +8,7 @@ public sealed class AgentModelConnection
     public string? AccountId { get; init; }
     public string? ApiVersion { get; init; }
     public string? Provider { get; init; }
+    public bool UseExternalCredential { get; init; }
     public IReadOnlyDictionary<string, string> Headers { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }

@@ -36,7 +36,7 @@ public sealed class AgentBootstrapper
         var failures = new List<AgentLoadFailure>();
         var customAgents = new List<AgentDefinition>();
 
-        AddAgentsFromDirectory(Path.Combine(_managedFilePath, ".claude", "agents"), "policySettings", customAgents, failures);
+        AddAgentsFromDirectory(Path.Combine(_managedFilePath, ".clawsharp", "agents"), "policySettings", customAgents, failures);
         AddAgentsFromDirectory(Path.Combine(_userConfigHomeDir, "agents"), "userSettings", customAgents, failures);
 
         foreach (var projectAgentsDirectory in GetProjectAgentDirectoriesUpToHome(workspaceRoot))
@@ -210,7 +210,7 @@ public sealed class AgentBootstrapper
                 break;
             }
 
-            var agentsDirectory = Path.Combine(current, ".claude", "agents");
+            var agentsDirectory = Path.Combine(current, ".clawsharp", "agents");
             if (Directory.Exists(agentsDirectory))
             {
                 directories.Add(agentsDirectory);

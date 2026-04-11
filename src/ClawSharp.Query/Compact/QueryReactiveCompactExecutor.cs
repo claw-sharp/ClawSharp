@@ -38,7 +38,8 @@ public sealed class QueryReactiveCompactExecutor : IQueryReactiveCompactExecutor
         QueryTerminalIterationResult terminalResult,
         ConversationSession session,
         ClawSharpSettings settings,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string trigger = "manual")
     {
         var context = new QueryReactiveCompactExecutionContext(
             request,
@@ -46,7 +47,8 @@ public sealed class QueryReactiveCompactExecutor : IQueryReactiveCompactExecutor
             terminalResult,
             session,
             settings,
-            _toolCatalog.GetTools(request, priorState, session, settings));
+            _toolCatalog.GetTools(request, priorState, session, settings),
+            Trigger: trigger);
 
         var hookResult = await _hookRunner.RunPreCompactAsync(
             context,

@@ -16,10 +16,10 @@ public sealed class ExtensionBootstrapperTests
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(Path.Combine(tempRoot, "repo", ".git"));
 
-        CreateSkill(Path.Combine(managedRoot, ".claude", "skills"), "managed-skill");
+        CreateSkill(Path.Combine(managedRoot, ".clawsharp", "skills"), "managed-skill");
         CreateSkill(Path.Combine(userConfigHomeDir, "skills"), "user-skill");
-        CreateSkill(Path.Combine(tempRoot, "repo", ".claude", "skills"), "root-skill");
-        CreateSkill(Path.Combine(workspaceRoot, ".claude", "skills"), "child-skill");
+        CreateSkill(Path.Combine(tempRoot, "repo", ".clawsharp", "skills"), "root-skill");
+        CreateSkill(Path.Combine(workspaceRoot, ".clawsharp", "skills"), "child-skill");
 
         var bootstrapper = new ExtensionBootstrapper(
             managedFilePath: managedRoot,
@@ -48,9 +48,9 @@ public sealed class ExtensionBootstrapperTests
         var userConfigHomeDir = Path.Combine(tempRoot, "user");
         Directory.CreateDirectory(workspaceRoot);
 
-        CreateSkill(Path.Combine(managedRoot, ".claude", "skills"), "managed-skill");
+        CreateSkill(Path.Combine(managedRoot, ".clawsharp", "skills"), "managed-skill");
         CreateSkill(Path.Combine(userConfigHomeDir, "skills"), "user-skill");
-        CreateSkill(Path.Combine(workspaceRoot, ".claude", "skills"), "project-skill");
+        CreateSkill(Path.Combine(workspaceRoot, ".clawsharp", "skills"), "project-skill");
 
         var bootstrapper = new ExtensionBootstrapper(
             managedFilePath: managedRoot,

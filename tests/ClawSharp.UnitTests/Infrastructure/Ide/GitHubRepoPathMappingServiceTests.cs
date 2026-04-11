@@ -11,7 +11,7 @@ public sealed class GitHubRepoPathMappingServiceTests
         var tempDirectory = Path.Combine(Path.GetTempPath(), "clawsharp-repo-paths", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(tempDirectory, "workspace");
         var previousClone = Path.Combine(tempDirectory, "previous");
-        var globalConfigPath = Path.Combine(tempDirectory, ".claude.json");
+        var globalConfigPath = Path.Combine(tempDirectory, ".clawsharp.json");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(previousClone);
         await File.WriteAllTextAsync(
@@ -68,7 +68,7 @@ public sealed class GitHubRepoPathMappingServiceTests
         var tempDirectory = Path.Combine(Path.GetTempPath(), "clawsharp-repo-paths", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(tempDirectory, "symlink-root");
         var canonicalRoot = Path.Combine(tempDirectory, "actual-root");
-        var globalConfigPath = Path.Combine(tempDirectory, ".claude.json");
+        var globalConfigPath = Path.Combine(tempDirectory, ".clawsharp.json");
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(canonicalRoot);
 
@@ -113,7 +113,7 @@ public sealed class GitHubRepoPathMappingServiceTests
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "clawsharp-repo-paths", Guid.NewGuid().ToString("N"));
         var workspaceRoot = Path.Combine(tempDirectory, "workspace");
-        var globalConfigPath = Path.Combine(tempDirectory, ".claude.json");
+        var globalConfigPath = Path.Combine(tempDirectory, ".clawsharp.json");
         Directory.CreateDirectory(workspaceRoot);
 
         try
@@ -156,7 +156,7 @@ public sealed class GitHubRepoPathMappingServiceTests
         var tempDirectory = Path.Combine(Path.GetTempPath(), "clawsharp-repo-paths", Guid.NewGuid().ToString("N"));
         var existingPath = Path.Combine(tempDirectory, "repo");
         var missingPath = Path.Combine(tempDirectory, "missing");
-        var globalConfigPath = Path.Combine(tempDirectory, ".claude.json");
+        var globalConfigPath = Path.Combine(tempDirectory, ".clawsharp.json");
         Directory.CreateDirectory(existingPath);
         await File.WriteAllTextAsync(
             globalConfigPath,

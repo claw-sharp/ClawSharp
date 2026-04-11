@@ -164,6 +164,8 @@ public static class ClawSharpApplicationFactory
             toolCatalog: new ToolRegistryReactiveCompactToolCatalog(tools),
             hookRunner: reactiveCompactHookRunner,
             modelCallRunner: reactiveCompactModelCallRunner);
+        var autoCompactRunner = new QueryAutoCompactRunner(
+            executor: reactiveCompactExecutor);
         var promptOverflowRecoveryRunner = new CompositeQueryPromptOverflowRecoveryRunner(
             new CompactBoundaryPromptOverflowRecoveryRunner(),
             new ReactiveCompactPromptOverflowRecoveryRunner(reactiveCompactExecutor));
@@ -175,6 +177,7 @@ public static class ClawSharpApplicationFactory
             iterationRequestBuilder: iterationRequestBuilder,
             modelCallExecutor: modelCallExecutor,
             promptOverflowRecoveryRunner: promptOverflowRecoveryRunner,
+            autoCompactRunner: autoCompactRunner,
             toolOrchestrator: toolOrchestrator,
             stopHookRunner: stopHookRunner);
         var queryTurnRunner = new ExplicitToolTurnRunner(

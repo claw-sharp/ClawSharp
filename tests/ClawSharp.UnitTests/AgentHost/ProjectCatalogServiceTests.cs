@@ -1,6 +1,9 @@
+using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.AgentHost.Sessions;
+using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 
 namespace ClawSharp.UnitTests;
 
@@ -56,14 +59,14 @@ public sealed class ProjectCatalogServiceTests
     [Fact]
     public async Task ListRecentProjectsAsync_Returns_Stored_Metadata_Without_Rehydrating_Workspaces()
     {
-        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
         var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-project-tests", Guid.NewGuid().ToString("N"));
-        var configRoot = Path.Combine(tempRoot, ".claude");
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
         var workspaceRoot = Path.Combine(tempRoot, "repo-one");
         Directory.CreateDirectory(tempRoot);
         Directory.CreateDirectory(configRoot);
         Directory.CreateDirectory(workspaceRoot);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configRoot);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
 
         var projectId = ClawSharp.AgentHost.Mapping.DesktopContractMapper.CreateProjectId(workspaceRoot);
         var lastOpenedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
@@ -98,7 +101,57 @@ public sealed class ProjectCatalogServiceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task OpenProjectAsync_Lists_Threads_From_Metadata_Without_Rehydrating_Workspace()
+    {
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        var tempRoot = Path.Combine(Path.GetTempPath(), "clawsharp-agenthost-project-open-tests", Guid.NewGuid().ToString("N"));
+        var configRoot = Path.Combine(tempRoot, ".clawsharp");
+        var workspaceRoot = Path.Combine(tempRoot, "repo-one");
+        Directory.CreateDirectory(configRoot);
+        Directory.CreateDirectory(workspaceRoot);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configRoot);
+
+        try
+        {
+            var transcriptStore = new JsonlTranscriptStore();
+            var sessionFactory = new DefaultSessionFactory(workspaceRoot, transcriptStore);
+            var session = sessionFactory.Create();
+            session.SetCustomTitle("Fast Thread");
+            session.Add(ChatMessageFactory.CreateText(MessageRole.User, "hello from metadata"));
+            await transcriptStore.RecordTranscriptAsync(session, session.Messages);
+
+            var transcriptPath = session.TranscriptPath;
+            var metadataPath = SessionStoragePaths.GetSessionLogMetadataPath(workspaceRoot, session.Id);
+            Assert.True(File.Exists(metadataPath));
+
+            File.Delete(transcriptPath);
+
+            var store = new RecentProjectStore(Path.Combine(tempRoot, "recent-projects.json"));
+            var threadCatalog = new ThreadCatalogService(new WorkspaceApplicationRegistry(), store);
+            var service = new ProjectCatalogService(store, threadCatalog);
+
+            var response = await service.OpenProjectAsync(new OpenProjectRequest
+            {
+                ProjectPath = workspaceRoot,
+            });
+
+            var thread = Assert.Single(response.Threads);
+            Assert.Equal(session.Id, thread.Id);
+            Assert.Equal("Fast Thread", thread.Title);
+            Assert.Equal("hello from metadata", thread.Summary);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", previousConfigDir);
             if (Directory.Exists(tempRoot))
             {
                 Directory.Delete(tempRoot, recursive: true);

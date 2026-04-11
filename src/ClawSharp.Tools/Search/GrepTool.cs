@@ -12,8 +12,8 @@ internal sealed class GrepTool : BaseTool
         : base(
             new ToolDescriptor(
                 "Grep",
-                "A powerful search tool built on ripgrep",
-                SearchHint: "search file contents with regex (ripgrep)",
+                "Search file contents with a non-empty regex pattern using ripgrep. Use Glob instead when you need to list files by name or path.",
+                SearchHint: "search file contents with a non-empty regex pattern (ripgrep); use Glob to list files",
                 InputSchema: SearchToolSchemas.GrepInputSchema,
                 OutputSchema: SearchToolSchemas.GrepOutputSchema,
                 Strict: true))
@@ -472,7 +472,7 @@ internal sealed class GrepTool : BaseTool
         var pattern = jsonObject["pattern"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(pattern))
         {
-            errorMessage = "Grep requires a non-empty pattern.";
+            errorMessage = "Grep requires a non-empty pattern. Use Glob to list files, or provide a concrete regex such as \"foo\", \"TODO\", or \".*\".";
             return false;
         }
 

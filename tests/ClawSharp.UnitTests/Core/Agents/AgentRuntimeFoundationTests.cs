@@ -19,7 +19,7 @@ public sealed class AgentRuntimeFoundationTests
         Directory.CreateDirectory(Path.Combine(tempRoot, "repo", ".git"));
 
         CreateAgent(
-            Path.Combine(managedRoot, ".claude", "agents"),
+            Path.Combine(managedRoot, ".clawsharp", "agents"),
             "general-purpose",
             "policy override",
             """
@@ -34,7 +34,7 @@ public sealed class AgentRuntimeFoundationTests
             "user-agent",
             "user description");
         CreateAgent(
-            Path.Combine(workspaceRoot, ".claude", "agents"),
+            Path.Combine(workspaceRoot, ".clawsharp", "agents"),
             "workspace-agent",
             "workspace description");
 
@@ -63,9 +63,9 @@ public sealed class AgentRuntimeFoundationTests
         var userConfigHomeDir = Path.Combine(tempRoot, "user");
         Directory.CreateDirectory(workspaceRoot);
 
-        CreateAgent(Path.Combine(managedRoot, ".claude", "agents"), "managed-agent", "managed");
+        CreateAgent(Path.Combine(managedRoot, ".clawsharp", "agents"), "managed-agent", "managed");
         CreateAgent(Path.Combine(userConfigHomeDir, "agents"), "user-agent", "user");
-        CreateAgent(Path.Combine(workspaceRoot, ".claude", "agents"), "project-agent", "project");
+        CreateAgent(Path.Combine(workspaceRoot, ".clawsharp", "agents"), "project-agent", "project");
 
         var bootstrapper = new AgentBootstrapper(managedFilePath: managedRoot, userConfigHomeDir: userConfigHomeDir);
         var result = await bootstrapper.LoadAsync(

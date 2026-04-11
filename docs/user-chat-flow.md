@@ -96,7 +96,7 @@ Current persistence behavior:
 - user message is appended before the model/tool loop starts
 - every emitted runtime `ChatMessage` is appended as soon as it is accepted by `QueryEngine`
 - resumed sessions are reconstructed from the JSONL transcript on disk
-- transcript path is under `~/.claude/projects/<sanitized-project>/<session-id>.jsonl`
+- transcript path is under `~/.clawsharp/projects/<sanitized-project>/<session-id>.jsonl`
 
 Relevant files:
 

@@ -51,10 +51,10 @@ public sealed class McpNeedsAuthCacheTests
 
         public ClaudeConfigDirectoryScope()
         {
-            _original = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+            _original = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
             var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clawsharp-mcp-auth-cache-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(path);
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", path);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", path);
             Path = path;
         }
 
@@ -62,7 +62,7 @@ public sealed class McpNeedsAuthCacheTests
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", _original);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", _original);
             if (Directory.Exists(Path))
             {
                 Directory.Delete(Path, recursive: true);

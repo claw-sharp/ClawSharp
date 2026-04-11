@@ -11,7 +11,8 @@ public sealed class NoOpQueryReactiveCompactExecutor : IQueryReactiveCompactExec
         QueryTerminalIterationResult terminalResult,
         ConversationSession session,
         ClawSharpSettings settings,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string trigger = "manual")
     {
         return Task.FromResult<QueryCompactionResult?>(null);
     }

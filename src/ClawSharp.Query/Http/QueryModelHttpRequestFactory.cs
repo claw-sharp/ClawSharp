@@ -10,6 +10,7 @@ namespace ClawSharp.Query;
 public static class QueryModelHttpRequestFactory
 {
     public const string AnthropicVersion = "2023-06-01";
+    public const int AnthropicStrictToolLimit = 20;
 
     public static HttpRequestMessage CreateStreamingRequest(
         QueryModelHttpClientConfig config,
@@ -37,7 +38,8 @@ public static class QueryModelHttpRequestFactory
         QueryModelHttpStreamingRequest request)
     {
         var target = $"{config.BaseUrl.TrimEnd('/')}/v1/messages";
-        var httpRequest = CreateJsonRequest(target, CreateAnthropicRequestBody(request));
+        var body = CreateAnthropicRequestBody(request);
+        var httpRequest = CreateJsonRequest(target, body);
 
         httpRequest.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
         if (!string.IsNullOrWhiteSpace(config.ApiKey))
@@ -54,6 +56,7 @@ public static class QueryModelHttpRequestFactory
             httpRequest.Headers.TryAddWithoutValidation("anthropic-beta", string.Join(",", request.Request.Betas));
         }
 
+        MaybeDumpDebugRequest("anthropic", httpRequest, body);
         return httpRequest;
     }
 
@@ -79,6 +82,7 @@ public static class QueryModelHttpRequestFactory
             }
         }
 
+        MaybeDumpDebugRequest("openai", httpRequest, body);
         return httpRequest;
     }
 
@@ -180,7 +184,7 @@ public static class QueryModelHttpRequestFactory
             ["stream"] = true,
             ["messages"] = new JsonArray(request.Request.Messages.Select(ToAnthropicJson).ToArray()),
             ["system"] = new JsonArray(request.Request.System.Select(ToAnthropicJson).ToArray()),
-            ["tools"] = new JsonArray(request.Request.Tools.Select(ToAnthropicJson).ToArray()),
+            ["tools"] = new JsonArray(BuildAnthropicTools(request.Request.Tools).ToArray()),
             ["output_config"] = ToAnthropicJson(request.Request.OutputConfig)
         };
 
@@ -195,6 +199,14 @@ public static class QueryModelHttpRequestFactory
         }
 
         return body;
+    }
+
+    private static IEnumerable<JsonObject> BuildAnthropicTools(IReadOnlyList<QueryRequestTool> tools)
+    {
+        foreach (var tool in tools)
+        {
+            yield return ToAnthropicJson(tool, emitStrict: false);
+        }
     }
 
     private static JsonObject CreateOpenAiRequestBody(
@@ -532,17 +544,18 @@ public static class QueryModelHttpRequestFactory
 
         if (block.Text is not null)
         {
-            json["text"] = block.Text;
+            json[string.Equals(block.Type, "tool_result", StringComparison.Ordinal) ? "content" : "text"] = block.Text;
         }
 
-        if (block.Name is not null)
+        if (block.Name is not null &&
+            !string.Equals(block.Type, "tool_result", StringComparison.Ordinal))
         {
             json["name"] = block.Name;
         }
 
         if (block.ToolUseId is not null)
         {
-            json["tool_use_id"] = block.ToolUseId;
+            json[string.Equals(block.Type, "tool_use", StringComparison.Ordinal) ? "id" : "tool_use_id"] = block.ToolUseId;
         }
 
         if (block.Input is not null)
@@ -550,7 +563,8 @@ public static class QueryModelHttpRequestFactory
             json["input"] = JsonNode.Parse(block.Input);
         }
 
-        if (block.StructuredOutput is not null)
+        if (block.StructuredOutput is not null &&
+            !string.Equals(block.Type, "tool_result", StringComparison.Ordinal))
         {
             json["structured_output"] = JsonNode.Parse(block.StructuredOutput);
         }
@@ -587,7 +601,7 @@ public static class QueryModelHttpRequestFactory
         return json;
     }
 
-    private static JsonObject ToAnthropicJson(QueryRequestTool tool)
+    private static JsonObject ToAnthropicJson(QueryRequestTool tool, bool emitStrict = true)
     {
         var json = new JsonObject();
         if (!string.IsNullOrEmpty(tool.Type))
@@ -600,10 +614,10 @@ public static class QueryModelHttpRequestFactory
 
         if (tool.InputSchema is not null)
         {
-            json["input_schema"] = tool.InputSchema.DeepClone();
+            json["input_schema"] = StripAnthropicUnsupportedSchemaKeywords(tool.InputSchema);
         }
 
-        if (tool.Strict)
+        if (tool.Strict && emitStrict)
         {
             json["strict"] = true;
         }
@@ -673,14 +687,48 @@ public static class QueryModelHttpRequestFactory
             ["type"] = "function",
             ["name"] = tool.Name,
             ["description"] = tool.Description,
-            ["parameters"] = OpenAiSchemaSanitizer.EnforceCodexStrictSchema(tool.InputSchema)
+            ["parameters"] = OpenAiSchemaSanitizer.EnforceCodexStrictSchema(tool.InputSchema),
+            ["strict"] = true
         };
 
-        if (tool.Strict)
+        return json;
+    }
+
+    private static JsonNode? StripAnthropicUnsupportedSchemaKeywords(JsonNode? node)
+    {
+        return node switch
         {
-            json["strict"] = true;
+            JsonObject obj => StripAnthropicUnsupportedSchemaKeywords(obj),
+            JsonArray array => new JsonArray(array.Select(StripAnthropicUnsupportedSchemaKeywords).ToArray()),
+            null => null,
+            _ => node.DeepClone()
+        };
+    }
+
+    private static JsonObject StripAnthropicUnsupportedSchemaKeywords(JsonObject obj)
+    {
+        var result = new JsonObject();
+        foreach (var pair in obj)
+        {
+            if (string.Equals(pair.Key, "maxItems", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "minimum", StringComparison.Ordinal) ||
+                string.Equals(pair.Key, "maximum", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(pair.Key, "minItems", StringComparison.Ordinal) &&
+                pair.Value is JsonValue minItemsValue &&
+                minItemsValue.TryGetValue<int>(out var minItems) &&
+                minItems > 1)
+            {
+                result[pair.Key] = 1;
+                continue;
+            }
+
+            result[pair.Key] = StripAnthropicUnsupportedSchemaKeywords(pair.Value);
         }
 
-        return json;
+        return result;
     }
 }

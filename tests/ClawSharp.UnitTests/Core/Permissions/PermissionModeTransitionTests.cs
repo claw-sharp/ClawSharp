@@ -155,15 +155,15 @@ public sealed class PermissionModeTransitionTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-permission-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-permission-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             File.WriteAllText(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -186,7 +186,7 @@ public sealed class PermissionModeTransitionTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }
@@ -197,11 +197,11 @@ public sealed class PermissionModeTransitionTests
     {
         var workspaceRoot = Path.Combine(Path.GetTempPath(), "clawsharp-auto-mode-bootstrap", Guid.NewGuid().ToString("N"));
         var configDir = Path.Combine(Path.GetTempPath(), "clawsharp-auto-mode-config", Guid.NewGuid().ToString("N"));
-        var originalConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
 
         Directory.CreateDirectory(workspaceRoot);
         Directory.CreateDirectory(configDir);
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
 
         try
         {
@@ -215,7 +215,7 @@ public sealed class PermissionModeTransitionTests
                   }
                 }
                 """);
-            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".claude"));
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, ".clawsharp"));
             await File.WriteAllTextAsync(
                 ClaudeConfigPaths.GetProjectSettingsFilePath(workspaceRoot),
                 """
@@ -242,7 +242,7 @@ public sealed class PermissionModeTransitionTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             DeleteDirectoryIfExists(workspaceRoot);
             DeleteDirectoryIfExists(configDir);
         }

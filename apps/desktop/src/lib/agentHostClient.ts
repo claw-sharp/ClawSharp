@@ -61,8 +61,20 @@ class AgentHostClient {
     return await this.request('createThread', { projectId, title: title ?? null });
   }
 
-  async getThread(projectId: string, threadId: string): Promise<GetThreadResponse> {
-    return await this.request('getThread', { projectId, threadId });
+  async getThread(
+    projectId: string,
+    threadId: string,
+    options?: {
+      beforeMessageId?: string | null;
+      pageSize?: number | null;
+    },
+  ): Promise<GetThreadResponse> {
+    return await this.request('getThread', {
+      projectId,
+      threadId,
+      beforeMessageId: options?.beforeMessageId ?? null,
+      pageSize: options?.pageSize ?? null,
+    });
   }
 
   async renameThread(projectId: string, threadId: string, title: string): Promise<RenameThreadResponse> {
@@ -113,15 +125,26 @@ class AgentHostClient {
     return await this.request('listProviders', {});
   }
 
-  async validateProviderConfig(provider: string, model?: string | null): Promise<ValidateProviderConfigResponse> {
-    return await this.request('validateProviderConfig', { provider, model: model ?? null });
+  async validateProviderConfig(
+    request: {
+      projectId?: string | null;
+      provider: string;
+      model?: string | null;
+      liveCheck?: boolean | null;
+      apiKey?: string | null;
+      authToken?: string | null;
+      accountId?: string | null;
+      useExternalCredential?: boolean | null;
+    },
+  ): Promise<ValidateProviderConfigResponse> {
+    return await this.request('validateProviderConfig', request);
   }
 
   async listPendingApprovals(threadId?: string | null): Promise<ListPendingApprovalsResponse> {
     return await this.request('listPendingApprovals', { threadId: threadId ?? null });
   }
 
-  async resolveApproval(approvalId: string, decision: 'approved' | 'rejected'): Promise<ResolveApprovalResponse> {
+  async resolveApproval(approvalId: string, decision: 'approved' | 'always_allow' | 'rejected'): Promise<ResolveApprovalResponse> {
     return await this.request('resolveApproval', { approvalId, decision });
   }
 

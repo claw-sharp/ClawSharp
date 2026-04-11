@@ -373,7 +373,7 @@ public sealed class ExtensionBootstrapper
 
         if (!startupEnvironment.DisablePolicySkills)
         {
-            AddSkillsFromDirectory(Path.Combine(_managedFilePath, ".claude", "skills"), "policySettings", discoveredSkills, seenPaths);
+            AddSkillsFromDirectory(Path.Combine(_managedFilePath, ".clawsharp", "skills"), "policySettings", discoveredSkills, seenPaths);
         }
 
         AddSkillsFromDirectory(Path.Combine(_userConfigHomeDir, "skills"), "userSettings", discoveredSkills, seenPaths);
@@ -513,7 +513,7 @@ public sealed class ExtensionBootstrapper
                 break;
             }
 
-            var skillsDirectory = Path.Combine(current, ".claude", "skills");
+            var skillsDirectory = Path.Combine(current, ".clawsharp", "skills");
             if (Directory.Exists(skillsDirectory))
             {
                 directories.Add(skillsDirectory);

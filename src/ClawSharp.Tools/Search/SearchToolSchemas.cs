@@ -7,7 +7,9 @@ internal static class SearchToolSchemas
     public static JsonObject GlobInputSchema =>
         ToolJsonSchemaFactory.StrictObject(
             [
-                ("pattern", ToolJsonSchemaFactory.String("The glob pattern to match files against")),
+                ("pattern", ToolJsonSchemaFactory.String(
+                    "The non-empty glob pattern to match files against. Use patterns such as \"**/*\", \"*.cs\", or \"src/**/*.ts\". Do not pass an empty string.",
+                    minLength: 1)),
                 ("path", ToolJsonSchemaFactory.String(
                     "The directory to search in. If omitted, the current working directory is used. Must be a valid directory path if provided."))
             ],
@@ -28,7 +30,9 @@ internal static class SearchToolSchemas
     public static JsonObject GrepInputSchema =>
         ToolJsonSchemaFactory.StrictObject(
             [
-                ("pattern", ToolJsonSchemaFactory.String("The regular expression pattern to search for in file contents")),
+                ("pattern", ToolJsonSchemaFactory.String(
+                    "The non-empty regular expression pattern to search for in file contents. Do not pass an empty string. Use Glob instead if you need to list files.",
+                    minLength: 1)),
                 ("path", ToolJsonSchemaFactory.String("File or directory to search in. Defaults to current working directory.")),
                 ("glob", ToolJsonSchemaFactory.String("Glob pattern to filter files (for example \"*.js\" or \"*.{ts,tsx}\")")),
                 ("output_mode", ToolJsonSchemaFactory.StringEnum(
