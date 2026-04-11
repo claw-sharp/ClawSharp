@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+
+const { spawn } = require('child_process');
+const path = require('path');
+
+console.log('Running desktop tests...');
+
+// Get the git root directory
+const gitRootDir = path.resolve(__dirname, '..');
+
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const child = spawn(npmCmd, ['run', '--prefix', 'apps/desktop', 'test'], {
+  stdio: 'inherit',
+  cwd: gitRootDir,
+});
+
+child.on('close', (code) => {
+  if (code !== 0) {
+    console.error('Desktop tests failed. Commit aborted.');
+    process.exit(1);
+  }
+  console.log('All tests passed!');
+  process.exit(0);
+});

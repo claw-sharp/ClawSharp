@@ -1,81 +1,128 @@
 # Contributing to ClawSharp
 
-Thank you for your interest in contributing! ClawSharp is a community-driven C# port of Claude Code and welcomes contributions of all kinds.
+Thank you for your interest in contributing to ClawSharp! This document provides guidelines and setup instructions for developers.
 
-## Ways to Contribute
+## Initial Setup
 
-- Reporting bugs
-- Suggesting features or improvements
-- Fixing issues
-- Improving documentation
-- Writing or improving tests
+After cloning the repository, set up git hooks to ensure code quality:
 
-## Before You Start
-
-- Search [existing issues](https://github.com/claw-sharp/ClawSharp/issues) before opening a new one.
-- For large changes, open an issue first to discuss the approach before writing code.
-- Review the [architecture overview](docs/architect.md) to understand how the codebase is structured.
-
-## Development Setup
-
-See [docs/contributor-setup.md](docs/contributor-setup.md) for full instructions on building and running ClawSharp locally.
-
-Quick start:
+### Automatic Setup (Recommended)
 
 ```bash
-git clone https://github.com/claw-sharp/ClawSharp.git
-cd ClawSharp
-dotnet restore ClawSharp.sln
-dotnet test ClawSharp.sln
+./setup-hooks.sh
 ```
 
-## Submitting Issues
+Or manually:
 
-When reporting a bug, please include:
-
-- ClawSharp version (`clawsharp --version`)
-- Operating system and architecture
-- Provider being used (Anthropic, Gemini, Codex, etc.)
-- Steps to reproduce
-- Expected behavior vs. actual behavior
-- Relevant terminal output or error messages
-
-## Submitting Pull Requests
-
-1. Fork the repository and create a branch from `main`.
-2. Name your branch descriptively: `fix/gemini-streaming-error`, `feat/add-xyz-provider`.
-3. Write or update tests to cover your changes.
-4. Ensure the full test suite passes: `dotnet test ClawSharp.sln`.
-5. Keep commits focused — one logical change per commit.
-6. Open a pull request against `main` with a clear description.
-
-## Commit Message Style
-
-Use the [Conventional Commits](https://www.conventionalcommits.org/) format:
-
+```bash
+git config core.hooksPath .githooks
 ```
-feat: add Bedrock provider streaming support
-fix: surface Gemini 429 errors in terminal UI
-docs: update authentication guide for Codex auth.json
-test: add unit tests for QueryModelSseStreamingClient
-chore: bump version to 0.0.6
+
+### What Hooks Do
+
+- **pre-commit**: Runs desktop tests (`npm run --prefix apps/desktop test`) before each commit
+  - If tests fail, your commit will be blocked
+  - This ensures only working code is committed
+
+## Development Workflow
+
+### 1. Create a Feature Branch
+
+```bash
+git checkout -b feature/your-feature-name
 ```
+
+### 2. Make Your Changes
+
+- Write your code
+- Add tests as needed
+- Keep commits focused and descriptive
+
+### 3. Run Tests Locally
+
+Before committing, ensure all tests pass:
+
+```bash
+# Desktop app tests
+npm run --prefix apps/desktop test
+
+# Or let the pre-commit hook catch it
+git commit -m "Your commit message"
+```
+
+### 4. Commit with Message
+
+The pre-commit hook will run automatically. If tests fail, fix the issues and try again.
+
+```bash
+git commit -m "Clear description of your changes"
+```
+
+### 5. Push and Create PR
+
+```bash
+git push origin feature/your-feature-name
+```
+
+Then open a pull request on GitHub.
+
+## Git Hooks
+
+### pre-commit
+
+Automatically runs desktop tests before each commit to prevent broken code from being committed.
+
+**Runs**: `npm run --prefix apps/desktop test`
+
+**Why**: Ensures all tests pass before code is committed, maintaining code quality.
+
+### post-checkout
+
+Automatically ensures git hooks are configured after cloning or pulling the repository.
+
+## Troubleshooting
+
+### Hooks Not Running
+
+If hooks aren't executing, ensure they're configured:
+
+```bash
+git config core.hooksPath
+# Should output: .githooks
+```
+
+If not, run:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Tests Fail on Commit
+
+The pre-commit hook will prevent your commit if tests fail. To fix:
+
+1. Review the test output
+2. Fix the failing test(s)
+3. Run `npm run --prefix apps/desktop test` locally to verify
+4. Commit again
+
+### Bypassing Hooks (Not Recommended)
+
+If you absolutely need to bypass hooks (not recommended):
+
+```bash
+git commit --no-verify
+```
+
+However, please fix the issues before pushing to ensure CI passes.
 
 ## Code Style
 
-- Follow standard C# / .NET naming conventions.
-- Keep the interaction layer (`ClawSharp.Ui.Terminal`) thin — no model or orchestration logic there.
-- Do not mix query, tool, and infrastructure responsibilities in the same class (see [architecture](docs/architect.md)).
-- Add XML doc comments on public APIs.
+- Follow existing code patterns in the repository
+- Keep commits small and focused
+- Write clear commit messages
+- Include relevant tests for new features
 
-## Parity Rule
+## Questions?
 
-ClawSharp aims for 1:1 behavioral parity with the original TypeScript Claude Code runtime. When porting behavior:
-
-- Do not invent new runtime logic or alternate control flow.
-- If C# has no direct TypeScript equivalent, stop and document the decision point clearly in a PR comment or issue.
-- The TypeScript source is the behavioral specification.
-
-## License
-
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+If you have questions or need help, please open an issue on GitHub.
