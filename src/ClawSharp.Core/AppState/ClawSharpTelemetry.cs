@@ -176,7 +176,7 @@ public static partial class ClawSharpTelemetry
                 return;
             }
 
-            var output = $"{DateTimeOffset.UtcNow:O} [{level.ToString().ToUpperInvariant()}] {PrepareDebugMessage(message)}{Environment.NewLine}";
+            var output = FormatDebugOutput(message, level, colorize: IsDebugToStdErr());
             if (IsDebugToStdErr())
             {
                 Console.Error.Write(output);
@@ -546,6 +546,31 @@ public static partial class ClawSharpTelemetry
         return value.Trim();
     }
 
+    private static string FormatDebugOutput(string message, DebugLogLevel level, bool colorize)
+    {
+        var timestamp = $"{DateTimeOffset.UtcNow:O}";
+        var levelLabel = $"[{level.ToString().ToUpperInvariant()}]";
+        var preparedMessage = PrepareDebugMessage(message);
+        if (!colorize || !ShouldColorizeTerminalOutput())
+        {
+            return $"{timestamp} {levelLabel} {preparedMessage}{Environment.NewLine}";
+        }
+
+        const string reset = "\u001b[0m";
+        const string dim = "\u001b[90m";
+        var levelColor = level switch
+        {
+            DebugLogLevel.Verbose => "\u001b[90m",
+            DebugLogLevel.Debug => "\u001b[36m",
+            DebugLogLevel.Info => "\u001b[32m",
+            DebugLogLevel.Warn => "\u001b[33m",
+            DebugLogLevel.Error => "\u001b[31m",
+            _ => reset
+        };
+
+        return $"{dim}{timestamp}{reset} {levelColor}{levelLabel}{reset} {preparedMessage}{Environment.NewLine}";
+    }
+
     private static bool ShouldWriteDebugLogs()
     {
         return
@@ -561,6 +586,18 @@ public static partial class ClawSharpTelemetry
     private static bool IsDebugToStdErr()
     {
         return Environment.GetCommandLineArgs().Any(static arg => arg is "--debug-to-stderr" or "-d2e");
+    }
+
+    private static bool ShouldColorizeTerminalOutput()
+    {
+        var noColor = Environment.GetEnvironmentVariable("NO_COLOR");
+        if (!string.IsNullOrWhiteSpace(noColor))
+        {
+            return false;
+        }
+
+        var term = Environment.GetEnvironmentVariable("TERM");
+        return !string.Equals(term, "dumb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GetDebugFilePathFromArgs()

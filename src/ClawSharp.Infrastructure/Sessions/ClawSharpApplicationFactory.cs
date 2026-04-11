@@ -4,6 +4,7 @@ using ClawSharp.Query;
 using ClawSharp.Tasks;
 using ClawSharp.Tools;
 using ClawSharp.Ui.Terminal;
+using System.Diagnostics;
 
 namespace ClawSharp.Infrastructure;
 
@@ -36,12 +37,54 @@ public static class ClawSharpApplicationFactory
         CancellationToken cancellationToken,
         ClawSharpApplicationFactoryOptions? options)
     {
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
+        static T LogSyncPhase<T>(string workspaceRoot, string phase, Func<T> action)
+        {
+            var phaseStopwatch = Stopwatch.StartNew();
+            ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] start workspace={workspaceRoot}", DebugLogLevel.Info);
+            try
+            {
+                var result = action();
+                phaseStopwatch.Stop();
+                ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] complete workspace={workspaceRoot} elapsedMs={phaseStopwatch.ElapsedMilliseconds}", DebugLogLevel.Info);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                phaseStopwatch.Stop();
+                ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] failed workspace={workspaceRoot} elapsedMs={phaseStopwatch.ElapsedMilliseconds} error={ex.GetType().Name}: {ex.Message}", DebugLogLevel.Warn);
+                throw;
+            }
+        }
+
+        static async Task<T> LogAsyncPhase<T>(string workspaceRoot, string phase, Func<Task<T>> action)
+        {
+            var phaseStopwatch = Stopwatch.StartNew();
+            ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] start workspace={workspaceRoot}", DebugLogLevel.Info);
+            try
+            {
+                var result = await action().ConfigureAwait(false);
+                phaseStopwatch.Stop();
+                ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] complete workspace={workspaceRoot} elapsedMs={phaseStopwatch.ElapsedMilliseconds}", DebugLogLevel.Info);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                phaseStopwatch.Stop();
+                ClawSharpTelemetry.LogDebug($"[AppFactory:{phase}] failed workspace={workspaceRoot} elapsedMs={phaseStopwatch.ElapsedMilliseconds} error={ex.GetType().Name}: {ex.Message}", DebugLogLevel.Warn);
+                throw;
+            }
+        }
+
         StartupProfiler.Checkpoint("create_default_application_start");
         workspaceRoot = Path.GetFullPath(workspaceRoot);
         ClawSharpTelemetry.Initialize(workspaceRoot);
-        var startupEnvironment = StartupEnvironment.Capture();
-        WindowsShellEnvironmentBootstrapper.Initialize();
+        var startupEnvironment = LogSyncPhase(workspaceRoot, "startup-environment", StartupEnvironment.Capture);
+        LogSyncPhase(workspaceRoot, "windows-shell-bootstrap", () =>
+        {
+            WindowsShellEnvironmentBootstrapper.Initialize();
+            return true;
+        });
         var transcriptStore = new JsonlTranscriptStore();
         var agentPersistenceService = new AgentPersistenceService(transcriptStore);
         var sessionLogStore = new DiskSessionLogStore();
@@ -72,20 +115,32 @@ public static class ClawSharpApplicationFactory
             workspaceRoot);
         StartupProfiler.Checkpoint("settings_bootstrap_start");
         var settingsBootstrapper = new SettingsBootstrapper();
-        var settingsResult = await settingsBootstrapper.LoadAsync(workspaceRoot, cancellationToken);
+        var settingsResult = await LogAsyncPhase(
+            workspaceRoot,
+            "settings-bootstrap",
+            () => settingsBootstrapper.LoadAsync(workspaceRoot, cancellationToken));
         StartupProfiler.Checkpoint("settings_bootstrap_end");
         var settingsStore = new JsonSettingsStore(ClaudeConfigPaths.GetUserSettingsFilePath());
         var settings = settingsResult.Settings;
         var autoModeGateProvider = new LocalOnlyAutoModeGateProvider();
         var permissionContextBootstrapper = new PermissionContextBootstrapper(autoModeGateProvider);
-        var toolPermissionContext = permissionContextBootstrapper.Load(
+        var toolPermissionContext = LogSyncPhase(
             workspaceRoot,
-            settings,
-            settingsResult.SourcePreferences);
+            "permission-context",
+            () => permissionContextBootstrapper.Load(
+                workspaceRoot,
+                settings,
+                settingsResult.SourcePreferences));
         var extensionBootstrapper = new ExtensionBootstrapper();
-        var extensionBootstrapResult = await extensionBootstrapper.LoadAsync(workspaceRoot, startupEnvironment, settings, cancellationToken);
+        var extensionBootstrapResult = await LogAsyncPhase(
+            workspaceRoot,
+            "extension-bootstrap",
+            () => extensionBootstrapper.LoadAsync(workspaceRoot, startupEnvironment, settings, cancellationToken));
         var agentBootstrapper = new AgentBootstrapper();
-        var agentDefinitions = await agentBootstrapper.LoadAsync(workspaceRoot, startupEnvironment, cancellationToken);
+        var agentDefinitions = await LogAsyncPhase(
+            workspaceRoot,
+            "agent-bootstrap",
+            () => agentBootstrapper.LoadAsync(workspaceRoot, startupEnvironment, cancellationToken));
         var appState = ClawSharpAppState.CreateDefault(
             workspaceRoot,
             startupEnvironment,
@@ -142,21 +197,24 @@ public static class ClawSharpApplicationFactory
             queuedCommandQueue,
             modelCallExecutor,
             nativeWebSearchService: nativeWebSearchService);
-        var tools = new ToolRegistry(
+        var tools = LogSyncPhase(
             workspaceRoot,
-            tasks,
-            readFileState,
-            toolPermissionContext,
-            fileUpdateNotifier,
-            agentDefinitions.ActiveAgents,
-            appStateStore,
-            permissionPrompter,
-            agentExecutionService,
-            nativeWebSearchService: nativeWebSearchService,
-            worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(), 
-            mcpResources: mcpResourceCatalog,
-            mcpLifecycle: mcpLifecycleManager,
-            settingsStore: settingsStore);
+            "tool-registry",
+            () => new ToolRegistry(
+                workspaceRoot,
+                tasks,
+                readFileState,
+                toolPermissionContext,
+                fileUpdateNotifier,
+                agentDefinitions.ActiveAgents,
+                appStateStore,
+                permissionPrompter,
+                agentExecutionService,
+                nativeWebSearchService: nativeWebSearchService,
+                worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(),
+                mcpResources: mcpResourceCatalog,
+                mcpLifecycle: mcpLifecycleManager,
+                settingsStore: settingsStore));
         var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
         var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
         var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
@@ -212,16 +270,19 @@ public static class ClawSharpApplicationFactory
             memoryStorageService,
             startupEnvironment,
             appStateStore);
-        var queryEngine = new QueryEngine(
-            settings,
-            eventSink,
-            transcriptStore,
-            queryTurnRunner,
-            queuedTaskNotificationDrainer,
-            fileUpdateNotifier: fileUpdateNotifier,
-            toolRegistry: tools,
-            modelTurnContextProvider: modelTurnContextProvider,
-            appStateStore: appStateStore);
+        var queryEngine = LogSyncPhase(
+            workspaceRoot,
+            "query-engine",
+            () => new QueryEngine(
+                settings,
+                eventSink,
+                transcriptStore,
+                queryTurnRunner,
+                queuedTaskNotificationDrainer,
+                fileUpdateNotifier: fileUpdateNotifier,
+                toolRegistry: tools,
+                modelTurnContextProvider: modelTurnContextProvider,
+                appStateStore: appStateStore));
         var localMainSessionTaskService = new LocalMainSessionTaskService(
             tasks,
             queuedCommandQueue,
@@ -229,51 +290,57 @@ public static class ClawSharpApplicationFactory
             appStateStore,
             transcriptStore);
         var cronSchedulerService = new CronSchedulerService(workspaceRoot);
-        var terminalShell = new TerminalShell(
-            queryEngine,
-            queuedTaskNotificationDrainer,
-            toolUseMessageRenderer,
-            toolProgressMessageRenderer,
-            toolResultMessageRenderer,
-            commands,
-            settings,
-            eventSink,
-            sessionFactory,
-            transcriptStore,
-            transcriptMessageRenderer: transcriptMessageRenderer,
-            appStateStore: appStateStore,
-            readFileState: readFileState,
-            toolRegistry: tools,
-            modelTurnContextProvider: modelTurnContextProvider,
-            localMainSessionTaskService: localMainSessionTaskService,
-            cronSchedulerService: cronSchedulerService);
+        var terminalShell = LogSyncPhase(
+            workspaceRoot,
+            "terminal-shell",
+            () => new TerminalShell(
+                queryEngine,
+                queuedTaskNotificationDrainer,
+                toolUseMessageRenderer,
+                toolProgressMessageRenderer,
+                toolResultMessageRenderer,
+                commands,
+                settings,
+                eventSink,
+                sessionFactory,
+                transcriptStore,
+                transcriptMessageRenderer: transcriptMessageRenderer,
+                appStateStore: appStateStore,
+                readFileState: readFileState,
+                toolRegistry: tools,
+                modelTurnContextProvider: modelTurnContextProvider,
+                localMainSessionTaskService: localMainSessionTaskService,
+                cronSchedulerService: cronSchedulerService));
 
-        var application = new ClawSharpApplication(
-            sessionFactory,
-            sessionLogStore,
-            transcriptStore,
-            agentPersistenceService,
-            replSessionBootstrapper,
-            mcpConfigService,
-            mcpAuthStateService,
-            mcpNeedsAuthCache,
-            mcpElicitationService,
-            mcpLifecycleManager,
-            mcpToolRegistrationService,
-            mcpPromptCommands,
-            mcpResourceCatalog,
-            mcpCommandResourceRegistrationService,
-            appStateStore,
-            settings,
-            settingsStore,
-            eventSink,
-            queuedCommandQueue,
-            commands,
-            tools,
-            tasks,
-            queryEngine,
-            terminalShell,
-            modelTurnContextProvider);
+        var application = LogSyncPhase(
+            workspaceRoot,
+            "application-compose",
+            () => new ClawSharpApplication(
+                sessionFactory,
+                sessionLogStore,
+                transcriptStore,
+                agentPersistenceService,
+                replSessionBootstrapper,
+                mcpConfigService,
+                mcpAuthStateService,
+                mcpNeedsAuthCache,
+                mcpElicitationService,
+                mcpLifecycleManager,
+                mcpToolRegistrationService,
+                mcpPromptCommands,
+                mcpResourceCatalog,
+                mcpCommandResourceRegistrationService,
+                appStateStore,
+                settings,
+                settingsStore,
+                eventSink,
+                queuedCommandQueue,
+                commands,
+                tools,
+                tasks,
+                queryEngine,
+                terminalShell,
+                modelTurnContextProvider));
         StartupProfiler.Checkpoint("create_default_application_end");
         stopwatch.Stop();
         ClawSharpTelemetry.LogEvent(

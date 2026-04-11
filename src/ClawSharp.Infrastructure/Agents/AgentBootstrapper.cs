@@ -7,77 +7,120 @@ namespace ClawSharp.Infrastructure;
 
 public sealed class AgentBootstrapper
 {
+    private static readonly TimeSpan GitCommandTimeout = TimeSpan.FromSeconds(5);
+    private const long SlowAgentFileThresholdMs = 250;
     private readonly string _managedFilePath;
     private readonly string _userConfigHomeDir;
     private readonly IDeserializer _yamlDeserializer;
+    private readonly Func<string, CancellationToken, Task<string?>> _canonicalGitRootResolver;
 
     public AgentBootstrapper(
         string? managedFilePath = null,
-        string? userConfigHomeDir = null)
+        string? userConfigHomeDir = null,
+        Func<string, CancellationToken, Task<string?>>? canonicalGitRootResolver = null)
     {
         _managedFilePath = managedFilePath ?? ClaudeConfigPaths.GetManagedFilePath();
         _userConfigHomeDir = userConfigHomeDir ?? SessionStoragePaths.GetClaudeConfigHomeDir();
         _yamlDeserializer = new DeserializerBuilder().Build();
+        _canonicalGitRootResolver = canonicalGitRootResolver ?? TryGetCanonicalGitRootAsync;
     }
 
-    public Task<AgentDefinitionsCatalog> LoadAsync(
+    public async Task<AgentDefinitionsCatalog> LoadAsync(
         string workspaceRoot,
         StartupEnvironment startupEnvironment,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        workspaceRoot = Path.GetFullPath(workspaceRoot);
+        var stopwatch = Stopwatch.StartNew();
+        LogInfo("load", $"start workspace={workspaceRoot} bareMode={startupEnvironment.BareMode}");
 
-        var builtInAgents = BuiltInAgentDefinitions.GetBuiltInAgents();
-        if (startupEnvironment.BareMode)
+        try
         {
-            return Task.FromResult(new AgentDefinitionsCatalog(builtInAgents, builtInAgents));
-        }
+            var builtInAgents = BuiltInAgentDefinitions.GetBuiltInAgents();
+            if (startupEnvironment.BareMode)
+            {
+                stopwatch.Stop();
+                LogInfo("load", $"complete workspace={workspaceRoot} bareMode=true activeCount={builtInAgents.Count} totalCount={builtInAgents.Count} failureCount=0 elapsedMs={stopwatch.ElapsedMilliseconds}");
+                return new AgentDefinitionsCatalog(builtInAgents, builtInAgents);
+            }
 
-        var failures = new List<AgentLoadFailure>();
-        var customAgents = new List<AgentDefinition>();
+            var failures = new List<AgentLoadFailure>();
+            var customAgents = new List<AgentDefinition>();
 
-        AddAgentsFromDirectory(Path.Combine(_managedFilePath, ".clawsharp", "agents"), "policySettings", customAgents, failures);
-        AddAgentsFromDirectory(Path.Combine(_userConfigHomeDir, "agents"), "userSettings", customAgents, failures);
+            AddAgentsFromDirectory(Path.Combine(_managedFilePath, ".clawsharp", "agents"), "policySettings", customAgents, failures, cancellationToken);
+            AddAgentsFromDirectory(Path.Combine(_userConfigHomeDir, "agents"), "userSettings", customAgents, failures, cancellationToken);
 
-        foreach (var projectAgentsDirectory in GetProjectAgentDirectoriesUpToHome(workspaceRoot))
-        {
-            AddAgentsFromDirectory(projectAgentsDirectory, "projectSettings", customAgents, failures);
-        }
+            foreach (var projectAgentsDirectory in await GetProjectAgentDirectoriesUpToHomeAsync(workspaceRoot, cancellationToken))
+            {
+                AddAgentsFromDirectory(projectAgentsDirectory, "projectSettings", customAgents, failures, cancellationToken);
+            }
 
-        var allAgents = builtInAgents.Concat(customAgents).ToArray();
-        var activeAgents = GetActiveAgentsFromList(allAgents);
-        return Task.FromResult(
-            new AgentDefinitionsCatalog(
+            var allAgents = builtInAgents.Concat(customAgents).ToArray();
+            var activeAgents = GetActiveAgentsFromList(allAgents);
+            stopwatch.Stop();
+            LogInfo("load", $"complete workspace={workspaceRoot} bareMode=false activeCount={activeAgents.Count} totalCount={allAgents.Length} failureCount={failures.Count} elapsedMs={stopwatch.ElapsedMilliseconds}");
+            return new AgentDefinitionsCatalog(
                 activeAgents,
                 allAgents,
-                failures.Count == 0 ? null : failures));
+                failures.Count == 0 ? null : failures);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            LogWarn("load", $"failed workspace={workspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
     }
 
     private void AddAgentsFromDirectory(
         string basePath,
         string source,
         List<AgentDefinition> discoveredAgents,
-        List<AgentLoadFailure> failures)
+        List<AgentLoadFailure> failures,
+        CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+        LogInfo("directory-scan", $"start source={source} path={Path.GetFullPath(basePath)}");
         if (!Directory.Exists(basePath))
         {
+            stopwatch.Stop();
+            LogInfo("directory-scan", $"skip source={source} path={Path.GetFullPath(basePath)} reason=not-found elapsedMs={stopwatch.ElapsedMilliseconds}");
             return;
         }
 
-        foreach (var filePath in Directory.GetFiles(basePath, "*.md", SearchOption.TopDirectoryOnly).OrderBy(static path => path, GetPathComparer()))
+        var startingAgentCount = discoveredAgents.Count;
+        var startingFailureCount = failures.Count;
+        var filePaths = Directory.GetFiles(basePath, "*.md", SearchOption.TopDirectoryOnly)
+            .OrderBy(static path => path, GetPathComparer())
+            .ToArray();
+
+        foreach (var filePath in filePaths)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var fileStopwatch = Stopwatch.StartNew();
             var agent = TryParseAgent(filePath, basePath, source, out var error);
+            fileStopwatch.Stop();
+
             if (agent is not null)
             {
                 discoveredAgents.Add(agent);
-                continue;
             }
-
-            if (!string.IsNullOrWhiteSpace(error))
+            else if (!string.IsNullOrWhiteSpace(error))
             {
                 failures.Add(new AgentLoadFailure(filePath, error));
             }
+
+            if (fileStopwatch.ElapsedMilliseconds >= SlowAgentFileThresholdMs)
+            {
+                LogWarn("agent-file-slow", $"source={source} path={filePath} elapsedMs={fileStopwatch.ElapsedMilliseconds}");
+            }
         }
+
+        stopwatch.Stop();
+        LogInfo(
+            "directory-scan",
+            $"complete source={source} path={Path.GetFullPath(basePath)} fileCount={filePaths.Length} discoveredCount={discoveredAgents.Count - startingAgentCount} failureCount={failures.Count - startingFailureCount} elapsedMs={stopwatch.ElapsedMilliseconds}");
     }
 
     private AgentDefinition? TryParseAgent(
@@ -196,15 +239,20 @@ public sealed class AgentBootstrapper
         return (normalized, content);
     }
 
-    private IReadOnlyList<string> GetProjectAgentDirectoriesUpToHome(string workspaceRoot)
+    private async Task<IReadOnlyList<string>> GetProjectAgentDirectoriesUpToHomeAsync(
+        string workspaceRoot,
+        CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+        LogInfo("project-directories", $"start workspace={workspaceRoot}");
         var homeDirectory = Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        var gitRoot = TryGetCanonicalGitRoot(workspaceRoot);
+        var gitRoot = await ResolveCanonicalGitRootAsync(workspaceRoot, cancellationToken);
         var current = Path.GetFullPath(workspaceRoot);
         var directories = new List<string>();
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (PathsEqual(current, homeDirectory))
             {
                 break;
@@ -230,7 +278,37 @@ public sealed class AgentBootstrapper
             current = parent;
         }
 
+        stopwatch.Stop();
+        LogInfo(
+            "project-directories",
+            $"complete workspace={workspaceRoot} directoryCount={directories.Count} gitRoot={gitRoot ?? "<none>"} elapsedMs={stopwatch.ElapsedMilliseconds}");
         return directories;
+    }
+
+    private async Task<string?> ResolveCanonicalGitRootAsync(string workspaceRoot, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        LogInfo("git-root", $"start workspace={workspaceRoot}");
+
+        try
+        {
+            var gitRoot = await _canonicalGitRootResolver(workspaceRoot, cancellationToken).ConfigureAwait(false);
+            stopwatch.Stop();
+            LogInfo("git-root", $"complete workspace={workspaceRoot} root={gitRoot ?? "<none>"} elapsedMs={stopwatch.ElapsedMilliseconds}");
+            return gitRoot;
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            LogWarn("git-root", $"canceled workspace={workspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            LogWarn("git-root", $"failed workspace={workspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
     }
 
     private static IReadOnlyList<string>? ParseAgentToolList(object? value)
@@ -337,7 +415,7 @@ public sealed class AgentBootstrapper
         return values.TryGetValue(key, out var raw) ? raw : null;
     }
 
-    private static string? TryGetCanonicalGitRoot(string workspaceRoot)
+    private static async Task<string?> TryGetCanonicalGitRootAsync(string workspaceRoot, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -365,14 +443,72 @@ public sealed class AgentBootstrapper
             return null;
         }
 
-        process.WaitForExit();
-        if (process.ExitCode != 0)
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(GitCommandTimeout);
+
+        try
         {
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKillProcess(process);
+            await AwaitExitQuietlyAsync(process).ConfigureAwait(false);
+            _ = await standardOutputTask.ConfigureAwait(false);
+            var timeoutError = await standardErrorTask.ConfigureAwait(false);
+            LogWarn("git-root", $"timeout workspace={workspaceRoot} timeoutMs={GitCommandTimeout.TotalMilliseconds} stderr={TrimForLog(timeoutError)}");
             return null;
         }
 
-        var output = process.StandardOutput.ReadToEnd().Trim();
+        var output = (await standardOutputTask.ConfigureAwait(false)).Trim();
+        var error = (await standardErrorTask.ConfigureAwait(false)).Trim();
+        if (process.ExitCode != 0)
+        {
+            LogWarn("git-root", $"non-zero-exit workspace={workspaceRoot} exitCode={process.ExitCode} stderr={TrimForLog(error)}");
+            return null;
+        }
+
         return string.IsNullOrWhiteSpace(output) ? null : Path.GetFullPath(output);
+    }
+
+    private static async Task AwaitExitQuietlyAsync(Process process)
+    {
+        try
+        {
+            await process.WaitForExitAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort cleanup only.
+        }
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup only.
+        }
+    }
+
+    private static string TrimForLog(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "<empty>";
+        }
+
+        var singleLine = value.ReplaceLineEndings(" ").Trim();
+        return singleLine.Length > 240 ? singleLine[..240] : singleLine;
     }
 
     private static bool PathsEqual(string left, string right)
@@ -388,5 +524,15 @@ public sealed class AgentBootstrapper
     private static StringComparison GetPathComparison()
     {
         return OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    }
+
+    private static void LogInfo(string category, string message)
+    {
+        ClawSharpTelemetry.LogDebug($"[AgentBootstrapper:{category}] {message}", DebugLogLevel.Info);
+    }
+
+    private static void LogWarn(string category, string message)
+    {
+        ClawSharpTelemetry.LogDebug($"[AgentBootstrapper:{category}] {message}", DebugLogLevel.Warn);
     }
 }

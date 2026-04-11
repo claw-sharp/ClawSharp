@@ -1,5 +1,6 @@
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
+using System.Reflection;
 
 namespace ClawSharp.UnitTests;
 
@@ -120,6 +121,33 @@ public sealed class ClawSharpTelemetryTests
             {
                 Directory.Delete(configDir, recursive: true);
             }
+        }
+    }
+
+    [Fact]
+    public void FormatDebugOutput_Colorizes_Level_For_Terminal_Output()
+    {
+        var originalNoColor = Environment.GetEnvironmentVariable("NO_COLOR");
+        var originalTerm = Environment.GetEnvironmentVariable("TERM");
+        Environment.SetEnvironmentVariable("NO_COLOR", null);
+        Environment.SetEnvironmentVariable("TERM", "xterm-256color");
+
+        try
+        {
+            var formatter = typeof(ClawSharpTelemetry).GetMethod("FormatDebugOutput", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(formatter);
+
+            var colorized = Assert.IsType<string>(formatter!.Invoke(null, ["message", DebugLogLevel.Warn, true]));
+            var plain = Assert.IsType<string>(formatter.Invoke(null, ["message", DebugLogLevel.Warn, false]));
+
+            Assert.Contains("\u001b[33m[WARN]\u001b[0m", colorized, StringComparison.Ordinal);
+            Assert.Contains("message", colorized, StringComparison.Ordinal);
+            Assert.DoesNotContain("\u001b[", plain, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("NO_COLOR", originalNoColor);
+            Environment.SetEnvironmentVariable("TERM", originalTerm);
         }
     }
 

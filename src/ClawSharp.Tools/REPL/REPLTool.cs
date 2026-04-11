@@ -22,7 +22,22 @@ internal sealed class REPLTool : BaseTool
                         ["properties"] = new JsonObject
                         {
                             ["tool"] = new JsonObject { ["type"] = "string" },
-                            ["input"] = new JsonObject { ["type"] = "object" }
+                            ["input"] = new JsonObject
+                            {
+                                ["description"] = "Arguments for the nested tool. Provide either a raw JSON object or a JSON-encoded string when the provider requires strict schemas.",
+                                ["anyOf"] = new JsonArray
+                                {
+                                    new JsonObject
+                                    {
+                                        ["type"] = "object"
+                                    },
+                                    new JsonObject
+                                    {
+                                        ["type"] = "string",
+                                        ["description"] = "JSON-encoded arguments for the nested tool."
+                                    }
+                                }
+                            }
                         },
                         ["required"] = new JsonArray { "tool", "input" }
                     },
@@ -52,7 +67,7 @@ internal sealed class REPLTool : BaseTool
             {
                 try
                 {
-                    string actionInputJson = JsonSerializer.Serialize(action.input);
+                    string actionInputJson = SerializeActionInput(action.input);
                     var subContext = context with { Arguments = actionInputJson };
                     
                     var result = await tool.ExecuteAsync(subContext, cancellationToken);
@@ -97,6 +112,34 @@ internal sealed class REPLTool : BaseTool
     private class ToolAction
     {
         public string tool { get; set; } = string.Empty;
-        public object input { get; set; } = new();
+        public JsonElement input { get; set; }
+    }
+
+    private static string SerializeActionInput(JsonElement input)
+    {
+        if (input.ValueKind == JsonValueKind.String)
+        {
+            var encodedJson = input.GetString();
+            if (string.IsNullOrWhiteSpace(encodedJson))
+            {
+                return "{}";
+            }
+
+            try
+            {
+                return JsonNode.Parse(encodedJson)!.ToJsonString();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException("REPL action input string must contain valid JSON.", ex);
+            }
+        }
+
+        if (input.ValueKind == JsonValueKind.Undefined)
+        {
+            return "{}";
+        }
+
+        return input.GetRawText();
     }
 }

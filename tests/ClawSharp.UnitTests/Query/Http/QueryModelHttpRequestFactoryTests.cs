@@ -532,6 +532,43 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Shapes_Repl_For_Codex_With_Input_Preserved()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        var repl = Assert.Single(registry.All, static tool => string.Equals(tool.Name, "REPL", StringComparison.Ordinal));
+
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-repl-codex",
+                "codexplan",
+                [new QuerySystemPromptBlock("system")],
+                [new QueryRequestMessage("user", [new QueryRequestContentBlock("text", Text: "hello")])],
+                [new QueryRequestTool(repl.Name, repl.Description, repl.InputSchema, Strict: repl.Strict)],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var codexRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var codexBody = JsonNode.Parse(await codexRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var actionSchema = codexBody["tools"]![0]!["parameters"]!["properties"]!["actions"]!["items"]!.AsObject();
+        var actionProperties = actionSchema["properties"]!.AsObject();
+        var actionRequired = actionSchema["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        var inputSchema = actionProperties["input"]!.AsObject();
+
+        Assert.Equal(["tool", "input"], actionRequired);
+        Assert.True(actionProperties.ContainsKey("input"));
+        Assert.True(inputSchema["anyOf"] is JsonArray);
+    }
+
+    [Fact]
     public async Task CreateStreamingRequest_Shapes_AskUserQuestion_For_OpenAi_With_Nullable_Optional_Fields()
     {
         var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());

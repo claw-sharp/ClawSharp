@@ -7,13 +7,18 @@ namespace ClawSharp.AgentHost.Services;
 
 public sealed class WorkspaceApplicationRegistry
 {
+    private static readonly TimeSpan StartupWaitLogInterval = TimeSpan.FromSeconds(5);
     private readonly ClawSharpApplicationFactoryOptions? _factoryOptions;
+    private readonly Func<string, CancellationToken, ClawSharpApplicationFactoryOptions?, Task<ClawSharpApplication>> _applicationFactory;
     private readonly ConcurrentDictionary<string, Lazy<Task<ClawSharpApplication>>> _applications =
-        new(StringComparer.Ordinal);
+        new(GetPathComparer());
 
-    public WorkspaceApplicationRegistry(ClawSharpApplicationFactoryOptions? factoryOptions = null)
+    public WorkspaceApplicationRegistry(
+        ClawSharpApplicationFactoryOptions? factoryOptions = null,
+        Func<string, CancellationToken, ClawSharpApplicationFactoryOptions?, Task<ClawSharpApplication>>? applicationFactory = null)
     {
         _factoryOptions = factoryOptions;
+        _applicationFactory = applicationFactory ?? ClawSharpApplicationFactory.CreateForWorkspaceAsync;
     }
 
     public async Task<ClawSharpApplication> GetOrCreateAsync(
@@ -29,7 +34,7 @@ public sealed class WorkspaceApplicationRegistry
         var lazy = _applications.GetOrAdd(
             normalizedWorkspaceRoot,
             path => new Lazy<Task<ClawSharpApplication>>(
-                () => ClawSharpApplicationFactory.CreateForWorkspaceAsync(path, CancellationToken.None, _factoryOptions),
+                () => _applicationFactory(path, CancellationToken.None, _factoryOptions),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         var createdNewLazy = !cacheHit && ReferenceEquals(_applications[normalizedWorkspaceRoot], lazy);
 
@@ -41,7 +46,7 @@ public sealed class WorkspaceApplicationRegistry
             }
 
             var stopwatch = Stopwatch.StartNew();
-            var app = await lazy.Value.WaitAsync(cancellationToken);
+            var app = await WaitForApplicationAsync(normalizedWorkspaceRoot, lazy, cancellationToken);
             stopwatch.Stop();
 
             AgentHostLog.Debug(
@@ -49,6 +54,13 @@ public sealed class WorkspaceApplicationRegistry
                 $"workspace={normalizedWorkspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds}");
 
             return app;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AgentHostLog.Warn(
+                "workspace-registry:wait-canceled",
+                $"workspace={normalizedWorkspaceRoot}");
+            throw;
         }
         catch (Exception ex)
         {
@@ -74,5 +86,47 @@ public sealed class WorkspaceApplicationRegistry
         }
 
         return normalized;
+    }
+
+    private static StringComparer GetPathComparer()
+    {
+        return OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    }
+
+    private static async Task<ClawSharpApplication> WaitForApplicationAsync(
+        string workspaceRoot,
+        Lazy<Task<ClawSharpApplication>> lazy,
+        CancellationToken cancellationToken)
+    {
+        var task = lazy.Value;
+        if (task.IsCompleted)
+        {
+            return await task.WaitAsync(cancellationToken);
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var nextLogAt = StartupWaitLogInterval;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var delay = nextLogAt - stopwatch.Elapsed;
+            if (delay <= TimeSpan.Zero)
+            {
+                delay = StartupWaitLogInterval;
+                nextLogAt = stopwatch.Elapsed + StartupWaitLogInterval;
+            }
+
+            var completed = await Task.WhenAny(task, Task.Delay(delay, cancellationToken));
+            if (completed == task)
+            {
+                return await task.WaitAsync(cancellationToken);
+            }
+
+            //AgentHostLog.Warn(
+            //    "workspace-registry:wait-slow",
+            //    $"workspace={workspaceRoot} elapsedMs={stopwatch.ElapsedMilliseconds}");
+        }
     }
 }

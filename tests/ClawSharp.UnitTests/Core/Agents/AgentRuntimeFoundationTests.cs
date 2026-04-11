@@ -77,6 +77,58 @@ public sealed class AgentRuntimeFoundationTests
     }
 
     [Fact]
+    public async Task AgentBootstrapper_LoadAsync_Logs_GitRoot_And_Directory_Substeps()
+    {
+        var originalConfigDir = Environment.GetEnvironmentVariable("CLAWSHARP_CONFIG_DIR");
+        var originalDebug = Environment.GetEnvironmentVariable("DEBUG");
+        var tempRoot = CreateTempDirectory();
+        var configDir = Path.Combine(tempRoot, "config");
+        var workspaceRoot = Path.Combine(tempRoot, "repo", "child");
+        var managedRoot = Path.Combine(tempRoot, "managed");
+        var userConfigHomeDir = Path.Combine(tempRoot, "user");
+        Directory.CreateDirectory(configDir);
+        Directory.CreateDirectory(workspaceRoot);
+        Directory.CreateDirectory(Path.Combine(tempRoot, "repo", ".git"));
+
+        Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", configDir);
+        Environment.SetEnvironmentVariable("DEBUG", "1");
+        ClawSharpTelemetry.ResetForTesting();
+
+        try
+        {
+            ClawSharpTelemetry.Initialize(configDir, "session-agent-bootstrap");
+            CreateAgent(Path.Combine(managedRoot, ".clawsharp", "agents"), "managed-agent", "managed");
+            CreateAgent(Path.Combine(userConfigHomeDir, "agents"), "user-agent", "user");
+            CreateAgent(Path.Combine(workspaceRoot, ".clawsharp", "agents"), "project-agent", "project");
+
+            var bootstrapper = new AgentBootstrapper(
+                managedFilePath: managedRoot,
+                userConfigHomeDir: userConfigHomeDir,
+                canonicalGitRootResolver: (_, _) => Task.FromResult<string?>(Path.Combine(tempRoot, "repo")));
+
+            _ = await bootstrapper.LoadAsync(
+                workspaceRoot,
+                new StartupEnvironment(userConfigHomeDir, BareMode: false, DisablePolicySkills: false));
+
+            var debugLog = ReadAllTextShared(ClawSharpTelemetry.GetDebugLogPath());
+            Assert.Contains("[AgentBootstrapper:git-root] start", debugLog, StringComparison.Ordinal);
+            Assert.Contains("[AgentBootstrapper:git-root] complete", debugLog, StringComparison.Ordinal);
+            Assert.Contains("[AgentBootstrapper:project-directories] complete", debugLog, StringComparison.Ordinal);
+            Assert.Contains("source=projectSettings", debugLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            ClawSharpTelemetry.ResetForTesting();
+            Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
+            Environment.SetEnvironmentVariable("DEBUG", originalDebug);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task AgentTool_Publishes_Ts_Shaped_Metadata_And_Validates_Subagent_Type()
     {
         var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
@@ -186,5 +238,12 @@ public sealed class AgentRuntimeFoundationTests
         var path = Path.Combine(Path.GetTempPath(), "clawsharp-agent-runtime-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static string ReadAllTextShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }
