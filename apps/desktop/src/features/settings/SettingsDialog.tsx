@@ -27,6 +27,7 @@ export const SettingsDialog = () => {
   const { ui, settings, toggleSettings, updateSettings, validateProviderConfig } = useAppStore();
   const [draftProvider, setDraftProvider] = useState(settings.defaultProvider);
   const [draftModel, setDraftModel] = useState(settings.defaultModel);
+  const [draftTheme, setDraftTheme] = useState(settings.theme);
   const [draftTelemetryEnabled, setDraftTelemetryEnabled] = useState(settings.showDiagnostics);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [authTokenInput, setAuthTokenInput] = useState('');
@@ -40,6 +41,7 @@ export const SettingsDialog = () => {
   const resetDraftFromSettings = () => {
     setDraftProvider(settings.defaultProvider);
     setDraftModel(settings.defaultModel);
+    setDraftTheme(settings.theme);
     setDraftTelemetryEnabled(settings.showDiagnostics);
     setApiKeyInput('');
     setAuthTokenInput('');
@@ -79,6 +81,7 @@ export const SettingsDialog = () => {
     settings.providerCredentials.hasAuthToken,
     settings.providerCredentials.source,
     settings.showDiagnostics,
+    settings.theme,
     ui.settingsOpen,
   ]);
 
@@ -143,7 +146,8 @@ export const SettingsDialog = () => {
   const hasSettingsChanges =
     draftProvider !== settings.defaultProvider ||
     draftModel !== settings.defaultModel ||
-    draftTelemetryEnabled !== settings.showDiagnostics;
+    draftTelemetryEnabled !== settings.showDiagnostics ||
+    draftTheme !== settings.theme;
   const hasCredentialChanges = credentialUpdate !== null || hasExternalCredentialPreferenceChange;
   const hasPendingChanges = hasSettingsChanges || hasCredentialChanges;
   const validationRequest = {
@@ -332,6 +336,21 @@ export const SettingsDialog = () => {
             }}
           />
 
+          <SettingRow label="Theme">
+            <select
+              value={draftTheme}
+              onChange={(e) => {
+                hasEditedDraftRef.current = true;
+                setDraftTheme(e.target.value as 'dark' | 'light' | 'system');
+              }}
+              className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
+            </select>
+          </SettingRow>
+
           {/*
             Temporarily hidden until the desktop runtime persists them for real:
             density, theme, streaming speed, editor path, compact mode,
@@ -377,6 +396,7 @@ export const SettingsDialog = () => {
                 void updateSettings({
                   defaultProvider: draftProvider,
                   defaultModel: draftModel,
+                  theme: draftTheme,
                   showDiagnostics: draftTelemetryEnabled,
                   ...(credentialUpdate ?? {}),
                   ...(hasExternalCredentialPreferenceChange
