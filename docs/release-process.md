@@ -8,6 +8,7 @@ It complements `docs/distribution.md`:
 
 - `distribution.md` explains how ClawSharp is packaged, installed, updated, and verified
 - this document explains how to cut and validate a new release end to end
+- `docs/version-bump-checklist.md` lists the exact files you update for a new version
 
 ## Release Model
 

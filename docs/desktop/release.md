@@ -8,6 +8,8 @@ This release pipeline is a production-shaped setup:
 - WinGet and a Homebrew tap point at GitHub-hosted assets.
 - No Microsoft Store, Mac App Store, Apple Developer Program, Windows code-signing certificate, or third-party updater service is required.
 
+For the short version-bump checklist, see `docs/version-bump-checklist.md`.
+
 ## Phase 0 audit
 
 Before these changes, the desktop app already had:
