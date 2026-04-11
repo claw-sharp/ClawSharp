@@ -277,8 +277,27 @@ export const ThreadView = () => {
 };
 
 const MessageBubble = ({ message }: { message: Message }) => {
+  const { selectedProjectId, projects, openExternalEditor, settings } = useAppStore();
   const isUser = message.role === 'user';
   const hasText = message.content.trim().length > 0;
+  const project = projects.find((item) => item.id === selectedProjectId);
+
+  const openFileFromMessage = (match: FileReferenceMatch) => {
+    if (!project) {
+      return;
+    }
+
+    const absolutePath = isAbsoluteFilePath(match.path)
+      ? match.path
+      : `${project.path}/${match.path}`.replace(/\/+/g, '/');
+    void openExternalEditor({
+      kind: 'position',
+      path: absolutePath,
+      line: match.line,
+      column: match.column,
+      editorCommand: settings.editorPath,
+    });
+  };
 
   return (
     <div className={cn('flex gap-3', isUser ? '' : '')}>
@@ -302,7 +321,7 @@ const MessageBubble = ({ message }: { message: Message }) => {
         </div>
         {hasText && (
           <div className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
-            {message.content}
+            {renderMessageContent(message.content, openFileFromMessage)}
             {message.isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-stream-cursor" />}
           </div>
         )}
@@ -313,6 +332,213 @@ const MessageBubble = ({ message }: { message: Message }) => {
     </div>
   );
 };
+
+
+type FileReferenceMatch = {
+  path: string;
+  line: number | null;
+  column: number | null;
+  label: string;
+  start: number;
+  end: number;
+  appearance: 'plain' | 'code' | 'markdown';
+};
+
+function renderMessageContent(content: string, onOpenFile: (match: FileReferenceMatch) => void) {
+  const tokens = findMessageTokens(content);
+  if (tokens.length === 0) {
+    return content;
+  }
+
+  const nodes: Array<string | JSX.Element> = [];
+  let cursor = 0;
+
+  tokens.forEach((token, index) => {
+    if (cursor < token.start) {
+      nodes.push(content.slice(cursor, token.start));
+    }
+
+    if (token.kind === 'text') {
+      nodes.push(content.slice(token.start, token.end));
+    } else {
+      nodes.push(
+        <button
+          key={`${token.match.path}-${token.start}-${index}`}
+          type="button"
+          onClick={() => onOpenFile(token.match)}
+          className={cn(
+            'cursor-pointer underline underline-offset-2 hover:text-primary/80',
+            token.match.appearance === 'code'
+              ? 'rounded-sm bg-muted px-1 font-mono text-primary'
+              : 'font-mono text-primary',
+          )}
+        >
+          {token.match.label}
+        </button>,
+      );
+    }
+
+    cursor = token.end;
+  });
+
+  if (cursor < content.length) {
+    nodes.push(content.slice(cursor));
+  }
+
+  return nodes;
+}
+
+type MessageToken =
+  | { kind: 'text'; start: number; end: number }
+  | { kind: 'file'; start: number; end: number; match: FileReferenceMatch };
+
+function findMessageTokens(content: string): MessageToken[] {
+  const protectedTokens: Array<MessageToken & { priority: number }> = [];
+  const markdownLinkPattern = /\[([^\]\n]+)\]\((<([^>\n]+)>|([^) \n]+))\)/g;
+  const inlineCodePattern = /`([^`\n]+)`/g;
+
+  for (const match of content.matchAll(markdownLinkPattern)) {
+    const fullMatch = match[0];
+    const label = match[1];
+    const target = match[3] ?? match[4] ?? '';
+    const parsedTarget = parseFileReferenceTarget(target);
+    const start = match.index ?? 0;
+    const end = start + fullMatch.length;
+
+    protectedTokens.push(parsedTarget
+      ? {
+          kind: 'file',
+          start,
+          end,
+          match: {
+            ...parsedTarget,
+            label,
+            start,
+            end,
+            appearance: 'markdown',
+          },
+          priority: 0,
+        }
+      : { kind: 'text', start, end, priority: 0 });
+  }
+
+  for (const match of content.matchAll(inlineCodePattern)) {
+    const fullMatch = match[0];
+    const rawValue = match[1];
+    const parsedTarget = parseFileReferenceTarget(rawValue);
+    const start = match.index ?? 0;
+    const end = start + fullMatch.length;
+
+    protectedTokens.push(parsedTarget
+      ? {
+          kind: 'file',
+          start,
+          end,
+          match: {
+            ...parsedTarget,
+            label: rawValue,
+            start,
+            end,
+            appearance: 'code',
+          },
+          priority: 1,
+        }
+      : { kind: 'text', start, end, priority: 1 });
+  }
+
+  const plainMatches = findPlainFileReferenceMatches(content).map((match) => ({
+    kind: 'file' as const,
+    start: match.start,
+    end: match.end,
+    match,
+    priority: 2,
+  }));
+
+  const allTokens = [...protectedTokens, ...plainMatches].sort((left, right) => {
+    if (left.start !== right.start) {
+      return left.start - right.start;
+    }
+
+    if (left.priority !== right.priority) {
+      return left.priority - right.priority;
+    }
+
+    return left.end - right.end;
+  });
+
+  const tokens: MessageToken[] = [];
+  let cursor = 0;
+
+  for (const token of allTokens) {
+    if (token.start < cursor) {
+      continue;
+    }
+
+    tokens.push(token.kind === 'text'
+      ? { kind: 'text', start: token.start, end: token.end }
+      : { kind: 'file', start: token.start, end: token.end, match: token.match });
+    cursor = token.end;
+  }
+
+  return tokens;
+}
+
+function findPlainFileReferenceMatches(content: string): FileReferenceMatch[] {
+  const pattern = /(^|[\s(])((?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+(?:\.[A-Za-z0-9._-]+)?)(?::(\d+))?(?::(\d+))?(?=$|[\s),.])/gm;
+  const matches: FileReferenceMatch[] = [];
+
+  for (const match of content.matchAll(pattern)) {
+    const fullMatch = match[0];
+    const leading = match[1] ?? '';
+    const path = match[2];
+    const line = match[3] ? Number(match[3]) : null;
+    const column = match[4] ? Number(match[4]) : null;
+    const start = (match.index ?? 0) + leading.length;
+    const end = start + path.length + (match[3] ? `:${match[3]}`.length : 0) + (match[4] ? `:${match[4]}`.length : 0);
+
+    if (!path.includes('/')) {
+      continue;
+    }
+
+    if (!/[.]/.test(path.split('/').pop() ?? '')) {
+      continue;
+    }
+
+    matches.push({ path, line, column, label: content.slice(start, end), start, end, appearance: 'plain' });
+  }
+
+  return matches;
+}
+
+function parseFileReferenceTarget(rawTarget: string) {
+  const normalizedTarget = rawTarget.trim().replace(/^file:\/\//, '');
+  const match = normalizedTarget.match(/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const path = match[1];
+  const line = match[2] ? Number(match[2]) : null;
+  const column = match[3] ? Number(match[3]) : null;
+
+  if (!isFileReferencePath(path)) {
+    return null;
+  }
+
+  return { path, line, column };
+}
+
+function isFileReferencePath(path: string) {
+  if ((!path.includes('/') && !path.includes('\\')) || !/[.]/.test(path.split(/[\\/]/).pop() ?? '')) {
+    return false;
+  }
+
+  return true;
+}
+
+function isAbsoluteFilePath(path: string) {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path);
+}
 
 const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
   const [collapsed, setCollapsed] = useState(true);
@@ -476,8 +702,8 @@ const PromptComposer = ({
                 ? 'ClawSharp is working…'
                 : 'Ask ClawSharp to work on this repository.'
           }
-          rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-h-[24px] max-h-[120px]"
+          rows={3}
+          className="flex-1 resize-none bg-transparent text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none min-h-[72px] max-h-[220px]"
           disabled={isRunning || isBrowserPreview}
         />
         <button

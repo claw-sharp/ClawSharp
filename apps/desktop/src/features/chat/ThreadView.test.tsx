@@ -74,6 +74,7 @@ const baseStoreState = {
   resolveApproval: vi.fn(),
   setActiveView: vi.fn(),
   loadOlderThreadMessages: vi.fn(),
+  openExternalEditor: vi.fn(),
 };
 
 describe('ThreadView', () => {
@@ -273,6 +274,211 @@ describe('ThreadView', () => {
     expect(screen.getByText('Ran `rg --files`')).toBeInTheDocument();
     expect(screen.getByText(/src\/App\.tsx/)).toBeInTheDocument();
     expect(screen.getByText(/src\/main\.tsx/)).toBeInTheDocument();
+  });
+
+
+  it('opens file links in chat messages in the external editor', () => {
+    const openExternalEditor = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      openExternalEditor,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Open file link',
+          summary: 'Testing clickable file links',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'See apps/desktop/src/layouts/AppShell.tsx:42:7 for the layout.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apps/desktop/src/layouts/AppShell.tsx:42:7' }));
+
+    expect(openExternalEditor).toHaveBeenCalledWith({
+      kind: 'position',
+      path: '/repo/apps/desktop/src/layouts/AppShell.tsx',
+      line: 42,
+      column: 7,
+      editorCommand: '/usr/local/bin/code',
+    });
+  });
+
+  it('opens backticked file paths in chat messages in the external editor', () => {
+    const openExternalEditor = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      openExternalEditor,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Open code file link',
+          summary: 'Testing clickable backticked file links',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'Verified: `apps/desktop/src/features/chat/ThreadView.test.tsx` passes.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apps/desktop/src/features/chat/ThreadView.test.tsx' }));
+
+    expect(openExternalEditor).toHaveBeenCalledWith({
+      kind: 'position',
+      path: '/repo/apps/desktop/src/features/chat/ThreadView.test.tsx',
+      line: null,
+      column: null,
+      editorCommand: '/usr/local/bin/code',
+    });
+  });
+
+  it('opens markdown file links in chat messages in the external editor', () => {
+    const openExternalEditor = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      openExternalEditor,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Open markdown file link',
+          summary: 'Testing clickable markdown file links',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'Verified: [ThreadView.test.tsx](</Users/hadoan/Documents/GitHub/ClawSharp/apps/desktop/src/features/chat/ThreadView.test.tsx:281>) passes.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'ThreadView.test.tsx' }));
+
+    expect(openExternalEditor).toHaveBeenCalledWith({
+      kind: 'position',
+      path: '/Users/hadoan/Documents/GitHub/ClawSharp/apps/desktop/src/features/chat/ThreadView.test.tsx',
+      line: 281,
+      column: null,
+      editorCommand: '/usr/local/bin/code',
+    });
   });
 
   it('renders approval required after transcript messages', () => {
