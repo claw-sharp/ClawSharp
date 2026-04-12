@@ -143,7 +143,8 @@ public static class ClawSharpApplicationFactory
                 settingsResult.Settings,
                 settingsResult.SourcePreferences));
 
-        var extensionBootstrapper = new ExtensionBootstrapper();
+        var extensionBootstrapper = new ExtensionBootstrapper(
+            builtInPluginRegistry: BuiltInPluginCatalog.CreateRegistry());
         var extensionBootstrapResult = await LogAsyncPhase(
             workspaceRoot,
             "extension-bootstrap",

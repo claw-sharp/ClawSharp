@@ -14,8 +14,14 @@ export interface AgentHostCommandMap {
   getDiff: { request: GetDiffRequest; response: GetDiffResponse };
   openExternalEditor: { request: OpenExternalEditorRequest; response: OpenExternalEditorResponse };
   listDiagnostics: { request: ListDiagnosticsRequest; response: ListDiagnosticsResponse };
+  listPlugins: { request: ListPluginsRequest; response: ListPluginsResponse };
+  listSkills: { request: ListSkillsRequest; response: ListSkillsResponse };
   getSettings: { request: GetSettingsRequest; response: GetSettingsResponse };
   updateSettings: { request: UpdateSettingsRequest; response: UpdateSettingsResponse };
+  setPluginEnabled: { request: SetPluginEnabledRequest; response: ListPluginsResponse };
+  savePluginOptions: { request: SavePluginOptionsRequest; response: ListPluginsResponse };
+  deletePluginOptions: { request: DeletePluginOptionsRequest; response: ListPluginsResponse };
+  refreshPlugins: { request: ListPluginsRequest; response: ListPluginsResponse };
   listProviders: { request: Record<string, never>; response: ListProvidersResponse };
   validateProviderConfig: { request: ValidateProviderConfigRequest; response: ValidateProviderConfigResponse };
   listPendingApprovals: { request: ListPendingApprovalsRequest; response: ListPendingApprovalsResponse };
@@ -152,6 +158,14 @@ export interface ListDiagnosticsRequest {
   threadId?: string | null;
 }
 
+export interface ListPluginsRequest {
+  projectId?: string | null;
+}
+
+export interface ListSkillsRequest {
+  projectId?: string | null;
+}
+
 export interface GetSettingsRequest {
   projectId?: string | null;
 }
@@ -170,6 +184,23 @@ export interface UpdateSettingsRequest {
   clearAuthToken?: boolean | null;
   clearAccountId?: boolean | null;
   useExternalCredential?: boolean | null;
+}
+
+export interface SetPluginEnabledRequest {
+  projectId?: string | null;
+  pluginId: string;
+  enabled: boolean;
+}
+
+export interface SavePluginOptionsRequest {
+  projectId?: string | null;
+  pluginId: string;
+  values: Record<string, unknown>;
+}
+
+export interface DeletePluginOptionsRequest {
+  projectId?: string | null;
+  pluginId: string;
 }
 
 export interface ValidateProviderConfigRequest {
@@ -320,6 +351,68 @@ export interface AgentHostDiagnostics {
 
 export interface ListDiagnosticsResponse {
   diagnostics: AgentHostDiagnostics;
+}
+
+export interface AgentHostPluginValidationIssue {
+  path: string;
+  message: string;
+  isWarning: boolean;
+}
+
+export interface AgentHostPluginOption {
+  key: string;
+  type: 'string' | 'number' | 'boolean' | 'directory' | 'file';
+  title: string;
+  description: string;
+  required: boolean;
+  multiple: boolean;
+  sensitive: boolean;
+  hasValue: boolean;
+  value?: unknown;
+  defaultValue?: unknown;
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface AgentHostPlugin {
+  pluginId: string;
+  name: string;
+  description?: string | null;
+  version?: string | null;
+  enabled: boolean;
+  isBundled: boolean;
+  installPath: string;
+  scope: string;
+  installedAt?: string | null;
+  lastUpdated?: string | null;
+  gitCommitSha?: string | null;
+  commands: string[];
+  agents: string[];
+  skills: string[];
+  outputStyles: string[];
+  hookFiles: string[];
+  hookEvents: string[];
+  validationIssues: AgentHostPluginValidationIssue[];
+  options: AgentHostPluginOption[];
+}
+
+export interface ListPluginsResponse {
+  projectId: string;
+  workspaceRoot: string;
+  plugins: AgentHostPlugin[];
+}
+
+export interface AgentHostSkill {
+  name: string;
+  source: string;
+  filePath: string;
+  baseDirectory: string;
+}
+
+export interface ListSkillsResponse {
+  projectId: string;
+  workspaceRoot: string;
+  skills: AgentHostSkill[];
 }
 
 export interface AgentHostRuntimeSettings {

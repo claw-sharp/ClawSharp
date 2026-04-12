@@ -2,12 +2,14 @@ using ClawSharp.AgentHost;
 using ClawSharp.AgentHost.Approvals;
 using ClawSharp.AgentHost.Ipc;
 using ClawSharp.AgentHost.Diagnostics;
+using ClawSharp.AgentHost.Plugins;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Providers;
 using ClawSharp.AgentHost.Review;
 using ClawSharp.AgentHost.Runs;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.AgentHost.Sessions;
+using ClawSharp.AgentHost.Skills;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
 
@@ -32,6 +34,8 @@ try
     var runCoordinator = new RunCoordinator(applicationRegistry, recentProjectStore, eventDispatcher);
     var reviewService = new WorkspaceReviewService(recentProjectStore);
     var diagnosticsService = new DiagnosticsCatalogService(applicationRegistry, recentProjectStore, runtimeState);
+    var pluginCatalog = new PluginCatalogService(applicationRegistry, recentProjectStore);
+    var skillCatalog = new SkillCatalogService(applicationRegistry, recentProjectStore);
     var providerCatalog = new ProviderCatalogService(applicationRegistry, recentProjectStore);
     var externalEditorService = new ExternalEditorService(recentProjectStore);
     var approvalCatalog = new ApprovalCatalogService();
@@ -41,6 +45,8 @@ try
         runCoordinator,
         reviewService,
         diagnosticsService,
+        pluginCatalog,
+        skillCatalog,
         providerCatalog,
         externalEditorService,
         approvalCatalog);

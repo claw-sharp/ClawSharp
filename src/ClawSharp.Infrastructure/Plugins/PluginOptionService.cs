@@ -52,30 +52,55 @@ public sealed class PluginOptionService
         ClawSharpSettings settings,
         out ClawSharpSettings updatedSettings)
     {
-        var nonSensitive = new Dictionary<string, object?>(StringComparer.Ordinal);
-        var sensitive = new Dictionary<string, string>(StringComparer.Ordinal);
+        var existingNonSensitive = settings.PluginConfigs.TryGetValue(pluginId, out var existingConfig)
+            ? new Dictionary<string, object?>(existingConfig.Options, StringComparer.Ordinal)
+            : new Dictionary<string, object?>(StringComparer.Ordinal);
+        var existingSensitive = _secureStorage.Read()?.PluginSecrets?.GetValueOrDefault(pluginId) is { } existingSecrets
+            ? new Dictionary<string, string>(existingSecrets, StringComparer.Ordinal)
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+        var nonSensitive = new Dictionary<string, object?>(existingNonSensitive, StringComparer.Ordinal);
+        var sensitive = new Dictionary<string, string>(existingSensitive, StringComparer.Ordinal);
 
         foreach (var pair in values)
         {
             if (schema.TryGetValue(pair.Key, out var definition) && definition.Sensitive)
             {
-                sensitive[pair.Key] = Convert.ToString(pair.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                if (pair.Value is null)
+                {
+                    sensitive.Remove(pair.Key);
+                }
+                else
+                {
+                    sensitive[pair.Key] = Convert.ToString(pair.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                }
             }
             else
             {
-                nonSensitive[pair.Key] = pair.Value;
+                if (pair.Value is null)
+                {
+                    nonSensitive.Remove(pair.Key);
+                }
+                else
+                {
+                    nonSensitive[pair.Key] = pair.Value;
+                }
             }
         }
 
+        var secureData = _secureStorage.Read() ?? new McpSecureStorageData();
+        var pluginSecrets = secureData.PluginSecrets is null
+            ? new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
+            : new Dictionary<string, IReadOnlyDictionary<string, string>>(secureData.PluginSecrets, StringComparer.Ordinal);
         if (sensitive.Count > 0)
         {
-            var secureData = _secureStorage.Read() ?? new McpSecureStorageData();
-            var pluginSecrets = secureData.PluginSecrets is null
-                ? new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
-                : new Dictionary<string, IReadOnlyDictionary<string, string>>(secureData.PluginSecrets, StringComparer.Ordinal);
             pluginSecrets[pluginId] = sensitive;
-            _secureStorage.Update(secureData with { PluginSecrets = pluginSecrets });
         }
+        else
+        {
+            pluginSecrets.Remove(pluginId);
+        }
+
+        _secureStorage.Update(secureData with { PluginSecrets = pluginSecrets.Count == 0 ? null : pluginSecrets });
 
         var configs = new Dictionary<string, PluginConfigSettings>(settings.PluginConfigs, StringComparer.Ordinal)
         {

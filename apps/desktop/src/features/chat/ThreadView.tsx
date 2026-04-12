@@ -8,12 +8,12 @@ import {
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
   TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge,
 } from 'lucide-react';
-import type { Message, ToolProgressEvent } from '@/types';
+import type { Message, Skill, ToolProgressEvent } from '@/types';
 
 export const ThreadView = () => {
   const {
-    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages,
+    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings, skills, skillsLoading,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
@@ -33,6 +33,14 @@ export const ThreadView = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [threadMessages.length, run.isStreaming]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    void loadSkills(selectedProjectId);
+  }, [loadSkills, selectedProjectId]);
 
   if (connection.isBootstrapping) {
     return (
@@ -269,6 +277,8 @@ export const ThreadView = () => {
         threadMessages={threadMessages}
         isRunning={run.isRunning}
         isBrowserPreview={isBrowserPreview}
+        skills={skills}
+        skillsLoading={skillsLoading}
         onSend={sendPrompt}
         onCancel={cancelRun}
       />
@@ -655,6 +665,8 @@ const PromptComposer = ({
   threadMessages,
   isRunning,
   isBrowserPreview,
+  skills,
+  skillsLoading,
   onSend,
   onCancel,
 }: {
@@ -663,12 +675,29 @@ const PromptComposer = ({
   threadMessages: Message[];
   isRunning: boolean;
   isBrowserPreview: boolean;
+  skills: Skill[];
+  skillsLoading: boolean;
   onSend: (threadId: string, prompt: string) => Promise<void>;
   onCancel: () => Promise<void>;
 }) => {
   const [value, setValue] = useState('');
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
+  const [dismissedSkillQuery, setDismissedSkillQuery] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contextUsage = summarizeContextUsage(threadMessages, threadModel);
+  const activeSkillQuery = findActiveSkillQuery(value, cursorPosition);
+  const skillQueryKey = activeSkillQuery ? `${activeSkillQuery.start}:${activeSkillQuery.query}` : null;
+  const normalizedSkillQuery = activeSkillQuery?.query.trim().toLowerCase() ?? '';
+  const skillSuggestions = getSkillSuggestions(skills, normalizedSkillQuery);
+  const isSkillMenuOpen = !isRunning &&
+    !isBrowserPreview &&
+    activeSkillQuery !== null &&
+    dismissedSkillQuery !== skillQueryKey;
+
+  useEffect(() => {
+    setSelectedSkillIndex(0);
+  }, [skillQueryKey]);
 
   const submit = () => {
     const prompt = value.trim();
@@ -677,10 +706,63 @@ const PromptComposer = ({
     }
 
     setValue('');
+    setCursorPosition(0);
+    setDismissedSkillQuery(null);
     void onSend(threadId, prompt);
   };
 
+  const applySelectedSkill = (skill: Skill) => {
+    if (!activeSkillQuery) {
+      return;
+    }
+
+    const nextValue = insertSelectedSkill(value, activeSkillQuery, skill.name);
+    setValue(nextValue);
+    setDismissedSkillQuery(null);
+    const nextCursorPosition = activeSkillQuery.start + skill.name.length + 2;
+    setCursorPosition(nextCursorPosition);
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isSkillMenuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSkillIndex((index) => (
+          skillSuggestions.length === 0
+            ? 0
+            : (index + 1) % skillSuggestions.length
+        ));
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSkillIndex((index) => (
+          skillSuggestions.length === 0
+            ? 0
+            : (index - 1 + skillSuggestions.length) % skillSuggestions.length
+        ));
+        return;
+      }
+
+      if ((e.key === 'Enter' || e.key === 'Tab') && skillSuggestions.length > 0) {
+        e.preventDefault();
+        applySelectedSkill(skillSuggestions[Math.min(selectedSkillIndex, skillSuggestions.length - 1)]);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDismissedSkillQuery(skillQueryKey);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -689,12 +771,70 @@ const PromptComposer = ({
 
   return (
     <div className="border-t border-border px-4 py-3 surface-2">
-      <div className="flex items-end gap-2 rounded-lg border border-border bg-background p-2 focus-within:border-primary/40 transition-colors">
+      <div className="relative flex items-end gap-2 rounded-lg border border-border bg-background p-2 focus-within:border-primary/40 transition-colors">
+        {isSkillMenuOpen && (
+          <div className="absolute inset-x-2 bottom-full mb-2 overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
+            <div className="border-b border-border/70 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Skills
+            </div>
+            <div role="listbox" aria-label="Skills" className="max-h-72 overflow-y-auto py-1">
+              {skillsLoading ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">Loading skills…</div>
+              ) : skillSuggestions.length > 0 ? (
+                skillSuggestions.map((skill, index) => (
+                  <button
+                    key={`${skill.name}-${skill.filePath}`}
+                    type="button"
+                    role="option"
+                    aria-selected={index === selectedSkillIndex}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applySelectedSkill(skill);
+                    }}
+                    className={cn(
+                      'flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition-colors',
+                      index === selectedSkillIndex
+                        ? 'bg-primary/10 text-foreground'
+                        : 'text-secondary-foreground hover:bg-muted/70 hover:text-foreground',
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-mono text-sm text-foreground">${skill.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{skill.source}</span>
+                    </span>
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Enter
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  {normalizedSkillQuery
+                    ? `No skills match "$${normalizedSkillQuery}".`
+                    : 'No skills discovered for this project.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setCursorPosition(e.target.selectionStart ?? e.target.value.length);
+            setDismissedSkillQuery(null);
+          }}
           onKeyDown={handleKeyDown}
+          onClick={(e) => {
+            setCursorPosition(e.currentTarget.selectionStart ?? 0);
+          }}
+          onKeyUp={(e) => {
+            setCursorPosition(e.currentTarget.selectionStart ?? 0);
+          }}
+          onSelect={(e) => {
+            setCursorPosition(e.currentTarget.selectionStart ?? 0);
+          }}
           placeholder={
             isBrowserPreview
               ? 'Browser preview is mock-only. Start the Tauri desktop app to chat for real.'
@@ -747,6 +887,55 @@ const PromptComposer = ({
     </div>
   );
 };
+
+type ActiveSkillQuery = {
+  query: string;
+  start: number;
+  end: number;
+};
+
+function findActiveSkillQuery(value: string, selectionStart: number | null): ActiveSkillQuery | null {
+  if (selectionStart === null) {
+    return null;
+  }
+
+  const beforeCursor = value.slice(0, selectionStart);
+  const match = /(^|[\s(])\$(?<query>[A-Za-z0-9:_-]*)$/.exec(beforeCursor);
+  if (!match) {
+    return null;
+  }
+
+  const query = match.groups?.query ?? '';
+  const start = beforeCursor.length - query.length - 1;
+  return {
+    query,
+    start,
+    end: selectionStart,
+  };
+}
+
+function getSkillSuggestions(skills: Skill[], query: string): Skill[] {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  return [...skills]
+    .filter((skill) => normalizedQuery.length === 0 || skill.name.toLowerCase().includes(normalizedQuery))
+    .sort((left, right) => {
+      const leftName = left.name.toLowerCase();
+      const rightName = right.name.toLowerCase();
+      const leftStartsWith = normalizedQuery.length > 0 && leftName.startsWith(normalizedQuery);
+      const rightStartsWith = normalizedQuery.length > 0 && rightName.startsWith(normalizedQuery);
+
+      if (leftStartsWith !== rightStartsWith) {
+        return leftStartsWith ? -1 : 1;
+      }
+
+      return leftName.localeCompare(rightName);
+    });
+}
+
+function insertSelectedSkill(value: string, query: ActiveSkillQuery, skillName: string): string {
+  return `${value.slice(0, query.start)}$${skillName} ${value.slice(query.end)}`;
+}
 
 const ContextUsageBadge = ({
   usedPercent,

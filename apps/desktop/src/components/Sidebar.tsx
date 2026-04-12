@@ -4,7 +4,7 @@ import type { Thread } from '@/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   FolderGit2, Pin, Plus, Bot,
-  Inbox, CalendarClock, PanelLeftClose, PanelLeftOpen,
+  Inbox, CalendarClock, PanelLeftClose, PanelLeftOpen, Plug,
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -95,6 +95,16 @@ export const Sidebar = () => {
         >
           <CalendarClock className="h-3.5 w-3.5" />
           <span>Automations</span>
+        </button>
+        <button
+          onClick={() => setActiveView('plugins')}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            ui.activeView === 'plugins' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+          )}
+        >
+          <Plug className="h-3.5 w-3.5" />
+          <span>Plugins</span>
         </button>
       </div>
 

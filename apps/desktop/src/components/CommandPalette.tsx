@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store';
 import { cn } from '@/lib/utils';
-import { Search, FolderGit2, Bot, Settings, Inbox, CalendarClock, FolderOpen, RotateCcw, Archive } from 'lucide-react';
+import { Search, FolderGit2, Bot, Settings, Inbox, CalendarClock, FolderOpen, RotateCcw, Archive, Plug } from 'lucide-react';
 
 export const CommandPalette = () => {
   const {
@@ -27,6 +27,7 @@ export const CommandPalette = () => {
     ...threads.map(t => ({ id: t.id, label: t.title, type: 'thread' as const, icon: Bot, action: () => { void selectThread(t.id); setActiveView('threads'); } })),
     { id: 'inbox', label: 'Open Inbox', type: 'action' as const, icon: Inbox, action: () => setActiveView('inbox') },
     { id: 'automations', label: 'Open Automations', type: 'action' as const, icon: CalendarClock, action: () => setActiveView('automations') },
+    { id: 'plugins', label: 'Open Plugins', type: 'action' as const, icon: Plug, action: () => setActiveView('plugins') },
     { id: 'settings', label: 'Open Settings', type: 'action' as const, icon: Settings, action: () => toggleSettings() },
   ];
 

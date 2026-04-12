@@ -1,0 +1,10 @@
+{
+  "name": "troubleshooter",
+  "description": "Structured investigation helpers for stuck, failing, or confusing behavior.",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "skills": [
+    "skills/investigate-failure",
+    "skills/collect-evidence"
+  ]
+}

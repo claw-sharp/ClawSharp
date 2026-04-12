@@ -2,12 +2,14 @@ using System.Text.Json;
 using ClawSharp.AgentHost.Approvals;
 using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Diagnostics;
+using ClawSharp.AgentHost.Plugins;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Providers;
 using ClawSharp.AgentHost.Review;
 using ClawSharp.AgentHost.Runs;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.AgentHost.Sessions;
+using ClawSharp.AgentHost.Skills;
 using ClawSharp.Core;
 
 namespace ClawSharp.AgentHost.Ipc;
@@ -19,6 +21,8 @@ public sealed class AgentHostCommandRouter
     private readonly RunCoordinator _runCoordinator;
     private readonly WorkspaceReviewService _reviewService;
     private readonly DiagnosticsCatalogService _diagnosticsService;
+    private readonly PluginCatalogService _pluginCatalog;
+    private readonly SkillCatalogService _skillCatalog;
     private readonly ProviderCatalogService _providerCatalog;
     private readonly ExternalEditorService _externalEditorService;
     private readonly ApprovalCatalogService _approvalCatalog;
@@ -29,6 +33,8 @@ public sealed class AgentHostCommandRouter
         RunCoordinator runCoordinator,
         WorkspaceReviewService reviewService,
         DiagnosticsCatalogService diagnosticsService,
+        PluginCatalogService pluginCatalog,
+        SkillCatalogService skillCatalog,
         ProviderCatalogService providerCatalog,
         ExternalEditorService externalEditorService,
         ApprovalCatalogService approvalCatalog)
@@ -38,6 +44,8 @@ public sealed class AgentHostCommandRouter
         _runCoordinator = runCoordinator;
         _reviewService = reviewService;
         _diagnosticsService = diagnosticsService;
+        _pluginCatalog = pluginCatalog;
+        _skillCatalog = skillCatalog;
         _providerCatalog = providerCatalog;
         _externalEditorService = externalEditorService;
         _approvalCatalog = approvalCatalog;
@@ -62,8 +70,14 @@ public sealed class AgentHostCommandRouter
             "getDiff" => await _reviewService.GetDiffAsync(DeserializePayload<GetDiffRequest>(request), cancellationToken),
             "openExternalEditor" => await _externalEditorService.OpenAsync(DeserializePayload<OpenExternalEditorRequest>(request), cancellationToken),
             "listDiagnostics" => await _diagnosticsService.ListDiagnosticsAsync(DeserializePayload<ListDiagnosticsRequest>(request), cancellationToken),
+            "listPlugins" => await _pluginCatalog.ListPluginsAsync(DeserializePayload<ListPluginsRequest>(request), cancellationToken),
+            "listSkills" => await _skillCatalog.ListSkillsAsync(DeserializePayload<ListSkillsRequest>(request), cancellationToken),
             "getSettings" => await _providerCatalog.GetSettingsAsync(DeserializePayload<GetSettingsRequest>(request), cancellationToken),
             "updateSettings" => await _providerCatalog.UpdateSettingsAsync(DeserializePayload<UpdateSettingsRequest>(request), cancellationToken),
+            "setPluginEnabled" => await _pluginCatalog.SetPluginEnabledAsync(DeserializePayload<SetPluginEnabledRequest>(request), cancellationToken),
+            "savePluginOptions" => await _pluginCatalog.SavePluginOptionsAsync(DeserializePayload<SavePluginOptionsRequest>(request), cancellationToken),
+            "deletePluginOptions" => await _pluginCatalog.DeletePluginOptionsAsync(DeserializePayload<DeletePluginOptionsRequest>(request), cancellationToken),
+            "refreshPlugins" => await _pluginCatalog.RefreshPluginsAsync(DeserializePayload<ListPluginsRequest>(request), cancellationToken),
             "listProviders" => await _providerCatalog.ListProvidersAsync(cancellationToken),
             "validateProviderConfig" => await _providerCatalog.ValidateProviderConfigAsync(DeserializePayload<ValidateProviderConfigRequest>(request), cancellationToken),
             "listPendingApprovals" => await _approvalCatalog.ListPendingApprovalsAsync(DeserializePayload<ListPendingApprovalsRequest>(request), cancellationToken),

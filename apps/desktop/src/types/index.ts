@@ -4,6 +4,7 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 export type FileChangeStatus = 'A' | 'M' | 'D';
 export type InboxItemType = 'review' | 'automation' | 'error' | 'info';
 export type AutomationCadence = 'daily' | 'weekly' | 'hourly' | 'on_push' | 'manual';
+export type PluginOptionType = 'string' | 'number' | 'boolean' | 'directory' | 'file';
 
 export interface Project {
   id: string;
@@ -121,6 +122,56 @@ export interface DiagnosticsRecord {
   startupProfilePath: string;
 }
 
+export interface PluginValidationIssue {
+  path: string;
+  message: string;
+  isWarning: boolean;
+}
+
+export interface PluginOption {
+  key: string;
+  type: PluginOptionType;
+  title: string;
+  description: string;
+  required: boolean;
+  multiple: boolean;
+  sensitive: boolean;
+  hasValue: boolean;
+  value?: unknown;
+  defaultValue?: unknown;
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface Plugin {
+  pluginId: string;
+  name: string;
+  description?: string | null;
+  version?: string | null;
+  enabled: boolean;
+  isBundled: boolean;
+  installPath: string;
+  scope: string;
+  installedAt?: string | null;
+  lastUpdated?: string | null;
+  gitCommitSha?: string | null;
+  commands: string[];
+  agents: string[];
+  skills: string[];
+  outputStyles: string[];
+  hookFiles: string[];
+  hookEvents: string[];
+  validationIssues: PluginValidationIssue[];
+  options: PluginOption[];
+}
+
+export interface Skill {
+  name: string;
+  source: string;
+  filePath: string;
+  baseDirectory: string;
+}
+
 export interface ProviderOption {
   id: string;
   displayName: string;
@@ -204,7 +255,7 @@ export interface UIState {
   commandPaletteOpen: boolean;
   selectedChangedFile: string | null;
   selectedInboxItem: string | null;
-  activeView: 'threads' | 'inbox' | 'automations' | 'settings';
+  activeView: 'threads' | 'inbox' | 'automations' | 'plugins' | 'settings';
   navigationLoading: NavigationLoadingState | null;
 }
 

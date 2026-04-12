@@ -1,0 +1,10 @@
+{
+  "name": "settings",
+  "description": "Helpers for editing ClawSharp settings and hooks safely.",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "skills": [
+    "skills/update-config",
+    "skills/hook-author"
+  ]
+}

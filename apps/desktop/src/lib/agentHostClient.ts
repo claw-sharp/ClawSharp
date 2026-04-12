@@ -10,8 +10,11 @@ import type {
   AgentHostEventEnvelope,
   AgentHostStateEvent,
   CancelRunResponse,
+  DeletePluginOptionsRequest,
   GetDiffResponse,
   GetSettingsResponse,
+  ListSkillsResponse,
+  ListPluginsResponse,
   ListChangedFilesResponse,
   ListDiagnosticsResponse,
   ListPendingApprovalsResponse,
@@ -26,6 +29,8 @@ import type {
   OpenProjectResponse,
   RenameThreadResponse,
   ResolveApprovalResponse,
+  SavePluginOptionsRequest,
+  SetPluginEnabledRequest,
   StartRunResponse,
   UpdateSettingsRequest,
   UpdateSettingsResponse,
@@ -113,12 +118,36 @@ class AgentHostClient {
     return await this.request('listDiagnostics', { projectId: projectId ?? null, threadId: threadId ?? null });
   }
 
+  async listPlugins(projectId?: string | null): Promise<ListPluginsResponse> {
+    return await this.request('listPlugins', { projectId: projectId ?? null });
+  }
+
+  async listSkills(projectId?: string | null): Promise<ListSkillsResponse> {
+    return await this.request('listSkills', { projectId: projectId ?? null });
+  }
+
   async getSettings(projectId?: string | null): Promise<GetSettingsResponse> {
     return await this.request('getSettings', { projectId: projectId ?? null });
   }
 
   async updateSettings(request: UpdateSettingsRequest): Promise<UpdateSettingsResponse> {
     return await this.request('updateSettings', request);
+  }
+
+  async setPluginEnabled(request: SetPluginEnabledRequest): Promise<ListPluginsResponse> {
+    return await this.request('setPluginEnabled', request);
+  }
+
+  async savePluginOptions(request: SavePluginOptionsRequest): Promise<ListPluginsResponse> {
+    return await this.request('savePluginOptions', request);
+  }
+
+  async deletePluginOptions(request: DeletePluginOptionsRequest): Promise<ListPluginsResponse> {
+    return await this.request('deletePluginOptions', request);
+  }
+
+  async refreshPlugins(projectId?: string | null): Promise<ListPluginsResponse> {
+    return await this.request('refreshPlugins', { projectId: projectId ?? null });
   }
 
   async listProviders(): Promise<ListProvidersResponse> {

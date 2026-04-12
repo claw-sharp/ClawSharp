@@ -9,14 +9,17 @@ import type {
   AgentHostDiagnostics,
   AgentHostDiff,
   AgentHostEventEnvelope,
+  AgentHostPlugin,
   AgentHostProject,
   AgentHostProviderOption,
   AgentHostRuntimeSettings,
+  AgentHostSkill,
   AgentHostStateEvent,
   AgentHostThreadMessage,
   AgentHostThreadSummary,
   CancelRunResponse,
   CreateThreadResponse,
+  DeletePluginOptionsRequest,
   GetDiffResponse,
   GetSettingsResponse,
   GetThreadResponse,
@@ -24,6 +27,8 @@ import type {
   ListChangedFilesResponse,
   ListDiagnosticsResponse,
   ListPendingApprovalsResponse,
+  ListPluginsResponse,
+  ListSkillsResponse,
   ListProvidersResponse,
   ListRecentProjectsResponse,
   ListThreadsResponse,
@@ -32,6 +37,8 @@ import type {
   OpenProjectResponse,
   RenameThreadResponse,
   ResolveApprovalResponse,
+  SavePluginOptionsRequest,
+  SetPluginEnabledRequest,
   StartRunResponse,
   UpdateSettingsRequest,
   UpdateSettingsResponse,
@@ -261,6 +268,171 @@ function createApprovals(): AgentHostApprovalRequest[] {
   ];
 }
 
+function createPluginCatalog(projects: AgentHostProject[]): Record<string, AgentHostPlugin[]> {
+  return Object.fromEntries(
+    projects.map((project, index) => {
+      const workspacePath = project.path;
+      const plugins: AgentHostPlugin[] = [
+        {
+          pluginId: 'reviewer@builtin',
+          name: 'reviewer',
+          description: 'Review, simplify, and tighten code changes before handoff.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: `${workspacePath}/.clawsharp/builtin/reviewer`,
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: ['skills/review-changes', 'skills/cleanup-diff', 'skills/react-review'],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+        },
+        {
+          pluginId: 'verification@builtin',
+          name: 'verification',
+          description: 'Verify local apps and recent changes with browser and regression checks.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: `${workspacePath}/.clawsharp/builtin/verification`,
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: ['skills/browser-verify', 'skills/regression-check'],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+        },
+        {
+          pluginId: 'troubleshooter@builtin',
+          name: 'troubleshooter',
+          description: 'Structured investigation helpers for stuck, failing, or confusing behavior.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: `${workspacePath}/.clawsharp/builtin/troubleshooter`,
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: ['skills/investigate-failure', 'skills/collect-evidence'],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+        },
+        {
+          pluginId: 'settings@builtin',
+          name: 'settings',
+          description: 'Helpers for editing ClawSharp settings and hooks safely.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: `${workspacePath}/.clawsharp/builtin/settings`,
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: ['skills/update-config', 'skills/hook-author'],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [
+            {
+              key: 'preferredScope',
+              type: 'string',
+              title: 'Preferred scope',
+              description: 'Default configuration scope to target first.',
+              required: false,
+              multiple: false,
+              sensitive: false,
+              hasValue: true,
+              value: index % 2 === 0 ? 'project' : 'local',
+              defaultValue: null,
+              min: null,
+              max: null,
+            },
+          ],
+        },
+        {
+          pluginId: 'playwright@anthropic-tools',
+          name: 'playwright',
+          description: 'Browser automation plugin installed from a marketplace cache.',
+          version: '0.9.2',
+          enabled: false,
+          isBundled: false,
+          installPath: `~/.clawsharp/plugins/cache/anthropic-tools/playwright/0.9.2`,
+          scope: 'user',
+          installedAt: '2026-03-28T08:15:00Z',
+          lastUpdated: '2026-04-04T10:45:00Z',
+          gitCommitSha: 'preview123',
+          commands: ['browser-check'],
+          agents: [],
+          skills: ['playwright'],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [
+            {
+              path: 'plugin.json',
+              message: 'Browser preview cannot validate the real MCP launch command.',
+              isWarning: true,
+            },
+          ],
+          options: [],
+        },
+      ];
+
+      return [project.id, plugins];
+    }),
+  );
+}
+
+function createSkillCatalog(projects: AgentHostProject[]): Record<string, AgentHostSkill[]> {
+  return Object.fromEntries(
+    projects.map((project) => {
+      const workspacePath = project.path;
+      const skills: AgentHostSkill[] = [
+        ['review-changes', 'reviewer'],
+        ['cleanup-diff', 'reviewer'],
+        ['react-review', 'reviewer'],
+        ['browser-verify', 'verification'],
+        ['regression-check', 'verification'],
+        ['investigate-failure', 'troubleshooter'],
+        ['collect-evidence', 'troubleshooter'],
+        ['update-config', 'settings'],
+        ['hook-author', 'settings'],
+        ['playwright', 'playwright'],
+      ].map(([name, pluginName]) => ({
+        name,
+        source: 'plugin',
+        filePath: `${workspacePath}/.clawsharp/${pluginName}/skills/${name}/SKILL.md`,
+        baseDirectory: `${workspacePath}/.clawsharp/${pluginName}/skills/${name}`,
+      }));
+
+      return [project.id, skills];
+    }),
+  );
+}
+
 function basename(projectPath: string): string {
   const normalized = projectPath.replace(/[\\/]+$/, '');
   const parts = normalized.split(/[\\/]/);
@@ -280,6 +452,8 @@ export class BrowserAgentHostClient {
     Object.entries(mockDiffs).map(([key, value]) => [key, deepClone(value as AgentHostDiff)]),
   ) as Record<string, AgentHostDiff>;
   private diagnosticsByThread = createDiagnostics(this.settings);
+  private pluginsByProject = createPluginCatalog(this.projects);
+  private skillsByProject = createSkillCatalog(this.projects);
   private approvals = createApprovals();
   private requestCounter = 0;
 
@@ -315,8 +489,14 @@ export class BrowserAgentHostClient {
         'listChangedFiles',
         'getDiff',
         'listDiagnostics',
+        'listPlugins',
+        'listSkills',
         'getSettings',
         'updateSettings',
+        'setPluginEnabled',
+        'savePluginOptions',
+        'deletePluginOptions',
+        'refreshPlugins',
         'listProviders',
         'validateProviderConfig',
         'listPendingApprovals',
@@ -338,6 +518,8 @@ export class BrowserAgentHostClient {
 
     this.projects = [project, ...this.projects.filter((entry) => entry.id !== project.id)];
     this.threadsByProject[project.id] = [];
+    this.pluginsByProject[project.id] = createPluginCatalog([project])[project.id] ?? [];
+    this.skillsByProject[project.id] = createSkillCatalog([project])[project.id] ?? [];
 
     return {
       project: deepClone(project),
@@ -629,6 +811,34 @@ export class BrowserAgentHostClient {
     };
   }
 
+  async listPlugins(projectId?: string | null): Promise<ListPluginsResponse> {
+    const resolvedProjectId = projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      plugins: deepClone(this.pluginsByProject[resolvedProjectId] ?? []),
+    };
+  }
+
+  async listSkills(projectId?: string | null): Promise<ListSkillsResponse> {
+    const resolvedProjectId = projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      skills: deepClone(this.skillsByProject[resolvedProjectId] ?? []),
+    };
+  }
+
   async getSettings(): Promise<GetSettingsResponse> {
     return {
       settings: deepClone(this.settings),
@@ -723,6 +933,81 @@ export class BrowserAgentHostClient {
     return {
       settings: deepClone(this.settings),
     };
+  }
+
+  async setPluginEnabled(request: SetPluginEnabledRequest): Promise<ListPluginsResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const pluginIndex = this.requirePluginIndex(resolvedProjectId, request.pluginId);
+    this.pluginsByProject[resolvedProjectId] = this.pluginsByProject[resolvedProjectId].map((plugin, index) =>
+      index === pluginIndex
+        ? { ...plugin, enabled: request.enabled }
+        : plugin);
+
+    return await this.listPlugins(resolvedProjectId);
+  }
+
+  async savePluginOptions(request: SavePluginOptionsRequest): Promise<ListPluginsResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const pluginIndex = this.requirePluginIndex(resolvedProjectId, request.pluginId);
+    this.pluginsByProject[resolvedProjectId] = this.pluginsByProject[resolvedProjectId].map((plugin, index) => {
+      if (index !== pluginIndex) {
+        return plugin;
+      }
+
+      const nextOptions = plugin.options.map((option) => {
+        if (!(option.key in request.values)) {
+          return option;
+        }
+
+        const nextValue = request.values[option.key];
+        return {
+          ...option,
+          hasValue: nextValue !== null && nextValue !== undefined && (!(Array.isArray(nextValue)) || nextValue.length > 0),
+          value: option.sensitive ? null : nextValue,
+        };
+      });
+
+      return {
+        ...plugin,
+        options: nextOptions,
+      };
+    });
+
+    return await this.listPlugins(resolvedProjectId);
+  }
+
+  async deletePluginOptions(request: DeletePluginOptionsRequest): Promise<ListPluginsResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const pluginIndex = this.requirePluginIndex(resolvedProjectId, request.pluginId);
+    this.pluginsByProject[resolvedProjectId] = this.pluginsByProject[resolvedProjectId].map((plugin, index) =>
+      index === pluginIndex
+        ? {
+            ...plugin,
+            options: plugin.options.map((option) => ({
+              ...option,
+              hasValue: false,
+              value: null,
+            })),
+          }
+        : plugin);
+
+    return await this.listPlugins(resolvedProjectId);
+  }
+
+  async refreshPlugins(projectId?: string | null): Promise<ListPluginsResponse> {
+    return await this.listPlugins(projectId);
   }
 
   async listProviders(): Promise<ListProvidersResponse> {
@@ -832,6 +1117,17 @@ export class BrowserAgentHostClient {
     }
 
     return thread;
+  }
+
+  private requirePluginIndex(projectId: string, pluginId: string): number {
+    this.requireProject(projectId);
+    const plugins = this.pluginsByProject[projectId] ?? [];
+    const pluginIndex = plugins.findIndex((entry) => entry.pluginId === pluginId);
+    if (pluginIndex === -1) {
+      throw new Error(`Plugin '${pluginId}' was not found in browser preview mode.`);
+    }
+
+    return pluginIndex;
   }
 
   private findProjectIdByThread(threadId: string): string {

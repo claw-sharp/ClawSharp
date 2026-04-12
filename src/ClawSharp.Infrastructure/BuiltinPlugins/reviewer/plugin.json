@@ -1,0 +1,11 @@
+{
+  "name": "reviewer",
+  "description": "Review, simplify, and tighten code changes before handoff.",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "skills": [
+    "skills/review-changes",
+    "skills/cleanup-diff",
+    "skills/react-review"
+  ]
+}

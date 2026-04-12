@@ -4,6 +4,10 @@ import { logToDesktop } from '@/lib/desktopLogger';
 import type {
   AgentHostChangedFile,
   AgentHostDiagnostics,
+  AgentHostPlugin,
+  AgentHostPluginOption,
+  AgentHostSkill,
+  AgentHostPluginValidationIssue,
   AgentHostProject,
   AgentHostApprovalRequest,
   AgentHostProviderOption,
@@ -22,6 +26,8 @@ import type {
   RunToolProgressEvent as AgentHostRunToolProgressEvent,
   RunToolResultEvent,
   OpenExternalEditorRequest,
+  ListPluginsResponse,
+  ListSkillsResponse,
 } from '@/lib/protocol';
 import type {
   ChangedFile,
@@ -32,10 +38,12 @@ import type {
   LogEntry,
   Message,
   NavigationLoadingState,
+  Plugin,
   Project,
   ProviderOption,
   RunState,
   SettingsState,
+  Skill,
   Thread,
   ThreadHistoryState,
   ToolProgressEvent,
@@ -44,6 +52,14 @@ import type {
 
 interface AppStore {
   projects: Project[];
+  pluginCatalog: Plugin[];
+  pluginCatalogProjectId: string | null;
+  pluginCatalogLoading: boolean;
+  pluginCatalogError: string | null;
+  skills: Skill[];
+  skillsProjectId: string | null;
+  skillsLoading: boolean;
+  skillsError: string | null;
   threads: Thread[];
   messages: Record<string, Message[]>;
   threadHistory: Record<string, ThreadHistoryState>;
@@ -61,6 +77,12 @@ interface AppStore {
   settings: SettingsState;
   connection: ConnectionState;
   initialize: () => Promise<void>;
+  loadPlugins: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  loadSkills: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  refreshPlugins: () => Promise<void>;
+  setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
+  savePluginOptions: (pluginId: string, values: Record<string, unknown>) => Promise<void>;
+  deletePluginOptions: (pluginId: string) => Promise<void>;
   openProjectPicker: () => Promise<void>;
   openProjectPath: (projectPath: string) => Promise<void>;
   selectProject: (id: string, options?: SelectProjectOptions) => Promise<void>;
@@ -198,6 +220,14 @@ let settingsMutationsInFlight = 0;
 
 export const useAppStore = create<AppStore>((set, get) => ({
   projects: [],
+  pluginCatalog: [],
+  pluginCatalogProjectId: null,
+  pluginCatalogLoading: false,
+  pluginCatalogError: null,
+  skills: [],
+  skillsProjectId: null,
+  skillsLoading: false,
+  skillsError: null,
   threads: [],
   messages: {},
   threadHistory: {},
@@ -311,6 +341,223 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  loadPlugins: async (projectId, options) => {
+    const resolvedProjectId = projectId ?? get().selectedProjectId;
+    if (!resolvedProjectId) {
+      set({
+        pluginCatalog: [],
+        pluginCatalogProjectId: null,
+        pluginCatalogLoading: false,
+        pluginCatalogError: null,
+      });
+      return;
+    }
+
+    if (!options?.force &&
+        get().pluginCatalogProjectId === resolvedProjectId &&
+        get().pluginCatalog.length > 0 &&
+        !get().pluginCatalogError) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const response = await agentHostClient.listPlugins(resolvedProjectId);
+      set(applyPluginCatalogResponse(response));
+    } catch (error) {
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: toErrorMessage(error, 'Failed to load plugins.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to load plugins.'),
+          statusLabel: 'Plugin load failed',
+        },
+      }));
+    }
+  },
+
+  loadSkills: async (projectId, options) => {
+    const resolvedProjectId = projectId ?? get().selectedProjectId;
+    if (!resolvedProjectId) {
+      set({
+        skills: [],
+        skillsProjectId: null,
+        skillsLoading: false,
+        skillsError: null,
+      });
+      return;
+    }
+
+    if (!options?.force &&
+        get().skillsProjectId === resolvedProjectId &&
+        get().skills.length > 0 &&
+        !get().skillsError) {
+      return;
+    }
+
+    set({
+      skillsLoading: true,
+      skillsError: null,
+    });
+
+    try {
+      const response = await agentHostClient.listSkills(resolvedProjectId);
+      set(applySkillCatalogResponse(response));
+    } catch (error) {
+      set((state) => ({
+        skillsLoading: false,
+        skillsError: toErrorMessage(error, 'Failed to load skills.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to load skills.'),
+          statusLabel: 'Skill load failed',
+        },
+      }));
+    }
+  },
+
+  refreshPlugins: async () => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const response = await agentHostClient.refreshPlugins(projectId);
+      set((state) => ({
+        ...applyPluginCatalogResponse(response)(state),
+        skillsLoading: true,
+        skillsError: null,
+      }));
+      void get().loadSkills(projectId, { force: true });
+    } catch (error) {
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: toErrorMessage(error, 'Failed to refresh plugins.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to refresh plugins.'),
+          statusLabel: 'Plugin refresh failed',
+        },
+      }));
+    }
+  },
+
+  setPluginEnabled: async (pluginId, enabled) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const response = await agentHostClient.setPluginEnabled({ projectId, pluginId, enabled });
+      set((state) => ({
+        ...applyPluginCatalogResponse(response)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: enabled ? `Enabled ${pluginId}` : `Disabled ${pluginId}`,
+        },
+      }));
+      void get().loadSkills(projectId, { force: true });
+    } catch (error) {
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: toErrorMessage(error, 'Failed to update plugin state.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to update plugin state.'),
+          statusLabel: 'Plugin update failed',
+        },
+      }));
+    }
+  },
+
+  savePluginOptions: async (pluginId, values) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const response = await agentHostClient.savePluginOptions({ projectId, pluginId, values });
+      set((state) => ({
+        ...applyPluginCatalogResponse(response)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: `Saved ${pluginId} options`,
+        },
+      }));
+      void get().loadSkills(projectId, { force: true });
+    } catch (error) {
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: toErrorMessage(error, 'Failed to save plugin options.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to save plugin options.'),
+          statusLabel: 'Plugin settings failed',
+        },
+      }));
+    }
+  },
+
+  deletePluginOptions: async (pluginId) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const response = await agentHostClient.deletePluginOptions({ projectId, pluginId });
+      set((state) => ({
+        ...applyPluginCatalogResponse(response)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: `Cleared ${pluginId} options`,
+        },
+      }));
+      void get().loadSkills(projectId, { force: true });
+    } catch (error) {
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: toErrorMessage(error, 'Failed to clear plugin options.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to clear plugin options.'),
+          statusLabel: 'Plugin settings failed',
+        },
+      }));
+    }
+  },
+
   openProjectPicker: async () => {
     try {
       const projectPath = await agentHostClient.pickProjectDirectory();
@@ -396,6 +643,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       set((state) => ({
         projects: upsertProject(state.projects, project),
+        pluginCatalog: state.selectedProjectId === id ? state.pluginCatalog : [],
+        pluginCatalogProjectId: state.selectedProjectId === id ? state.pluginCatalogProjectId : null,
+        pluginCatalogLoading: state.selectedProjectId === id ? state.pluginCatalogLoading : false,
+        pluginCatalogError: null,
+        skills: state.selectedProjectId === id ? state.skills : [],
+        skillsProjectId: state.selectedProjectId === id ? state.skillsProjectId : null,
+        skillsLoading: state.selectedProjectId === id ? state.skillsLoading : false,
+        skillsError: null,
         threads: mergeThreads(state.threads, id, threads),
         selectedProjectId: id,
         selectedThreadId: firstThread,
@@ -405,6 +660,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           errorMessage: null,
         },
       }));
+
+      void get().loadSkills(id);
 
       void ancillaryPromise.then(([settingsResponse, diagnosticsResponse]) => {
         if (settingsResponse.status !== 'fulfilled') {
@@ -940,9 +1197,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     ui: { ...state.ui, rightPanelTab: tab },
   })),
 
-  setActiveView: (view) => set((state) => ({
-    ui: { ...state.ui, activeView: view },
-  })),
+  setActiveView: (view) => {
+    set((state) => ({
+      ui: { ...state.ui, activeView: view },
+    }));
+
+    if (view === 'plugins') {
+      void get().loadPlugins(get().selectedProjectId);
+      void get().loadSkills(get().selectedProjectId);
+    }
+  },
 
   selectChangedFile: async (path) => {
     const projectId = get().selectedProjectId;
@@ -1231,6 +1495,92 @@ function mapDiagnosticsRecord(diagnostics: AgentHostDiagnostics): DiagnosticsRec
     tracePath: diagnostics.logPaths.tracePath,
     startupProfilePath: diagnostics.logPaths.startupProfilePath,
   };
+}
+
+function mapPlugin(plugin: AgentHostPlugin): Plugin {
+  return {
+    pluginId: plugin.pluginId,
+    name: plugin.name,
+    description: plugin.description ?? null,
+    version: plugin.version ?? null,
+    enabled: plugin.enabled,
+    isBundled: plugin.isBundled,
+    installPath: plugin.installPath,
+    scope: plugin.scope,
+    installedAt: plugin.installedAt ?? null,
+    lastUpdated: plugin.lastUpdated ?? null,
+    gitCommitSha: plugin.gitCommitSha ?? null,
+    commands: plugin.commands,
+    agents: plugin.agents,
+    skills: plugin.skills,
+    outputStyles: plugin.outputStyles,
+    hookFiles: plugin.hookFiles,
+    hookEvents: plugin.hookEvents,
+    validationIssues: plugin.validationIssues.map(mapPluginValidationIssue),
+    options: plugin.options.map(mapPluginOption),
+  };
+}
+
+function mapPluginOption(option: AgentHostPluginOption): Plugin['options'][number] {
+  return {
+    key: option.key,
+    type: option.type,
+    title: option.title,
+    description: option.description,
+    required: option.required,
+    multiple: option.multiple,
+    sensitive: option.sensitive,
+    hasValue: option.hasValue,
+    value: option.value,
+    defaultValue: option.defaultValue,
+    min: option.min ?? null,
+    max: option.max ?? null,
+  };
+}
+
+function mapPluginValidationIssue(issue: AgentHostPluginValidationIssue): Plugin['validationIssues'][number] {
+  return {
+    path: issue.path,
+    message: issue.message,
+    isWarning: issue.isWarning,
+  };
+}
+
+function mapSkill(skill: AgentHostSkill): Skill {
+  return {
+    name: skill.name,
+    source: skill.source,
+    filePath: skill.filePath,
+    baseDirectory: skill.baseDirectory,
+  };
+}
+
+function applyPluginCatalogResponse(response: ListPluginsResponse) {
+  return (state: AppStore) => ({
+    pluginCatalog: response.plugins.map(mapPlugin),
+    pluginCatalogProjectId: response.projectId,
+    pluginCatalogLoading: false,
+    pluginCatalogError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Loaded ${response.plugins.length} plugin${response.plugins.length === 1 ? '' : 's'}`,
+    },
+  });
+}
+
+function applySkillCatalogResponse(response: ListSkillsResponse) {
+  return (state: AppStore) => ({
+    skills: response.skills.map(mapSkill),
+    skillsProjectId: response.projectId,
+    skillsLoading: false,
+    skillsError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Loaded ${response.skills.length} skill${response.skills.length === 1 ? '' : 's'}`,
+    },
+  });
 }
 
 function mapProviderOption(provider: AgentHostProviderOption): ProviderOption {

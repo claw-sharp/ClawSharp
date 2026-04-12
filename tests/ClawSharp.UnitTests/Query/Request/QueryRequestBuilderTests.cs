@@ -438,6 +438,124 @@ public class QueryRequestBuilderTests
         Assert.Contains("Today's date is 2026-04-03.", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task QueryEngine_Expands_Prompt_Skill_References_Into_User_Context()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-skill-context-tests", Guid.NewGuid().ToString("N"));
+        var skillDirectory = Path.Combine(tempDir, ".clawsharp", "skills", "review-changes");
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+        var skillFilePath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(
+            skillFilePath,
+            """
+            ---
+            name: review-changes
+            ---
+            # Review Changes
+
+            Focus on bugs and missing tests.
+            """);
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [],
+                [new DiscoveredSkill("review-changes", skillFilePath, skillDirectory, "builtin")],
+                [],
+                []));
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry,
+            appStateStore: appStateStore);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "Use $review-changes before reading note.txt",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Equal("user", result.Request!.Messages[0].Role);
+        Assert.Contains("Skill $review-changes", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Base directory for this skill:", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Focus on bugs and missing tests.", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("name: review-changes", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Equal("Use $review-changes before reading note.txt", result.Request.Messages[1].Content[0].Text);
+    }
+
+    [Fact]
+    public async Task QueryEngine_Resolves_Unique_Suffix_Matches_For_Prompt_Skill_References()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-skill-suffix-tests", Guid.NewGuid().ToString("N"));
+        var skillDirectory = Path.Combine(tempDir, ".clawsharp", "plugins", "vercel", "agent-browser");
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+        var skillFilePath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(skillFilePath, "# Agent Browser\n\nVerify the app in a browser.");
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [],
+                [new DiscoveredSkill("vercel:agent-browser", skillFilePath, skillDirectory, "plugin:vercel")],
+                [],
+                []));
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry,
+            appStateStore: appStateStore);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "Run $agent-browser before reading note.txt",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Contains("Skill $vercel:agent-browser", result.Request!.Messages[0].Content[0].Text, StringComparison.Ordinal);
+    }
+
     private sealed class FixedQueryModelTurnContextProvider : IQueryModelTurnContextProvider
     {
         private readonly QueryModelTurnContext _context;

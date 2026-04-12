@@ -12,6 +12,8 @@ const baseStoreState = {
   selectedProjectId: '',
   selectedThreadId: '',
   projects: [],
+  skills: [],
+  skillsLoading: false,
   threads: [],
   messages: {},
   threadHistory: {},
@@ -74,6 +76,7 @@ const baseStoreState = {
   resolveApproval: vi.fn(),
   setActiveView: vi.fn(),
   loadOlderThreadMessages: vi.fn(),
+  loadSkills: vi.fn(),
   openExternalEditor: vi.fn(),
 };
 
@@ -629,5 +632,137 @@ describe('ThreadView', () => {
 
     expect(screen.getByRole('button', { name: 'Context ~1%' })).toBeInTheDocument();
 
+  });
+
+  it('shows a skill picker when the user types a dollar sign', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      skills: [
+        {
+          name: 'review-changes',
+          source: 'builtin',
+          filePath: '/repo/.clawsharp/skills/review-changes/SKILL.md',
+          baseDirectory: '/repo/.clawsharp/skills/review-changes',
+        },
+        {
+          name: 'browser-verify',
+          source: 'builtin',
+          filePath: '/repo/.clawsharp/skills/browser-verify/SKILL.md',
+          baseDirectory: '/repo/.clawsharp/skills/browser-verify',
+        },
+      ],
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Skill picker',
+          summary: 'Testing $ skill autocomplete',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const composer = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '$' } });
+    composer.setSelectionRange(1, 1);
+    fireEvent.select(composer);
+
+    expect(screen.getByRole('listbox', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\$review-changes/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\$browser-verify/i })).toBeInTheDocument();
+  });
+
+  it('inserts the selected skill token instead of sending the prompt on Enter', () => {
+    const sendPrompt = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      sendPrompt,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      skills: [
+        {
+          name: 'review-changes',
+          source: 'builtin',
+          filePath: '/repo/.clawsharp/skills/review-changes/SKILL.md',
+          baseDirectory: '/repo/.clawsharp/skills/review-changes',
+        },
+      ],
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Skill insert',
+          summary: 'Testing Enter selection',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const composer = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '$rev' } });
+    composer.setSelectionRange(4, 4);
+    fireEvent.select(composer);
+    fireEvent.keyDown(composer, { key: 'Enter' });
+
+    expect(composer.value).toBe('$review-changes ');
+    expect(sendPrompt).not.toHaveBeenCalled();
   });
 });

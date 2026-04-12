@@ -1,0 +1,10 @@
+{
+  "name": "verification",
+  "description": "Verify local apps and recent changes with browser and regression checks.",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "skills": [
+    "skills/browser-verify",
+    "skills/regression-check"
+  ]
+}

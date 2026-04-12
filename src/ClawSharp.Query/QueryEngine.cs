@@ -1,5 +1,6 @@
 // TS parity status: queued task-notification drain, transcript persistence, runtime-event consumption, and completed-turn result shaping are ported; full 1:1 parity still depends on the remaining model-backed query-loop branches.
 using ClawSharp.Core;
+using ClawSharp.Query.Skills;
 using ClawSharp.Tools;
 
 namespace ClawSharp.Query;
@@ -16,6 +17,7 @@ public sealed class QueryEngine
     private readonly QueryRequestBuilder _queryRequestBuilder;
     private readonly IQueryModelTurnContextProvider? _modelTurnContextProvider;
     private readonly IClawSharpAppStateStore? _appStateStore;
+    private readonly PromptSkillReferenceService _promptSkillReferenceService;
 
     public QueryEngine(
         ClawSharpSettings settings,
@@ -39,6 +41,7 @@ public sealed class QueryEngine
         _queryRequestBuilder = queryRequestBuilder ?? new QueryRequestBuilder();
         _modelTurnContextProvider = modelTurnContextProvider;
         _appStateStore = appStateStore;
+        _promptSkillReferenceService = new PromptSkillReferenceService();
     }
 
     public async Task<QueryResult> RunTurnAsync(
@@ -203,15 +206,25 @@ public sealed class QueryEngine
             };
         }
 
+        if (_appStateStore?.GetState().Skills is { Count: > 0 } skills)
+        {
+            request = await _promptSkillReferenceService.ExpandPromptSkillReferencesAsync(
+                request,
+                skills,
+                cancellationToken);
+        }
+
+        var modelTurnContext = request.ModelTurnContext ?? QueryModelTurnContext.ReplMainThread;
+
         var modelRequest = _queryRequestBuilder.BuildFromMessages(
             request,
             session.Messages,
             settings,
             _toolRegistry?.All ?? [],
             new QueryRequestBuildOptions(
-                SystemPrompt: request.ModelTurnContext.SystemPrompt,
-                SystemContext: request.ModelTurnContext.SystemContext,
-                UserContext: request.ModelTurnContext.UserContext));
+                SystemPrompt: modelTurnContext.SystemPrompt,
+                SystemContext: modelTurnContext.SystemContext,
+                UserContext: modelTurnContext.UserContext));
         ClawSharpTelemetry.LogDebug(
             $"[QueryEngine] request-built sessionId={session.Id} model={modelRequest.Model} messages={session.Messages.Count} tools={modelRequest.Tools.Count}");
 

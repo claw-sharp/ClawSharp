@@ -18,6 +18,13 @@
     <ProjectReference Include="..\ClawSharp.Ui.Terminal\ClawSharp.Ui.Terminal.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="BuiltinPlugins\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
