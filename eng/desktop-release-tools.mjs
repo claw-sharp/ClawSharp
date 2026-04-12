@@ -415,9 +415,17 @@ ${sections.join("\n")}
   caveats do
     <<~EOS
       ClawSharp is currently unsigned and not notarized.
+      For the smoothest first install with Homebrew, use:
+
+        brew install --cask --no-quarantine claw-sharp/tap/clawsharp
+
+      If Homebrew reports that '/Applications/ClawSharp.app' is missing during cleanup, reset the cask state with:
+
+        brew uninstall --cask --force clawsharp
+
       If you see a "damaged" error on macOS, run:
 
-        xattr -cr /Applications/ClawSharp.app
+        xattr -dr com.apple.quarantine /Applications/ClawSharp.app
 
       Then you can open it normally. Future signed releases will remove this requirement.
     EOS
