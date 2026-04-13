@@ -1,13 +1,27 @@
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
-import { Search, Settings, Bell, ChevronDown, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Search, Settings, Bell, ChevronDown, Loader2, Code2, Folder, Rocket, TerminalSquare } from 'lucide-react';
 import { useTheme } from 'next-themes';
+
+const projectLaunchTargets = [
+  { id: '__vscode__', label: 'VS Code', icon: Code2 },
+  { id: '__antigravity__', label: 'Antigravity', icon: Rocket },
+  { id: '__finder__', label: 'Finder', icon: Folder },
+  { id: '__terminal__', label: 'Terminal', icon: TerminalSquare },
+] as const;
 
 export const TopBar = () => {
   const {
     selectedProjectId, projects, inboxItems, run, connection,
     openProjectPicker,
-    toggleSettings, toggleCommandPalette, setActiveView, ui
+    toggleSettings, toggleCommandPalette, setActiveView, ui, openExternalEditor,
   } = useAppStore();
   const { resolvedTheme } = useTheme();
   const project = projects.find(p => p.id === selectedProjectId);
@@ -45,6 +59,40 @@ export const TopBar = () => {
             {project.branch && (
               <span className="text-xs text-muted-foreground font-mono">{project.branch}</span>
             )}
+            <div className="ml-2 flex items-center rounded-lg border border-border bg-muted/30 p-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 rounded-md px-2 text-xs"
+                onClick={() => void openExternalEditor({ kind: 'project', projectId: project.id, editorCommand: '__vscode__' })}
+              >
+                <Code2 className="h-3.5 w-3.5" />
+                <span>Open VS</span>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 w-8 rounded-md px-0" aria-label="Open project in another app">
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  {projectLaunchTargets.map((target) => {
+                    const Icon = target.icon;
+                    return (
+                      <DropdownMenuItem
+                        key={target.id}
+                        onClick={() => void openExternalEditor({ kind: 'project', projectId: project.id, editorCommand: target.id })}
+                        className="gap-2"
+                      >
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span>{target.label}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </>
         ) : (
           <button

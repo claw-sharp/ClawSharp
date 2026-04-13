@@ -8,10 +8,14 @@ namespace ClawSharp.AgentHost.Services;
 public sealed class ExternalEditorService
 {
     private readonly RecentProjectStore _recentProjectStore;
+    private readonly Func<string, IReadOnlyList<string>, CancellationToken, Task<ExternalEditorLaunchDto>> _launchAsync;
 
-    public ExternalEditorService(RecentProjectStore recentProjectStore)
+    public ExternalEditorService(
+        RecentProjectStore recentProjectStore,
+        Func<string, IReadOnlyList<string>, CancellationToken, Task<ExternalEditorLaunchDto>>? launchAsync = null)
     {
         _recentProjectStore = recentProjectStore;
+        _launchAsync = launchAsync ?? LaunchAsync;
     }
 
     public async Task<OpenExternalEditorResponse> OpenAsync(
@@ -20,12 +24,42 @@ public sealed class ExternalEditorService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var command = string.IsNullOrWhiteSpace(request.EditorCommand)
-            ? "code"
-            : request.EditorCommand.Trim();
-        var arguments = await BuildArgumentsAsync(request, cancellationToken);
-        var launch = await LaunchAsync(command, arguments, cancellationToken);
+        var target = ResolveLaunchTarget(request.EditorCommand);
+        var targetArguments = await BuildArgumentsAsync(request, cancellationToken);
+        var arguments = target.PrefixArguments.Count == 0
+            ? targetArguments
+            : [.. target.PrefixArguments, .. targetArguments];
+        var launch = await _launchAsync(target.Command, arguments, cancellationToken);
         return new OpenExternalEditorResponse(launch);
+    }
+
+    private static (string Command, IReadOnlyList<string> PrefixArguments) ResolveLaunchTarget(string? editorCommand)
+    {
+        if (string.IsNullOrWhiteSpace(editorCommand))
+        {
+            return ("code", Array.Empty<string>());
+        }
+
+        return editorCommand.Trim().ToLowerInvariant() switch
+        {
+            "__vscode__" or "vscode" => OperatingSystem.IsMacOS()
+                ? ("open", ["-a", "Visual Studio Code"])
+                : ("code", Array.Empty<string>()),
+            "__antigravity__" or "antigravity" => OperatingSystem.IsMacOS()
+                ? ("open", ["-a", "Antigravity"])
+                : ("antigravity", Array.Empty<string>()),
+            "__finder__" or "finder" => OperatingSystem.IsMacOS()
+                ? ("open", ["-a", "Finder"])
+                : OperatingSystem.IsWindows()
+                    ? ("explorer", Array.Empty<string>())
+                    : ("xdg-open", Array.Empty<string>()),
+            "__terminal__" or "terminal" => OperatingSystem.IsMacOS()
+                ? ("open", ["-a", "Terminal"])
+                : OperatingSystem.IsWindows()
+                    ? ("wt", ["-d"])
+                    : ("x-terminal-emulator", ["--working-directory"]),
+            _ => (editorCommand.Trim(), Array.Empty<string>())
+        };
     }
 
     private async Task<IReadOnlyList<string>> BuildArgumentsAsync(
