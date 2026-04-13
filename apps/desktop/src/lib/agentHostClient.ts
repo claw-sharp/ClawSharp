@@ -14,6 +14,7 @@ import type {
   GetDiffResponse,
   GetSettingsResponse,
   ListSkillsResponse,
+  ListWorkspaceFilesResponse,
   ListPluginsResponse,
   ListChangedFilesResponse,
   ListDiagnosticsResponse,
@@ -126,6 +127,10 @@ class AgentHostClient {
     return await this.request('listSkills', { projectId: projectId ?? null });
   }
 
+  async listWorkspaceFiles(projectId?: string | null): Promise<ListWorkspaceFilesResponse> {
+    return await this.request('listWorkspaceFiles', { projectId: projectId ?? null });
+  }
+
   async getSettings(projectId?: string | null): Promise<GetSettingsResponse> {
     return await this.request('getSettings', { projectId: projectId ?? null });
   }
@@ -187,6 +192,32 @@ class AgentHostClient {
     return typeof selection === 'string' ? selection : null;
   }
 
+  async pickPromptFiles(): Promise<string[]> {
+    const selection = await open({
+      directory: false,
+      multiple: true,
+      title: 'Attach Files',
+    });
+
+    return normalizeDialogSelection(selection);
+  }
+
+  async pickPromptImages(): Promise<string[]> {
+    const selection = await open({
+      directory: false,
+      multiple: true,
+      title: 'Attach Photos',
+      filters: [
+        {
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+        },
+      ],
+    });
+
+    return normalizeDialogSelection(selection);
+  }
+
   async request<TCommand extends keyof AgentHostCommandMap>(
     command: TCommand,
     payload: AgentHostCommandMap[TCommand]['request'],
@@ -208,6 +239,16 @@ class AgentHostClient {
       unlistenState();
     };
   }
+}
+
+function normalizeDialogSelection(selection: string | string[] | null): string[] {
+  if (typeof selection === 'string') {
+    return [selection];
+  }
+
+  return Array.isArray(selection)
+    ? selection.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    : [];
 }
 
 export const agentHostClient = isTauriRuntime()

@@ -14,6 +14,8 @@ const mockClient = {
   getDiff: vi.fn(),
   openExternalEditor: vi.fn(),
   listDiagnostics: vi.fn(),
+  listSkills: vi.fn(),
+  listWorkspaceFiles: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   listProviders: vi.fn(),
@@ -43,6 +45,8 @@ describe('useAppStore', () => {
     mockClient.getDiff.mockReset();
     mockClient.openExternalEditor.mockReset();
     mockClient.listDiagnostics.mockReset();
+    mockClient.listSkills.mockReset();
+    mockClient.listWorkspaceFiles.mockReset();
     mockClient.getSettings.mockReset();
     mockClient.updateSettings.mockReset();
     mockClient.listProviders.mockReset();
@@ -119,6 +123,19 @@ describe('useAppStore', () => {
         errors: [],
         recentEvents: [],
       },
+    });
+    mockClient.listSkills.mockResolvedValue({
+      projectId: 'proj-1',
+      workspaceRoot: '/repo',
+      skills: [],
+    });
+    mockClient.listWorkspaceFiles.mockResolvedValue({
+      projectId: 'proj-1',
+      workspaceRoot: '/repo',
+      files: [
+        'README.md',
+        'apps/desktop/src/features/chat/ThreadView.tsx',
+      ],
     });
     mockClient.listChangedFiles.mockResolvedValue({ projectId: 'proj-1', threadId: 'thread-1', files: [] });
     mockClient.listPendingApprovals.mockResolvedValue({ approvals: [] });

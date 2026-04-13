@@ -109,6 +109,7 @@ public sealed class QueryReactiveCompactModelCallRunner : IQueryReactiveCompactM
                 enablePromptCaching: false,
                 useGlobalCacheScope: false),
             QueryRequestBuilder.AddCacheBreakpoints(
+                context.Request,
                 compactMessages,
                 enablePromptCaching: false),
             context.Tools,

@@ -28,6 +28,7 @@ import type {
   OpenExternalEditorRequest,
   ListPluginsResponse,
   ListSkillsResponse,
+  ListWorkspaceFilesResponse,
 } from '@/lib/protocol';
 import type {
   ChangedFile,
@@ -60,6 +61,10 @@ interface AppStore {
   skillsProjectId: string | null;
   skillsLoading: boolean;
   skillsError: string | null;
+  workspaceFiles: string[];
+  workspaceFilesProjectId: string | null;
+  workspaceFilesLoading: boolean;
+  workspaceFilesError: string | null;
   threads: Thread[];
   messages: Record<string, Message[]>;
   threadHistory: Record<string, ThreadHistoryState>;
@@ -79,6 +84,7 @@ interface AppStore {
   initialize: () => Promise<void>;
   loadPlugins: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   loadSkills: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  loadWorkspaceFiles: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   refreshPlugins: () => Promise<void>;
   setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
   savePluginOptions: (pluginId: string, values: Record<string, unknown>) => Promise<void>;
@@ -228,6 +234,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   skillsProjectId: null,
   skillsLoading: false,
   skillsError: null,
+  workspaceFiles: [],
+  workspaceFilesProjectId: null,
+  workspaceFilesLoading: false,
+  workspaceFilesError: null,
   threads: [],
   messages: {},
   threadHistory: {},
@@ -416,6 +426,46 @@ export const useAppStore = create<AppStore>((set, get) => ({
           ...state.connection,
           errorMessage: toErrorMessage(error, 'Failed to load skills.'),
           statusLabel: 'Skill load failed',
+        },
+      }));
+    }
+  },
+
+  loadWorkspaceFiles: async (projectId, options) => {
+    const resolvedProjectId = projectId ?? get().selectedProjectId;
+    if (!resolvedProjectId) {
+      set({
+        workspaceFiles: [],
+        workspaceFilesProjectId: null,
+        workspaceFilesLoading: false,
+        workspaceFilesError: null,
+      });
+      return;
+    }
+
+    if (!options?.force &&
+        get().workspaceFilesProjectId === resolvedProjectId &&
+        get().workspaceFiles.length > 0 &&
+        !get().workspaceFilesError) {
+      return;
+    }
+
+    set({
+      workspaceFilesLoading: true,
+      workspaceFilesError: null,
+    });
+
+    try {
+      const response = await agentHostClient.listWorkspaceFiles(resolvedProjectId);
+      set(applyWorkspaceFilesResponse(response));
+    } catch (error) {
+      set((state) => ({
+        workspaceFilesLoading: false,
+        workspaceFilesError: toErrorMessage(error, 'Failed to load workspace files.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to load workspace files.'),
+          statusLabel: 'Workspace file load failed',
         },
       }));
     }
@@ -651,6 +701,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         skillsProjectId: state.selectedProjectId === id ? state.skillsProjectId : null,
         skillsLoading: state.selectedProjectId === id ? state.skillsLoading : false,
         skillsError: null,
+        workspaceFiles: state.selectedProjectId === id ? state.workspaceFiles : [],
+        workspaceFilesProjectId: state.selectedProjectId === id ? state.workspaceFilesProjectId : null,
+        workspaceFilesLoading: state.selectedProjectId === id ? state.workspaceFilesLoading : false,
+        workspaceFilesError: null,
         threads: mergeThreads(state.threads, id, threads),
         selectedProjectId: id,
         selectedThreadId: firstThread,
@@ -662,6 +716,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }));
 
       void get().loadSkills(id);
+      void get().loadWorkspaceFiles(id);
 
       void ancillaryPromise.then(([settingsResponse, diagnosticsResponse]) => {
         if (settingsResponse.status !== 'fulfilled') {
@@ -1579,6 +1634,20 @@ function applySkillCatalogResponse(response: ListSkillsResponse) {
       ...state.connection,
       errorMessage: null,
       statusLabel: `Loaded ${response.skills.length} skill${response.skills.length === 1 ? '' : 's'}`,
+    },
+  });
+}
+
+function applyWorkspaceFilesResponse(response: ListWorkspaceFilesResponse) {
+  return (state: AppStore) => ({
+    workspaceFiles: [...response.files],
+    workspaceFilesProjectId: response.projectId,
+    workspaceFilesLoading: false,
+    workspaceFilesError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Loaded ${response.files.length} workspace file${response.files.length === 1 ? '' : 's'}`,
     },
   });
 }

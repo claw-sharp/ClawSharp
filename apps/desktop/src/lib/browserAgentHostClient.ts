@@ -29,6 +29,7 @@ import type {
   ListPendingApprovalsResponse,
   ListPluginsResponse,
   ListSkillsResponse,
+  ListWorkspaceFilesResponse,
   ListProvidersResponse,
   ListRecentProjectsResponse,
   ListThreadsResponse,
@@ -433,6 +434,25 @@ function createSkillCatalog(projects: AgentHostProject[]): Record<string, AgentH
   );
 }
 
+function createWorkspaceFileCatalog(projects: AgentHostProject[]): Record<string, string[]> {
+  return Object.fromEntries(
+    projects.map((project) => [
+      project.id,
+      [
+        'README.md',
+        'src/ClawSharp.Cli/Program.cs',
+        'src/ClawSharp.Query/QueryEngine.cs',
+        'src/ClawSharp.Infrastructure/Plugins/BuiltInPluginCatalog.cs',
+        'apps/desktop/src/features/chat/ThreadView.tsx',
+        'apps/desktop/src/features/chat/ThreadView.test.tsx',
+        'apps/desktop/src/features/plugins/PluginsPanel.tsx',
+        'apps/desktop/src/lib/browserAgentHostClient.ts',
+        'apps/desktop/src/layouts/AppShell.tsx',
+      ],
+    ]),
+  );
+}
+
 function basename(projectPath: string): string {
   const normalized = projectPath.replace(/[\\/]+$/, '');
   const parts = normalized.split(/[\\/]/);
@@ -454,6 +474,7 @@ export class BrowserAgentHostClient {
   private diagnosticsByThread = createDiagnostics(this.settings);
   private pluginsByProject = createPluginCatalog(this.projects);
   private skillsByProject = createSkillCatalog(this.projects);
+  private workspaceFilesByProject = createWorkspaceFileCatalog(this.projects);
   private approvals = createApprovals();
   private requestCounter = 0;
 
@@ -491,6 +512,7 @@ export class BrowserAgentHostClient {
         'listDiagnostics',
         'listPlugins',
         'listSkills',
+        'listWorkspaceFiles',
         'getSettings',
         'updateSettings',
         'setPluginEnabled',
@@ -520,6 +542,7 @@ export class BrowserAgentHostClient {
     this.threadsByProject[project.id] = [];
     this.pluginsByProject[project.id] = createPluginCatalog([project])[project.id] ?? [];
     this.skillsByProject[project.id] = createSkillCatalog([project])[project.id] ?? [];
+    this.workspaceFilesByProject[project.id] = createWorkspaceFileCatalog([project])[project.id] ?? [];
 
     return {
       project: deepClone(project),
@@ -839,6 +862,20 @@ export class BrowserAgentHostClient {
     };
   }
 
+  async listWorkspaceFiles(projectId?: string | null): Promise<ListWorkspaceFilesResponse> {
+    const resolvedProjectId = projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      files: deepClone(this.workspaceFilesByProject[resolvedProjectId] ?? []),
+    };
+  }
+
   async getSettings(): Promise<GetSettingsResponse> {
     return {
       settings: deepClone(this.settings),
@@ -1074,6 +1111,14 @@ export class BrowserAgentHostClient {
 
   async pickProjectDirectory(): Promise<string | null> {
     return null;
+  }
+
+  async pickPromptFiles(): Promise<string[]> {
+    return [];
+  }
+
+  async pickPromptImages(): Promise<string[]> {
+    return [];
   }
 
   async subscribe(

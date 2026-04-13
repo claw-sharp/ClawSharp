@@ -2,6 +2,7 @@
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
 using ClawSharp.Query;
+using ClawSharp.Query.Attachments;
 using ClawSharp.Tasks;
 using ClawSharp.Tools;
 
@@ -305,13 +306,25 @@ public class QueryRequestBuilderTests
         var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
         var queue = new InMemoryQueuedCommandQueue();
         var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [],
+                [],
+                [],
+                []));
         var queryEngine = new QueryEngine(
             settings,
             eventSink,
             transcriptStore,
             queryTurnRunner,
             queuedTaskNotificationDrainer,
-            toolRegistry: toolRegistry);
+            toolRegistry: toolRegistry,
+            appStateStore: appStateStore);
         var session = new DefaultSessionFactory(tempDir).Create();
         var request = QueryTurnRequest.Create(
             session,
@@ -554,6 +567,145 @@ public class QueryRequestBuilderTests
 
         Assert.NotNull(result.Request);
         Assert.Contains("Skill $vercel:agent-browser", result.Request!.Messages[0].Content[0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueryEngine_Expands_Prompt_File_References_Into_User_Context()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-file-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var attachedFilePath = Path.Combine(tempDir, "src", "Program.cs");
+        Directory.CreateDirectory(Path.GetDirectoryName(attachedFilePath)!);
+        await File.WriteAllTextAsync(attachedFilePath, "Console.WriteLine(\"hello\");");
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [],
+                [],
+                [],
+                []));
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry,
+            appStateStore: appStateStore);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "Review @src/Program.cs before reading note.txt",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Equal("user", result.Request!.Messages[0].Role);
+        Assert.Contains("Attached file @src/Program.cs", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Console.WriteLine(\"hello\");", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Equal("Review @src/Program.cs before reading note.txt", result.Request.Messages[1].Content[0].Text);
+    }
+
+    [Fact]
+    public void BuildFromMessages_Uses_Prompt_Attachments_For_The_Final_User_Message()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-image-attachment-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var taskRegistry = new TaskRegistry();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "Describe this\n\n<clawsharp-attachment>{\"kind\":\"image\",\"path\":\"/tmp/cat.png\",\"name\":\"cat.png\"}</clawsharp-attachment>") with
+        {
+            ResolvedUserInput = "Describe this",
+            PromptAttachments =
+            [
+                new QueryPromptAttachment(
+                    QueryPromptAttachmentKind.Image,
+                    "/tmp/cat.png",
+                    "cat.png",
+                    "image/png",
+                    "YWJjMTIz")
+            ]
+        };
+        var stateMessages = new[]
+        {
+            ChatMessageFactory.CreateText(MessageRole.User, request.UserInput)
+        };
+
+        var builder = new QueryRequestBuilder();
+        var modelRequest = builder.BuildFromMessages(
+            request,
+            stateMessages,
+            new ClawSharpSettings(),
+            toolRegistry.All,
+            new QueryRequestBuildOptions(SystemPrompt: ["system body"]));
+
+        Assert.Single(modelRequest.Messages);
+        Assert.Equal("Describe this", modelRequest.Messages[0].Content[0].Text);
+        Assert.Equal("image", modelRequest.Messages[0].Content[1].Type);
+        Assert.Equal("image/png", modelRequest.Messages[0].Content[1].ImageSource?.MediaType);
+        Assert.Equal("YWJjMTIz", modelRequest.Messages[0].Content[1].ImageSource?.Data);
+    }
+
+    [Fact]
+    public async Task QueryEngine_Extracts_Prompt_Attachment_Markers_And_Adds_File_Context()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-picked-file-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var attachedFilePath = Path.Combine(tempDir, "spec.md");
+        await File.WriteAllTextAsync(attachedFilePath, "# Spec");
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            $"Review the picked file.\n\n<clawsharp-attachment>{{\"kind\":\"file\",\"path\":\"{attachedFilePath.Replace("\\", "\\\\")}\",\"name\":\"spec.md\"}}</clawsharp-attachment>",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Contains("Attached file spec.md", result.Request!.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("# Spec", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Equal("Review the picked file.", result.Request.Messages[1].Content[0].Text);
     }
 
     private sealed class FixedQueryModelTurnContextProvider : IQueryModelTurnContextProvider

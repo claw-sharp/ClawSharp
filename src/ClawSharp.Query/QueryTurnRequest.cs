@@ -1,5 +1,7 @@
-// TS parity status: simplified foundation only, not a 1:1 translation yet.
 using ClawSharp.Core;
+using ClawSharp.Query.Attachments;
+
+// TS parity status: simplified foundation only, not a 1:1 translation yet.
 
 namespace ClawSharp.Query;
 
@@ -14,8 +16,13 @@ public sealed record QueryTurnRequest(
     QueryToolUseContextState? InitialToolUseContext = null,
     QueryTurnExecutionMode ExecutionMode = QueryTurnExecutionMode.Auto,
     QueryTaskBudget? TaskBudget = null,
-    string? FallbackModel = null)
+    string? FallbackModel = null,
+    string? ResolvedUserInput = null,
+    IReadOnlyList<QueryPromptAttachment>? PromptAttachments = null)
 {
+    public string EffectiveUserInput => ResolvedUserInput ?? UserInput;
+    public IReadOnlyList<QueryPromptAttachment> EffectivePromptAttachments => PromptAttachments ?? [];
+
     public static QueryTurnRequest Create(ConversationSession session, string userInput)
     {
         return new QueryTurnRequest(
@@ -29,7 +36,9 @@ public sealed record QueryTurnRequest(
             InitialToolUseContext: null,
             ExecutionMode: QueryTurnExecutionMode.ModelBacked,
             TaskBudget: null,
-            FallbackModel: null);
+            FallbackModel: null,
+            ResolvedUserInput: null,
+            PromptAttachments: []);
     }
 
     public static QueryTurnRequest Create(
@@ -48,7 +57,9 @@ public sealed record QueryTurnRequest(
             InitialToolUseContext: null,
             ExecutionMode: QueryTurnExecutionMode.ExplicitTool,
             TaskBudget: null,
-            FallbackModel: null);
+            FallbackModel: null,
+            ResolvedUserInput: null,
+            PromptAttachments: []);
     }
 
     public static QueryTurnRequest Create(
@@ -70,6 +81,8 @@ public sealed record QueryTurnRequest(
                 ? QueryTurnExecutionMode.ExplicitTool
                 : QueryTurnExecutionMode.ModelBacked,
             TaskBudget: null,
-            FallbackModel: null);
+            FallbackModel: null,
+            ResolvedUserInput: null,
+            PromptAttachments: []);
     }
 }

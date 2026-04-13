@@ -1,5 +1,7 @@
 // TS parity status: queued task-notification drain, transcript persistence, runtime-event consumption, and completed-turn result shaping are ported; full 1:1 parity still depends on the remaining model-backed query-loop branches.
 using ClawSharp.Core;
+using ClawSharp.Query.Attachments;
+using ClawSharp.Query.Files;
 using ClawSharp.Query.Skills;
 using ClawSharp.Tools;
 
@@ -17,6 +19,8 @@ public sealed class QueryEngine
     private readonly QueryRequestBuilder _queryRequestBuilder;
     private readonly IQueryModelTurnContextProvider? _modelTurnContextProvider;
     private readonly IClawSharpAppStateStore? _appStateStore;
+    private readonly PromptAttachmentReferenceService _promptAttachmentReferenceService;
+    private readonly PromptFileReferenceService _promptFileReferenceService;
     private readonly PromptSkillReferenceService _promptSkillReferenceService;
 
     public QueryEngine(
@@ -41,6 +45,8 @@ public sealed class QueryEngine
         _queryRequestBuilder = queryRequestBuilder ?? new QueryRequestBuilder();
         _modelTurnContextProvider = modelTurnContextProvider;
         _appStateStore = appStateStore;
+        _promptAttachmentReferenceService = new PromptAttachmentReferenceService();
+        _promptFileReferenceService = new PromptFileReferenceService();
         _promptSkillReferenceService = new PromptSkillReferenceService();
     }
 
@@ -157,9 +163,10 @@ public sealed class QueryEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         var settings = _appStateStore?.GetState().Settings ?? _settings;
+        request = _promptAttachmentReferenceService.ExtractPromptAttachments(request);
         ClawSharpTelemetry.LogDebug(
-            $"[QueryEngine] run-start sessionId={session.Id} appendUserInput={appendUserInputMessage} promptLength={request.UserInput.Length}");
-        using var interactionSpan = ClawSharpTelemetry.StartInteractionSpan(request.UserInput);
+            $"[QueryEngine] run-start sessionId={session.Id} appendUserInput={appendUserInputMessage} promptLength={request.EffectiveUserInput.Length}");
+        using var interactionSpan = ClawSharpTelemetry.StartInteractionSpan(request.EffectiveUserInput);
         await _queuedTaskNotificationDrainer.DrainAsync(session, cancellationToken);
         await _fileUpdateNotifier.HandleQueryStartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -206,11 +213,21 @@ public sealed class QueryEngine
             };
         }
 
-        if (_appStateStore?.GetState().Skills is { Count: > 0 } skills)
+        request = await _promptAttachmentReferenceService.ExpandPromptAttachmentsAsync(request, cancellationToken);
+
+        if (_appStateStore?.GetState() is { } appState)
         {
-            request = await _promptSkillReferenceService.ExpandPromptSkillReferencesAsync(
+            if (appState.Skills.Count > 0)
+            {
+                request = await _promptSkillReferenceService.ExpandPromptSkillReferencesAsync(
+                    request,
+                    appState.Skills,
+                    cancellationToken);
+            }
+
+            request = await _promptFileReferenceService.ExpandPromptFileReferencesAsync(
                 request,
-                skills,
+                appState.WorkspaceRoot,
                 cancellationToken);
         }
 

@@ -16,6 +16,7 @@ export interface AgentHostCommandMap {
   listDiagnostics: { request: ListDiagnosticsRequest; response: ListDiagnosticsResponse };
   listPlugins: { request: ListPluginsRequest; response: ListPluginsResponse };
   listSkills: { request: ListSkillsRequest; response: ListSkillsResponse };
+  listWorkspaceFiles: { request: ListWorkspaceFilesRequest; response: ListWorkspaceFilesResponse };
   getSettings: { request: GetSettingsRequest; response: GetSettingsResponse };
   updateSettings: { request: UpdateSettingsRequest; response: UpdateSettingsResponse };
   setPluginEnabled: { request: SetPluginEnabledRequest; response: ListPluginsResponse };
@@ -163,6 +164,10 @@ export interface ListPluginsRequest {
 }
 
 export interface ListSkillsRequest {
+  projectId?: string | null;
+}
+
+export interface ListWorkspaceFilesRequest {
   projectId?: string | null;
 }
 
@@ -413,6 +418,12 @@ export interface ListSkillsResponse {
   projectId: string;
   workspaceRoot: string;
   skills: AgentHostSkill[];
+}
+
+export interface ListWorkspaceFilesResponse {
+  projectId: string;
+  workspaceRoot: string;
+  files: string[];
 }
 
 export interface AgentHostRuntimeSettings {

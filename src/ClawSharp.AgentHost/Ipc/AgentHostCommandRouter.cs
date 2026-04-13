@@ -2,6 +2,7 @@ using System.Text.Json;
 using ClawSharp.AgentHost.Approvals;
 using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Diagnostics;
+using ClawSharp.AgentHost.Files;
 using ClawSharp.AgentHost.Plugins;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Providers;
@@ -23,6 +24,7 @@ public sealed class AgentHostCommandRouter
     private readonly DiagnosticsCatalogService _diagnosticsService;
     private readonly PluginCatalogService _pluginCatalog;
     private readonly SkillCatalogService _skillCatalog;
+    private readonly WorkspaceFileCatalogService _workspaceFileCatalog;
     private readonly ProviderCatalogService _providerCatalog;
     private readonly ExternalEditorService _externalEditorService;
     private readonly ApprovalCatalogService _approvalCatalog;
@@ -35,6 +37,7 @@ public sealed class AgentHostCommandRouter
         DiagnosticsCatalogService diagnosticsService,
         PluginCatalogService pluginCatalog,
         SkillCatalogService skillCatalog,
+        WorkspaceFileCatalogService workspaceFileCatalog,
         ProviderCatalogService providerCatalog,
         ExternalEditorService externalEditorService,
         ApprovalCatalogService approvalCatalog)
@@ -46,6 +49,7 @@ public sealed class AgentHostCommandRouter
         _diagnosticsService = diagnosticsService;
         _pluginCatalog = pluginCatalog;
         _skillCatalog = skillCatalog;
+        _workspaceFileCatalog = workspaceFileCatalog;
         _providerCatalog = providerCatalog;
         _externalEditorService = externalEditorService;
         _approvalCatalog = approvalCatalog;
@@ -72,6 +76,7 @@ public sealed class AgentHostCommandRouter
             "listDiagnostics" => await _diagnosticsService.ListDiagnosticsAsync(DeserializePayload<ListDiagnosticsRequest>(request), cancellationToken),
             "listPlugins" => await _pluginCatalog.ListPluginsAsync(DeserializePayload<ListPluginsRequest>(request), cancellationToken),
             "listSkills" => await _skillCatalog.ListSkillsAsync(DeserializePayload<ListSkillsRequest>(request), cancellationToken),
+            "listWorkspaceFiles" => await _workspaceFileCatalog.ListAsync(DeserializePayload<ListWorkspaceFilesRequest>(request), cancellationToken),
             "getSettings" => await _providerCatalog.GetSettingsAsync(DeserializePayload<GetSettingsRequest>(request), cancellationToken),
             "updateSettings" => await _providerCatalog.UpdateSettingsAsync(DeserializePayload<UpdateSettingsRequest>(request), cancellationToken),
             "setPluginEnabled" => await _pluginCatalog.SetPluginEnabledAsync(DeserializePayload<SetPluginEnabledRequest>(request), cancellationToken),

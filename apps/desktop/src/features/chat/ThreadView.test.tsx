@@ -1,19 +1,30 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadView } from '@/features/chat/ThreadView';
+import { agentHostClient } from '@/lib/agentHostClient';
 import { useAppStore } from '@/store';
 
 vi.mock('@/store', () => ({
   useAppStore: vi.fn(),
 }));
 
+vi.mock('@/lib/agentHostClient', () => ({
+  agentHostClient: {
+    pickPromptFiles: vi.fn(),
+    pickPromptImages: vi.fn(),
+  },
+}));
+
 const mockedUseAppStore = vi.mocked(useAppStore);
+const mockedAgentHostClient = vi.mocked(agentHostClient);
 const baseStoreState = {
   selectedProjectId: '',
   selectedThreadId: '',
   projects: [],
   skills: [],
   skillsLoading: false,
+  workspaceFiles: [],
+  workspaceFilesLoading: false,
   threads: [],
   messages: {},
   threadHistory: {},
@@ -77,11 +88,16 @@ const baseStoreState = {
   setActiveView: vi.fn(),
   loadOlderThreadMessages: vi.fn(),
   loadSkills: vi.fn(),
+  loadWorkspaceFiles: vi.fn(),
   openExternalEditor: vi.fn(),
 };
 
 describe('ThreadView', () => {
   beforeEach(() => {
+    mockedAgentHostClient.pickPromptFiles.mockReset();
+    mockedAgentHostClient.pickPromptFiles.mockResolvedValue([]);
+    mockedAgentHostClient.pickPromptImages.mockReset();
+    mockedAgentHostClient.pickPromptImages.mockResolvedValue([]);
     mockedUseAppStore.mockReturnValue({
       ...baseStoreState,
     } as ReturnType<typeof useAppStore>);
@@ -764,5 +780,259 @@ describe('ThreadView', () => {
 
     expect(composer.value).toBe('$review-changes ');
     expect(sendPrompt).not.toHaveBeenCalled();
+  });
+
+  it('shows workspace file suggestions for @ references and inserts the selected file', () => {
+    const sendPrompt = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      sendPrompt,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      workspaceFiles: [
+        'README.md',
+        'apps/desktop/src/features/chat/ThreadView.tsx',
+        'src/ClawSharp.Cli/Program.cs',
+      ],
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'File attach',
+          summary: 'Testing @ file autocomplete',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const composer = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '@Thread' } });
+    composer.setSelectionRange(7, 7);
+    fireEvent.select(composer);
+    expect(screen.getByRole('listbox', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /@apps\/desktop\/src\/features\/chat\/ThreadView\.tsx/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(composer, { key: 'Enter' });
+
+    expect(composer.value).toBe('@apps/desktop/src/features/chat/ThreadView.tsx ');
+    expect(sendPrompt).not.toHaveBeenCalled();
+  });
+
+  it('adds picked files to the composer and encodes them into the submitted prompt', async () => {
+    const sendPrompt = vi.fn();
+    mockedAgentHostClient.pickPromptFiles.mockResolvedValue(['/tmp/spec.md']);
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      sendPrompt,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'File picker',
+          summary: 'Testing picked file attachments',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+
+    expect(await screen.findByText('spec.md')).toBeInTheDocument();
+
+    const composer = screen.getByRole('textbox');
+    fireEvent.change(composer, { target: { value: 'Review this attachment' } });
+    fireEvent.keyDown(composer, { key: 'Enter' });
+
+    expect(sendPrompt).toHaveBeenCalledWith(
+      'thread-1',
+      'Review this attachment\n\n<clawsharp-attachment>{"kind":"file","path":"/tmp/spec.md","name":"spec.md"}</clawsharp-attachment>',
+    );
+  });
+
+  it('renders attachment chips from stored prompts and opens them in the external editor', () => {
+    const openExternalEditor = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      openExternalEditor,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Attachment render',
+          summary: 'Testing attachment pills',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'user-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'Look at this file.\n\n<clawsharp-attachment>{"kind":"file","path":"/tmp/spec.md","name":"spec.md"}</clawsharp-attachment>',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    expect(screen.getByText('Look at this file.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'spec.md' }));
+
+    expect(openExternalEditor).toHaveBeenCalledWith({
+      kind: 'file',
+      path: '/tmp/spec.md',
+      editorCommand: '/usr/local/bin/code',
+    });
+  });
+
+  it('runs slash commands from the composer instead of sending them as prompts', () => {
+    const setActiveView = vi.fn();
+    const sendPrompt = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      sendPrompt,
+      setActiveView,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Slash commands',
+          summary: 'Testing / command autocomplete',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const composer = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '/plug' } });
+    composer.setSelectionRange(5, 5);
+    fireEvent.select(composer);
+    expect(screen.getByRole('listbox', { name: 'Commands' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\/plugins/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(composer, { key: 'Enter' });
+
+    expect(setActiveView).toHaveBeenCalledWith('plugins');
+    expect(sendPrompt).not.toHaveBeenCalled();
+    expect(composer.value).toBe('');
   });
 });

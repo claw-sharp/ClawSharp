@@ -8,4 +8,10 @@ public sealed record QueryRequestContentBlock(
     string? ToolUseId = null,
     string? Input = null,
     string? StructuredOutput = null,
-    QueryRequestCacheControl? CacheControl = null);
+    QueryRequestCacheControl? CacheControl = null,
+    QueryRequestImageSource? ImageSource = null);
+
+public sealed record QueryRequestImageSource(
+    string Type,
+    string MediaType,
+    string Data);

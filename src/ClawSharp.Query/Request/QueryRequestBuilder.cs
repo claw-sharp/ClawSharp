@@ -1,6 +1,8 @@
 // TS parity status: ports the current request-construction foundation for system prompt splitting, user/system context shaping, cache-marker placement, task-budget shaping, and tool schema projection; live model transport, thinking blocks, and provider-specific beta handling remain blocked.
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using ClawSharp.Core;
+using ClawSharp.Query.Attachments;
 using ClawSharp.Tools;
 
 namespace ClawSharp.Query;
@@ -75,6 +77,7 @@ public sealed class QueryRequestBuilder
                 options.UseGlobalCacheScope,
                 options.SkipGlobalCacheForSystemPrompt),
             AddCacheBreakpoints(
+                request,
                 requestMessages,
                 options.EnablePromptCaching,
                 options.SkipCacheWrite),
@@ -225,6 +228,7 @@ public sealed class QueryRequestBuilder
     }
 
     public static IReadOnlyList<QueryRequestMessage> AddCacheBreakpoints(
+        QueryTurnRequest request,
         IReadOnlyList<ChatMessage> messages,
         bool enablePromptCaching,
         bool skipCacheWrite = false)
@@ -244,23 +248,45 @@ public sealed class QueryRequestBuilder
             markerIndex = apiMessages.Length - 1;
         }
 
+        var lastUserMessageIndex = Array.FindLastIndex(apiMessages, static message => message.Role == MessageRole.User);
+
         return apiMessages
             .Select(
                 (message, index) =>
-                    message.Role == MessageRole.User
-                        ? UserMessageToMessageParam(message, index == markerIndex, enablePromptCaching)
-                        : AssistantMessageToMessageParam(message, index == markerIndex, enablePromptCaching))
+                {
+                    var shouldOverrideLastUserMessage = index == lastUserMessageIndex &&
+                        (request.ResolvedUserInput is not null || request.EffectivePromptAttachments.Count > 0);
+
+                    return message.Role == MessageRole.User
+                        ? UserMessageToMessageParam(
+                            message,
+                            index == markerIndex,
+                            enablePromptCaching,
+                            overrideText: shouldOverrideLastUserMessage ? request.EffectiveUserInput : null,
+                            attachments: shouldOverrideLastUserMessage ? request.EffectivePromptAttachments : [])
+                        : AssistantMessageToMessageParam(message, index == markerIndex, enablePromptCaching);
+                })
             .ToArray();
     }
 
     public static QueryRequestMessage UserMessageToMessageParam(
         ChatMessage message,
         bool addCache,
-        bool enablePromptCaching)
+        bool enablePromptCaching,
+        string? overrideText = null,
+        IReadOnlyList<QueryPromptAttachment>? attachments = null)
     {
+        if (overrideText is null &&
+            TryBuildInlineAttachmentContent(message.Content, out var inlinePrompt, out var inlineAttachments))
+        {
+            return new QueryRequestMessage(
+                "user",
+                BuildContent(message, addCache, enablePromptCaching, inlinePrompt, inlineAttachments));
+        }
+
         return new QueryRequestMessage(
             "user",
-            BuildContent(message, addCache, enablePromptCaching));
+            BuildContent(message, addCache, enablePromptCaching, overrideText, attachments));
     }
 
     public static QueryRequestMessage AssistantMessageToMessageParam(
@@ -360,13 +386,19 @@ public sealed class QueryRequestBuilder
     private static IReadOnlyList<QueryRequestContentBlock> BuildContent(
         ChatMessage message,
         bool addCache,
-        bool enablePromptCaching)
+        bool enablePromptCaching,
+        string? overrideText = null,
+        IReadOnlyList<QueryPromptAttachment>? attachments = null)
     {
-        var blocks = message.ContentBlocks
-            .Select(ToContentBlock)
-            .Where(block => block is not null)
-            .Cast<QueryRequestContentBlock>()
-            .ToArray();
+        var contentBlocks = overrideText is not null
+            ? BuildPromptContentBlocks(overrideText, attachments)
+            : message.ContentBlocks
+                .Select(ToContentBlock)
+                .Where(block => block is not null)
+                .Cast<QueryRequestContentBlock>()
+                .ToArray();
+
+        var blocks = contentBlocks;
 
         if (!addCache || !enablePromptCaching || blocks.Length == 0)
         {
@@ -381,6 +413,207 @@ public sealed class QueryRequestBuilder
         blocks[^1] = lastBlock;
         return blocks;
     }
+
+    private static QueryRequestContentBlock[] BuildPromptContentBlocks(
+        string promptText,
+        IReadOnlyList<QueryPromptAttachment>? attachments)
+    {
+        List<QueryRequestContentBlock> blocks = [];
+        if (!string.IsNullOrWhiteSpace(promptText))
+        {
+            blocks.Add(new QueryRequestContentBlock("text", Text: promptText));
+        }
+        else if ((attachments?.Count ?? 0) > 0)
+        {
+            blocks.Add(new QueryRequestContentBlock("text", Text: BuildAttachmentSummary(attachments!)));
+        }
+
+        foreach (var attachment in attachments ?? [])
+        {
+            if (attachment.Kind != QueryPromptAttachmentKind.Image ||
+                string.IsNullOrWhiteSpace(attachment.Base64Data) ||
+                string.IsNullOrWhiteSpace(attachment.MediaType))
+            {
+                continue;
+            }
+
+            blocks.Add(new QueryRequestContentBlock(
+                "image",
+                ImageSource: new QueryRequestImageSource("base64", attachment.MediaType, attachment.Base64Data)));
+        }
+
+        return blocks.ToArray();
+    }
+
+    private static string BuildAttachmentSummary(IReadOnlyList<QueryPromptAttachment> attachments)
+    {
+        var parts = attachments
+            .Select(static attachment => attachment.Kind == QueryPromptAttachmentKind.Image
+                ? $"attached image {attachment.Name}"
+                : $"attached file {attachment.Name}")
+            .ToArray();
+
+        return $"Use the {string.Join(", ", parts)} as context for this turn.";
+    }
+
+    private static bool TryBuildInlineAttachmentContent(
+        string rawContent,
+        out string cleanedPrompt,
+        out IReadOnlyList<QueryPromptAttachment> attachments)
+    {
+        cleanedPrompt = rawContent;
+        attachments = [];
+
+        var matches = PromptAttachmentMarkerPattern.Matches(rawContent);
+        if (matches.Count == 0)
+        {
+            return false;
+        }
+
+        List<QueryPromptAttachment> parsedAttachments = [];
+        foreach (Match match in matches)
+        {
+            var serialized = match.Groups["json"].Value;
+            if (string.IsNullOrWhiteSpace(serialized))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (JsonNode.Parse(serialized) is not JsonObject parsed ||
+                    string.IsNullOrWhiteSpace(parsed["path"]?.GetValue<string>()) ||
+                    string.IsNullOrWhiteSpace(parsed["name"]?.GetValue<string>()))
+                {
+                    continue;
+                }
+
+                var kind = parsed["kind"]?.GetValue<string>();
+                var path = parsed["path"]!.GetValue<string>();
+                var name = parsed["name"]!.GetValue<string>();
+
+                if (string.Equals(kind, "image", StringComparison.OrdinalIgnoreCase) &&
+                    TryReadInlineImageAttachment(path, name, out var imageAttachment))
+                {
+                    parsedAttachments.Add(imageAttachment);
+                }
+                else if (string.Equals(kind, "file", StringComparison.OrdinalIgnoreCase))
+                {
+                    parsedAttachments.Add(new QueryPromptAttachment(QueryPromptAttachmentKind.File, path, name));
+                }
+            }
+            catch
+            {
+                continue;
+            }
+        }
+
+        cleanedPrompt = PromptAttachmentMarkerPattern.Replace(rawContent, string.Empty)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Trim();
+        var fileAttachments = parsedAttachments
+            .Where(static attachment => attachment.Kind == QueryPromptAttachmentKind.File)
+            .ToArray();
+        if (fileAttachments.Length > 0 && !string.IsNullOrWhiteSpace(cleanedPrompt))
+        {
+            cleanedPrompt = $"{cleanedPrompt}\n\n{BuildAttachmentSummary(fileAttachments)}";
+        }
+
+        attachments = parsedAttachments;
+        return true;
+    }
+
+    private static bool TryReadInlineImageAttachment(string path, string name, out QueryPromptAttachment attachment)
+    {
+        attachment = new QueryPromptAttachment(QueryPromptAttachmentKind.Image, path, name);
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return false;
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(fullPath);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (bytes.Length == 0 || bytes.LongLength > (5 * 1024 * 1024 * 3) / 4)
+        {
+            return false;
+        }
+
+        attachment = new QueryPromptAttachment(
+            QueryPromptAttachmentKind.Image,
+            fullPath,
+            name,
+            DetectInlineImageMediaType(bytes),
+            Convert.ToBase64String(bytes));
+        return true;
+    }
+
+    private static string DetectInlineImageMediaType(byte[] buffer)
+    {
+        if (buffer.Length < 4)
+        {
+            return "image/png";
+        }
+
+        if (buffer[0] == 0x89 &&
+            buffer[1] == 0x50 &&
+            buffer[2] == 0x4E &&
+            buffer[3] == 0x47)
+        {
+            return "image/png";
+        }
+
+        if (buffer[0] == 0xFF &&
+            buffer[1] == 0xD8 &&
+            buffer[2] == 0xFF)
+        {
+            return "image/jpeg";
+        }
+
+        if (buffer[0] == 0x47 &&
+            buffer[1] == 0x49 &&
+            buffer[2] == 0x46)
+        {
+            return "image/gif";
+        }
+
+        if (buffer.Length >= 12 &&
+            buffer[0] == 0x52 &&
+            buffer[1] == 0x49 &&
+            buffer[2] == 0x46 &&
+            buffer[3] == 0x46 &&
+            buffer[8] == 0x57 &&
+            buffer[9] == 0x45 &&
+            buffer[10] == 0x42 &&
+            buffer[11] == 0x50)
+        {
+            return "image/webp";
+        }
+
+        return "image/png";
+    }
+
+    private static readonly Regex PromptAttachmentMarkerPattern = new(
+        @"<clawsharp-attachment>(?<json>.*?)</clawsharp-attachment>",
+        RegexOptions.Compiled | RegexOptions.Singleline);
 
     private static QueryRequestContentBlock? ToContentBlock(MessageContentBlock block)
     {

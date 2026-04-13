@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/store';
 import { StatusBadge } from '@/components/StatusBadge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { agentHostClient } from '@/lib/agentHostClient';
 import { cn } from '@/lib/utils';
 import {
   Send, Square, Bot, User, FileCode,
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
-  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge,
+  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge, Paperclip, ImagePlus, X,
 } from 'lucide-react';
 import type { Message, Skill, ToolProgressEvent } from '@/types';
+import { buildPromptWithAttachments, parsePromptAttachments, type PromptAttachment } from '@/features/chat/promptAttachments';
 
 export const ThreadView = () => {
   const {
-    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings, skills, skillsLoading,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills,
+    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings, skills, skillsLoading, workspaceFiles, workspaceFilesLoading,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills, loadWorkspaceFiles,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
@@ -40,7 +42,8 @@ export const ThreadView = () => {
     }
 
     void loadSkills(selectedProjectId);
-  }, [loadSkills, selectedProjectId]);
+    void loadWorkspaceFiles(selectedProjectId);
+  }, [loadSkills, loadWorkspaceFiles, selectedProjectId]);
 
   if (connection.isBootstrapping) {
     return (
@@ -279,6 +282,8 @@ export const ThreadView = () => {
         isBrowserPreview={isBrowserPreview}
         skills={skills}
         skillsLoading={skillsLoading}
+        workspaceFiles={workspaceFiles}
+        workspaceFilesLoading={workspaceFilesLoading}
         onSend={sendPrompt}
         onCancel={cancelRun}
       />
@@ -289,7 +294,8 @@ export const ThreadView = () => {
 const MessageBubble = ({ message }: { message: Message }) => {
   const { selectedProjectId, projects, openExternalEditor, settings } = useAppStore();
   const isUser = message.role === 'user';
-  const hasText = message.content.trim().length > 0;
+  const parsedPrompt = parsePromptAttachments(message.content);
+  const hasText = parsedPrompt.prompt.trim().length > 0;
   const project = projects.find((item) => item.id === selectedProjectId);
 
   const openFileFromMessage = (match: FileReferenceMatch) => {
@@ -305,6 +311,14 @@ const MessageBubble = ({ message }: { message: Message }) => {
       path: absolutePath,
       line: match.line,
       column: match.column,
+      editorCommand: settings.editorPath,
+    });
+  };
+
+  const openAttachment = (attachment: PromptAttachment) => {
+    void openExternalEditor({
+      kind: 'file',
+      path: attachment.path,
       editorCommand: settings.editorPath,
     });
   };
@@ -331,9 +345,12 @@ const MessageBubble = ({ message }: { message: Message }) => {
         </div>
         {hasText && (
           <div className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
-            {renderMessageContent(message.content, openFileFromMessage)}
+            {renderMessageContent(parsedPrompt.prompt, openFileFromMessage)}
             {message.isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-stream-cursor" />}
           </div>
+        )}
+        {parsedPrompt.attachments.length > 0 && (
+          <AttachmentPills attachments={parsedPrompt.attachments} onOpenAttachment={openAttachment} />
         )}
         {message.toolProgress && message.toolProgress.length > 0 && (
           <ToolProgressList events={message.toolProgress} />
@@ -342,6 +359,28 @@ const MessageBubble = ({ message }: { message: Message }) => {
     </div>
   );
 };
+
+const AttachmentPills = ({
+  attachments,
+  onOpenAttachment,
+}: {
+  attachments: PromptAttachment[];
+  onOpenAttachment: (attachment: PromptAttachment) => void;
+}) => (
+  <div className="flex flex-wrap gap-2">
+    {attachments.map((attachment) => (
+      <button
+        key={`${attachment.kind}:${attachment.path}`}
+        type="button"
+        onClick={() => onOpenAttachment(attachment)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/40 px-2.5 py-1 text-[11px] text-secondary-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+      >
+        {attachment.kind === 'image' ? <ImagePlus className="h-3 w-3" /> : <Paperclip className="h-3 w-3" />}
+        <span className="font-medium">{attachment.name}</span>
+      </button>
+    ))}
+  </div>
+);
 
 
 type FileReferenceMatch = {
@@ -667,6 +706,8 @@ const PromptComposer = ({
   isBrowserPreview,
   skills,
   skillsLoading,
+  workspaceFiles,
+  workspaceFilesLoading,
   onSend,
   onCancel,
 }: {
@@ -677,49 +718,121 @@ const PromptComposer = ({
   isBrowserPreview: boolean;
   skills: Skill[];
   skillsLoading: boolean;
+  workspaceFiles: string[];
+  workspaceFilesLoading: boolean;
   onSend: (threadId: string, prompt: string) => Promise<void>;
   onCancel: () => Promise<void>;
 }) => {
+  const { createThread, openProjectPicker, setActiveView, toggleSettings } = useAppStore();
   const [value, setValue] = useState('');
+  const [draftAttachments, setDraftAttachments] = useState<PromptAttachment[]>([]);
+  const [isPickingAttachment, setIsPickingAttachment] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
-  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
-  const [dismissedSkillQuery, setDismissedSkillQuery] = useState<string | null>(null);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [dismissedSuggestionQuery, setDismissedSuggestionQuery] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contextUsage = summarizeContextUsage(threadMessages, threadModel);
-  const activeSkillQuery = findActiveSkillQuery(value, cursorPosition);
-  const skillQueryKey = activeSkillQuery ? `${activeSkillQuery.start}:${activeSkillQuery.query}` : null;
-  const normalizedSkillQuery = activeSkillQuery?.query.trim().toLowerCase() ?? '';
-  const skillSuggestions = getSkillSuggestions(skills, normalizedSkillQuery);
-  const isSkillMenuOpen = !isRunning &&
+  const activeQuery = findActiveComposerQuery(value, cursorPosition);
+  const suggestionQueryKey = activeQuery ? `${activeQuery.trigger}:${activeQuery.start}:${activeQuery.query}` : null;
+  const slashCommands = createSlashCommands({
+    createThread: () => void createThread(),
+    openProjectPicker: () => void openProjectPicker(),
+    openPlugins: () => setActiveView('plugins'),
+    openInbox: () => setActiveView('inbox'),
+    openSettings: () => toggleSettings(),
+  });
+  const suggestions = getComposerSuggestions(activeQuery, {
+    skills,
+    workspaceFiles,
+    slashCommands,
+  });
+  const isSuggestionMenuOpen = !isRunning &&
     !isBrowserPreview &&
-    activeSkillQuery !== null &&
-    dismissedSkillQuery !== skillQueryKey;
+    activeQuery !== null &&
+    dismissedSuggestionQuery !== suggestionQueryKey;
+  const isSuggestionMenuLoading = activeQuery?.trigger === '$'
+    ? skillsLoading
+    : activeQuery?.trigger === '@'
+      ? workspaceFilesLoading
+      : false;
+  const menuTitle = activeQuery?.trigger === '@'
+    ? 'Files'
+    : activeQuery?.trigger === '/'
+      ? 'Commands'
+      : 'Skills';
 
   useEffect(() => {
-    setSelectedSkillIndex(0);
-  }, [skillQueryKey]);
+    setSelectedSuggestionIndex(0);
+  }, [suggestionQueryKey]);
+
+  const canSubmit = !isRunning && !isBrowserPreview && (value.trim().length > 0 || draftAttachments.length > 0);
 
   const submit = () => {
-    const prompt = value.trim();
-    if (!prompt || isRunning || isBrowserPreview) {
+    if (!canSubmit) {
       return;
     }
 
+    const prompt = buildPromptWithAttachments(value, draftAttachments);
     setValue('');
+    setDraftAttachments([]);
     setCursorPosition(0);
-    setDismissedSkillQuery(null);
+    setDismissedSuggestionQuery(null);
     void onSend(threadId, prompt);
   };
 
-  const applySelectedSkill = (skill: Skill) => {
-    if (!activeSkillQuery) {
+  const pickAttachments = async (kind: PromptAttachment['kind']) => {
+    if (isRunning || isBrowserPreview || isPickingAttachment) {
       return;
     }
 
-    const nextValue = insertSelectedSkill(value, activeSkillQuery, skill.name);
+    setIsPickingAttachment(true);
+    try {
+      const paths = kind === 'image'
+        ? await agentHostClient.pickPromptImages()
+        : await agentHostClient.pickPromptFiles();
+      if (paths.length === 0) {
+        return;
+      }
+
+      setDraftAttachments((current) => mergePromptAttachments(
+        current,
+        paths.map((path) => ({
+          kind,
+          path,
+          name: getAttachmentName(path),
+        })),
+      ));
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } finally {
+      setIsPickingAttachment(false);
+    }
+  };
+
+  const removeDraftAttachment = (attachment: PromptAttachment) => {
+    setDraftAttachments((current) => current.filter((item) => (
+      item.kind !== attachment.kind || item.path !== attachment.path
+    )));
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const applySelectedSuggestion = (suggestion: ComposerSuggestion) => {
+    if (suggestion.action === 'execute') {
+      setValue('');
+      setCursorPosition(0);
+      setDismissedSuggestionQuery(null);
+      suggestion.execute();
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+
+    if (!activeQuery) {
+      return;
+    }
+
+    const nextValue = insertComposerSuggestion(value, activeQuery, suggestion.insertValue);
     setValue(nextValue);
-    setDismissedSkillQuery(null);
-    const nextCursorPosition = activeSkillQuery.start + skill.name.length + 2;
+    setDismissedSuggestionQuery(null);
+    const nextCursorPosition = activeQuery.start + suggestion.trigger.length + suggestion.insertValue.length + 1;
     setCursorPosition(nextCursorPosition);
 
     requestAnimationFrame(() => {
@@ -729,36 +842,36 @@ const PromptComposer = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (isSkillMenuOpen) {
+    if (isSuggestionMenuOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedSkillIndex((index) => (
-          skillSuggestions.length === 0
+        setSelectedSuggestionIndex((index) => (
+          suggestions.length === 0
             ? 0
-            : (index + 1) % skillSuggestions.length
+            : (index + 1) % suggestions.length
         ));
         return;
       }
 
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedSkillIndex((index) => (
-          skillSuggestions.length === 0
+        setSelectedSuggestionIndex((index) => (
+          suggestions.length === 0
             ? 0
-            : (index - 1 + skillSuggestions.length) % skillSuggestions.length
+            : (index - 1 + suggestions.length) % suggestions.length
         ));
         return;
       }
 
-      if ((e.key === 'Enter' || e.key === 'Tab') && skillSuggestions.length > 0) {
+      if ((e.key === 'Enter' || e.key === 'Tab') && suggestions.length > 0) {
         e.preventDefault();
-        applySelectedSkill(skillSuggestions[Math.min(selectedSkillIndex, skillSuggestions.length - 1)]);
+        applySelectedSuggestion(suggestions[Math.min(selectedSuggestionIndex, suggestions.length - 1)]);
         return;
       }
 
       if (e.key === 'Escape') {
         e.preventDefault();
-        setDismissedSkillQuery(skillQueryKey);
+        setDismissedSuggestionQuery(suggestionQueryKey);
         return;
       }
     }
@@ -771,108 +884,159 @@ const PromptComposer = ({
 
   return (
     <div className="border-t border-border px-4 py-3 surface-2">
-      <div className="relative flex items-end gap-2 rounded-lg border border-border bg-background p-2 focus-within:border-primary/40 transition-colors">
-        {isSkillMenuOpen && (
+      <div className="relative flex gap-3 rounded-lg border border-border bg-background p-2 focus-within:border-primary/40 transition-colors">
+        {isSuggestionMenuOpen && (
           <div className="absolute inset-x-2 bottom-full mb-2 overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
             <div className="border-b border-border/70 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Skills
+              {menuTitle}
             </div>
-            <div role="listbox" aria-label="Skills" className="max-h-72 overflow-y-auto py-1">
-              {skillsLoading ? (
-                <div className="px-3 py-2 text-sm text-muted-foreground">Loading skills…</div>
-              ) : skillSuggestions.length > 0 ? (
-                skillSuggestions.map((skill, index) => (
+            <div role="listbox" aria-label={menuTitle} className="max-h-72 overflow-y-auto py-1">
+              {isSuggestionMenuLoading ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  {activeQuery?.trigger === '@' ? 'Loading files…' : 'Loading skills…'}
+                </div>
+              ) : suggestions.length > 0 ? (
+                suggestions.map((suggestion, index) => (
                   <button
-                    key={`${skill.name}-${skill.filePath}`}
+                    key={suggestion.key}
                     type="button"
                     role="option"
-                    aria-selected={index === selectedSkillIndex}
+                    aria-selected={index === selectedSuggestionIndex}
                     onMouseDown={(event) => {
                       event.preventDefault();
-                      applySelectedSkill(skill);
+                      applySelectedSuggestion(suggestion);
                     }}
                     className={cn(
                       'flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition-colors',
-                      index === selectedSkillIndex
+                      index === selectedSuggestionIndex
                         ? 'bg-primary/10 text-foreground'
                         : 'text-secondary-foreground hover:bg-muted/70 hover:text-foreground',
                     )}
                   >
                     <span className="min-w-0">
-                      <span className="block font-mono text-sm text-foreground">${skill.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{skill.source}</span>
+                      <span className="block font-mono text-sm text-foreground">{suggestion.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{suggestion.description}</span>
                     </span>
                     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      Enter
+                      {suggestion.badge}
                     </span>
                   </button>
                 ))
               ) : (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
-                  {normalizedSkillQuery
-                    ? `No skills match "$${normalizedSkillQuery}".`
-                    : 'No skills discovered for this project.'}
+                  {getEmptySuggestionText(activeQuery)}
                 </div>
               )}
             </div>
           </div>
         )}
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setCursorPosition(e.target.selectionStart ?? e.target.value.length);
-            setDismissedSkillQuery(null);
-          }}
-          onKeyDown={handleKeyDown}
-          onClick={(e) => {
-            setCursorPosition(e.currentTarget.selectionStart ?? 0);
-          }}
-          onKeyUp={(e) => {
-            setCursorPosition(e.currentTarget.selectionStart ?? 0);
-          }}
-          onSelect={(e) => {
-            setCursorPosition(e.currentTarget.selectionStart ?? 0);
-          }}
-          placeholder={
-            isBrowserPreview
-              ? 'Browser preview is mock-only. Start the Tauri desktop app to chat for real.'
-              : isRunning
-                ? 'ClawSharp is working…'
-                : 'Ask ClawSharp to work on this repository.'
-          }
-          rows={3}
-          className="flex-1 resize-none bg-transparent text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none min-h-[72px] max-h-[220px]"
-          disabled={isRunning || isBrowserPreview}
-        />
-        <button
-          disabled={isBrowserPreview || (!isRunning && value.trim().length === 0)}
-          onClick={() => {
-            if (isRunning) {
-              void onCancel();
-              return;
-            }
-
-            submit();
-          }}
-          className={cn(
-            'flex items-center justify-center rounded-md p-1.5 text-primary-foreground transition-colors',
-            isRunning
-              ? 'bg-status-running hover:bg-status-running/80'
-              : value.trim().length > 0
-                ? 'bg-primary hover:bg-primary/90'
-                : 'bg-primary/40 cursor-not-allowed',
+        <div className="min-w-0 flex-1 space-y-2">
+          {draftAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {draftAttachments.map((attachment) => (
+                <span
+                  key={`${attachment.kind}:${attachment.path}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/40 px-2.5 py-1 text-[11px] text-secondary-foreground"
+                >
+                  {attachment.kind === 'image' ? <ImagePlus className="h-3 w-3" /> : <Paperclip className="h-3 w-3" />}
+                  <span className="font-medium">{attachment.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeDraftAttachment(attachment)}
+                    className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label={`Remove ${attachment.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
-        >
-          {isRunning ? <Square className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
-        </button>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setCursorPosition(e.target.selectionStart ?? e.target.value.length);
+              setDismissedSuggestionQuery(null);
+            }}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => {
+              setCursorPosition(e.currentTarget.selectionStart ?? 0);
+            }}
+            onKeyUp={(e) => {
+              setCursorPosition(e.currentTarget.selectionStart ?? 0);
+            }}
+            onSelect={(e) => {
+              setCursorPosition(e.currentTarget.selectionStart ?? 0);
+            }}
+            placeholder={
+              isBrowserPreview
+                ? 'Browser preview is mock-only. Start the Tauri desktop app to chat for real.'
+                : isRunning
+                  ? 'ClawSharp is working…'
+                  : 'Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills.'
+            }
+            rows={3}
+            className="w-full resize-none bg-transparent text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none min-h-[72px] max-h-[220px]"
+            disabled={isRunning || isBrowserPreview}
+          />
+        </div>
+        <div className="flex shrink-0 items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              disabled={isBrowserPreview || isRunning || isPickingAttachment}
+              onClick={() => void pickAttachments('image')}
+              aria-label="Attach photos"
+              className={cn(
+                'rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground',
+                (isBrowserPreview || isRunning || isPickingAttachment) && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={isBrowserPreview || isRunning || isPickingAttachment}
+              onClick={() => void pickAttachments('file')}
+              aria-label="Attach files"
+              className={cn(
+                'rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground',
+                (isBrowserPreview || isRunning || isPickingAttachment) && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <button
+            disabled={!isRunning && !canSubmit}
+            onClick={() => {
+              if (isRunning) {
+                void onCancel();
+                return;
+              }
+
+              submit();
+            }}
+            className={cn(
+              'flex items-center justify-center rounded-md p-1.5 text-primary-foreground transition-colors',
+              isRunning
+                ? 'bg-status-running hover:bg-status-running/80'
+                : canSubmit
+                  ? 'bg-primary hover:bg-primary/90'
+                  : 'bg-primary/40 cursor-not-allowed',
+            )}
+          >
+            {isRunning ? <Square className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-3">
         <p className="text-[10px] text-muted-foreground">
           {isBrowserPreview
             ? 'This browser preview is read-only. Use `npm run dev` or `npm run dev:codex` for the real desktop runtime.'
-            : `Shift+Enter for newline · ${isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}`}
+            : `Shift+Enter for newline · Use / for actions, @ for workspace files, buttons for photos/files, and $ for skills · ${isRunning ? 'Cancel the current run to send another prompt.' : 'Streaming responses and tool progress are live.'}`}
         </p>
         {!isBrowserPreview && (
           <ContextUsageBadge
@@ -888,53 +1052,235 @@ const PromptComposer = ({
   );
 };
 
-type ActiveSkillQuery = {
+function mergePromptAttachments(
+  current: PromptAttachment[],
+  next: PromptAttachment[],
+) {
+  const merged = [...current];
+
+  for (const attachment of next) {
+    if (merged.some((item) => item.kind === attachment.kind && item.path === attachment.path)) {
+      continue;
+    }
+
+    merged.push(attachment);
+  }
+
+  return merged;
+}
+
+function getAttachmentName(path: string) {
+  const normalized = path.replace(/\\/g, '/');
+  return normalized.split('/').pop() || normalized;
+}
+
+type ComposerQuery = {
+  trigger: '$' | '@' | '/';
   query: string;
   start: number;
   end: number;
 };
 
-function findActiveSkillQuery(value: string, selectionStart: number | null): ActiveSkillQuery | null {
+type SlashCommand = {
+  id: string;
+  label: string;
+  description: string;
+  execute: () => void;
+};
+
+type ComposerSuggestion = {
+  key: string;
+  trigger: '$' | '@' | '/';
+  label: string;
+  description: string;
+  badge: string;
+  action: 'insert' | 'execute';
+  insertValue: string;
+  execute: () => void;
+};
+
+function findActiveComposerQuery(value: string, selectionStart: number | null): ComposerQuery | null {
   if (selectionStart === null) {
     return null;
   }
 
   const beforeCursor = value.slice(0, selectionStart);
-  const match = /(^|[\s(])\$(?<query>[A-Za-z0-9:_-]*)$/.exec(beforeCursor);
-  if (!match) {
+  const patterns: Array<{ trigger: ComposerQuery['trigger']; pattern: RegExp }> = [
+    { trigger: '$', pattern: /(^|[\s(])\$(?<query>[A-Za-z0-9:_-]*)$/ },
+    { trigger: '@', pattern: /(^|[\s(])@(?<query>[A-Za-z0-9_./-]*)$/ },
+    { trigger: '/', pattern: /(^|[\s(])\/(?<query>[A-Za-z0-9-]*)$/ },
+  ];
+
+  const matches = patterns
+    .map(({ trigger, pattern }) => {
+      const match = pattern.exec(beforeCursor);
+      if (!match) {
+        return null;
+      }
+
+      const query = match.groups?.query ?? '';
+      return {
+        trigger,
+        query,
+        start: beforeCursor.length - query.length - 1,
+        end: selectionStart,
+      } satisfies ComposerQuery;
+    })
+    .filter((match): match is ComposerQuery => match !== null);
+
+  if (matches.length === 0) {
     return null;
   }
 
-  const query = match.groups?.query ?? '';
-  const start = beforeCursor.length - query.length - 1;
-  return {
-    query,
-    start,
-    end: selectionStart,
-  };
+  return matches.sort((left, right) => right.start - left.start)[0];
 }
 
-function getSkillSuggestions(skills: Skill[], query: string): Skill[] {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  return [...skills]
-    .filter((skill) => normalizedQuery.length === 0 || skill.name.toLowerCase().includes(normalizedQuery))
-    .sort((left, right) => {
-      const leftName = left.name.toLowerCase();
-      const rightName = right.name.toLowerCase();
-      const leftStartsWith = normalizedQuery.length > 0 && leftName.startsWith(normalizedQuery);
-      const rightStartsWith = normalizedQuery.length > 0 && rightName.startsWith(normalizedQuery);
-
-      if (leftStartsWith !== rightStartsWith) {
-        return leftStartsWith ? -1 : 1;
-      }
-
-      return leftName.localeCompare(rightName);
-    });
+function createSlashCommands(actions: {
+  createThread: () => void;
+  openProjectPicker: () => void;
+  openPlugins: () => void;
+  openInbox: () => void;
+  openSettings: () => void;
+}): SlashCommand[] {
+  return [
+    {
+      id: 'new-thread',
+      label: '/new-thread',
+      description: 'Create a new thread in the current project.',
+      execute: actions.createThread,
+    },
+    {
+      id: 'open-project',
+      label: '/open-project',
+      description: 'Open another local repository.',
+      execute: actions.openProjectPicker,
+    },
+    {
+      id: 'plugins',
+      label: '/plugins',
+      description: 'Open the Plugins panel.',
+      execute: actions.openPlugins,
+    },
+    {
+      id: 'inbox',
+      label: '/inbox',
+      description: 'Open the inbox and pending approvals.',
+      execute: actions.openInbox,
+    },
+    {
+      id: 'settings',
+      label: '/settings',
+      description: 'Open desktop runtime settings.',
+      execute: actions.openSettings,
+    },
+  ];
 }
 
-function insertSelectedSkill(value: string, query: ActiveSkillQuery, skillName: string): string {
-  return `${value.slice(0, query.start)}$${skillName} ${value.slice(query.end)}`;
+function getComposerSuggestions(
+  activeQuery: ComposerQuery | null,
+  options: {
+    skills: Skill[];
+    workspaceFiles: string[];
+    slashCommands: SlashCommand[];
+  },
+): ComposerSuggestion[] {
+  if (!activeQuery) {
+    return [];
+  }
+
+  const normalizedQuery = activeQuery.query.trim().toLowerCase();
+  switch (activeQuery.trigger) {
+    case '$':
+      return [...options.skills]
+        .filter((skill) => normalizedQuery.length === 0 || skill.name.toLowerCase().includes(normalizedQuery))
+        .sort((left, right) => compareSuggestionLabels(left.name, right.name, normalizedQuery))
+        .slice(0, 12)
+        .map((skill) => ({
+          key: `skill:${skill.name}`,
+          trigger: '$',
+          label: `$${skill.name}`,
+          description: skill.source,
+          badge: 'Enter',
+          action: 'insert',
+          insertValue: skill.name,
+          execute: () => undefined,
+        }));
+    case '@':
+      return [...options.workspaceFiles]
+        .filter((filePath) => normalizedQuery.length === 0 || filePath.toLowerCase().includes(normalizedQuery))
+        .sort((left, right) => compareSuggestionLabels(left, right, normalizedQuery))
+        .slice(0, 14)
+        .map((filePath) => ({
+          key: `file:${filePath}`,
+          trigger: '@',
+          label: `@${filePath}`,
+          description: filePath.split('/').slice(0, -1).join('/') || 'workspace root',
+          badge: 'Attach',
+          action: 'insert',
+          insertValue: filePath,
+          execute: () => undefined,
+        }));
+    case '/':
+      return options.slashCommands
+        .filter((command) => normalizedQuery.length === 0 || command.label.slice(1).toLowerCase().includes(normalizedQuery))
+        .sort((left, right) => compareSuggestionLabels(left.label.slice(1), right.label.slice(1), normalizedQuery))
+        .map((command) => ({
+          key: `slash:${command.id}`,
+          trigger: '/',
+          label: command.label,
+          description: command.description,
+          badge: 'Run',
+          action: 'execute',
+          insertValue: command.label.slice(1),
+          execute: command.execute,
+        }));
+    default:
+      return [];
+  }
+}
+
+function compareSuggestionLabels(left: string, right: string, normalizedQuery: string) {
+  const leftLabel = left.toLowerCase();
+  const rightLabel = right.toLowerCase();
+  const leftStartsWith = normalizedQuery.length > 0 && leftLabel.startsWith(normalizedQuery);
+  const rightStartsWith = normalizedQuery.length > 0 && rightLabel.startsWith(normalizedQuery);
+
+  if (leftStartsWith !== rightStartsWith) {
+    return leftStartsWith ? -1 : 1;
+  }
+
+  if (leftLabel.length !== rightLabel.length) {
+    return leftLabel.length - rightLabel.length;
+  }
+
+  return leftLabel.localeCompare(rightLabel);
+}
+
+function insertComposerSuggestion(value: string, query: ComposerQuery, insertValue: string): string {
+  return `${value.slice(0, query.start)}${query.trigger}${insertValue} ${value.slice(query.end)}`;
+}
+
+function getEmptySuggestionText(activeQuery: ComposerQuery | null): string {
+  if (!activeQuery) {
+    return 'No suggestions available.';
+  }
+
+  const normalizedQuery = activeQuery.query.trim();
+  switch (activeQuery.trigger) {
+    case '@':
+      return normalizedQuery
+        ? `No files match "@${normalizedQuery}".`
+        : 'No files discovered for this workspace.';
+    case '/':
+      return normalizedQuery
+        ? `No slash command matches "/${normalizedQuery}".`
+        : 'No slash commands available.';
+    case '$':
+    default:
+      return normalizedQuery
+        ? `No skills match "$${normalizedQuery}".`
+        : 'No skills discovered for this project.';
+  }
 }
 
 const ContextUsageBadge = ({

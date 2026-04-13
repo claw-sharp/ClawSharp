@@ -569,6 +569,17 @@ public static class QueryModelHttpRequestFactory
             json["structured_output"] = JsonNode.Parse(block.StructuredOutput);
         }
 
+        if (block.ImageSource is not null &&
+            string.Equals(block.Type, "image", StringComparison.Ordinal))
+        {
+            json["source"] = new JsonObject
+            {
+                ["type"] = block.ImageSource.Type,
+                ["media_type"] = block.ImageSource.MediaType,
+                ["data"] = block.ImageSource.Data
+            };
+        }
+
         if (block.CacheControl is not null)
         {
             json["cache_control"] = new JsonObject

@@ -15,12 +15,12 @@ internal sealed class PromptSkillReferenceService
         IReadOnlyList<DiscoveredSkill> discoveredSkills,
         CancellationToken cancellationToken = default)
     {
-        if (discoveredSkills.Count == 0 || string.IsNullOrWhiteSpace(request.UserInput))
+        if (discoveredSkills.Count == 0 || string.IsNullOrWhiteSpace(request.EffectiveUserInput))
         {
             return request;
         }
 
-        var referencedSkillNames = SkillReferencePattern.Matches(request.UserInput)
+        var referencedSkillNames = SkillReferencePattern.Matches(request.EffectiveUserInput)
             .Select(static match => match.Groups["name"].Value)
             .Where(static name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
