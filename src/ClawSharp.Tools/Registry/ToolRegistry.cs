@@ -27,6 +27,7 @@ public sealed class ToolRegistry
     private readonly Dictionary<string, IClawSharpTool> _dynamicToolsByLookupName =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string>? _allowedToolNames;
+    private readonly HashSet<string>? _excludedToolNames;
 
     public string? AgentId { get; }
 
@@ -46,6 +47,7 @@ public sealed class ToolRegistry
         ClawSharp.Core.IMcpLifecycleManager? mcpLifecycle = null,
         ClawSharp.Core.ISettingsStore? settingsStore = null,
         IReadOnlySet<string>? allowedToolNames = null,
+        IReadOnlySet<string>? excludedToolNames = null,
         string? agentId = null)
     {
         WorkspaceRoot = workspaceRoot;
@@ -61,6 +63,9 @@ public sealed class ToolRegistry
         _allowedToolNames = allowedToolNames is null
             ? null
             : new HashSet<string>(allowedToolNames, StringComparer.OrdinalIgnoreCase);
+        _excludedToolNames = excludedToolNames is null
+            ? null
+            : new HashSet<string>(excludedToolNames, StringComparer.OrdinalIgnoreCase);
         WorktreeService = worktreeService ?? new ClawSharp.Core.Worktree.NullWorktreeService();
         McpResources = mcpResources ?? new ClawSharp.Core.McpResourceCatalog();
         McpLifecycle = mcpLifecycle;
@@ -182,6 +187,12 @@ public sealed class ToolRegistry
     {
         if (_allowedToolNames is not null &&
             !_allowedToolNames.Contains(tool.Descriptor.Name))
+        {
+            return;
+        }
+
+        if (_excludedToolNames is not null &&
+            _excludedToolNames.Contains(tool.Descriptor.Name))
         {
             return;
         }

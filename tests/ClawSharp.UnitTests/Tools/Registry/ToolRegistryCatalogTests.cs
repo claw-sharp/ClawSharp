@@ -35,6 +35,20 @@ public sealed class ToolRegistryCatalogTests
     }
 
     [Fact]
+    public void All_Filters_BuiltIn_Tools_Matched_By_Excluded_Tool_Names()
+    {
+        var registry = new ToolRegistry(
+            Environment.CurrentDirectory,
+            new TaskRegistry(),
+            excludedToolNames: new HashSet<string>(["AskUserQuestion"], StringComparer.OrdinalIgnoreCase));
+
+        var names = registry.All.Select(static tool => tool.Name).ToArray();
+
+        Assert.DoesNotContain("AskUserQuestion", names);
+        Assert.Equal(["Agent", "Bash"], names.Take(2));
+    }
+
+    [Fact]
     public void All_Filters_Mcp_Tools_By_Server_Level_Deny_Rule()
     {
         var registry = new ToolRegistry(

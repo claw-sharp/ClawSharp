@@ -16,3 +16,4 @@ apps/desktop/src-tauri/binaries/
 scratch/updater.key.pub
 scratch/updater.key
 /keys/
+/.clawsharp/

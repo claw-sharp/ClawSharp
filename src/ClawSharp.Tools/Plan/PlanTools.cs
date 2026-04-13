@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
+using ClawSharp.Tools.Agent;
 
 namespace ClawSharp.Tools.Plan;
 
@@ -40,15 +41,24 @@ internal sealed class EnterPlanModeTool : BaseTool
             };
         });
 
+        var canAskUserQuestion = (context.AvailableTools ?? [])
+            .Any(
+            static tool => string.Equals(tool.Name, AskUserQuestionTool.ToolName, StringComparison.Ordinal));
+        var steps = new List<string>
+        {
+            "1. Thoroughly explore the codebase to understand existing patterns",
+            "2. Identify similar features and architectural approaches",
+            "3. Consider multiple approaches and their trade-offs",
+            canAskUserQuestion
+                ? "4. Use AskUserQuestion if you need to clarify the approach"
+                : "4. If you need clarification, record the open question in your plan instead of calling AskUserQuestion",
+            "5. Design a concrete implementation strategy",
+            "6. When ready, use ExitPlanMode to present your plan for approval"
+        };
         var message = "Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.\n\n" +
                       "In plan mode, you should:\n" +
-                      "1. Thoroughly explore the codebase to understand existing patterns\n" +
-                      "2. Identify similar features and architectural approaches\n" +
-                      "3. Consider multiple approaches and their trade-offs\n" +
-                      "4. Use AskUserQuestion if you need to clarify the approach\n" +
-                      "5. Design a concrete implementation strategy\n" +
-                      "6. When ready, use ExitPlanMode to present your plan for approval\n\n" +
-                      "Remember: DO NOT write or edit any files yet. This is a read-only exploration and planning phase.";
+                      string.Join("\n", steps) +
+                      "\n\nRemember: DO NOT write or edit any files yet. This is a read-only exploration and planning phase.";
 
         return Task.FromResult(Success(message, new JsonObject { ["message"] = message }));
     }

@@ -10,4 +10,5 @@ public enum ClawSharpApplicationInitializationMode
 
 public sealed record ClawSharpApplicationFactoryOptions(
     IPermissionPrompter? PermissionPrompter = null,
-    ClawSharpApplicationInitializationMode InitializationMode = ClawSharpApplicationInitializationMode.Eager);
+    ClawSharpApplicationInitializationMode InitializationMode = ClawSharpApplicationInitializationMode.Eager,
+    IReadOnlySet<string>? ExcludedToolNames = null);

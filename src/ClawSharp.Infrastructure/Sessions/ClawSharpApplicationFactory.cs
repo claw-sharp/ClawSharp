@@ -248,7 +248,8 @@ public static class ClawSharpApplicationFactory
                         worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(),
                         mcpResources: mcpResourceCatalog,
                         mcpLifecycle: mcpLifecycleManager,
-                        settingsStore: settingsStore));
+                        settingsStore: settingsStore,
+                        excludedToolNames: options?.ExcludedToolNames));
                 var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
                 var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
                 var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
