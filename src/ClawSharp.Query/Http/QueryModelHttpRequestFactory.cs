@@ -319,7 +319,45 @@ public static class QueryModelHttpRequestFactory
                         .Where(block => string.Equals(block.Type, "text", StringComparison.Ordinal))
                         .Select(block => block.Text)
                         .Where(text => !string.IsNullOrWhiteSpace(text)));
-                if (!string.IsNullOrWhiteSpace(userText))
+
+                var imageParts = message.Content
+                    .Where(block =>
+                        string.Equals(block.Type, "image", StringComparison.Ordinal) &&
+                        block.ImageSource is not null &&
+                        !string.IsNullOrWhiteSpace(block.ImageSource.MediaType) &&
+                        !string.IsNullOrWhiteSpace(block.ImageSource.Data))
+                    .Select(
+                        block => new JsonObject
+                        {
+                            ["type"] = "image_url",
+                            ["image_url"] = new JsonObject
+                            {
+                                ["url"] = BuildDataUrl(block.ImageSource!.MediaType, block.ImageSource.Data)
+                            }
+                        })
+                    .Cast<JsonNode>()
+                    .ToArray();
+
+                if (imageParts.Length > 0)
+                {
+                    var userParts = new List<JsonNode>();
+                    if (!string.IsNullOrWhiteSpace(userText))
+                    {
+                        userParts.Add(new JsonObject
+                        {
+                            ["type"] = "text",
+                            ["text"] = userText
+                        });
+                    }
+
+                    userParts.AddRange(imageParts);
+                    yield return new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray(userParts.ToArray())
+                    };
+                }
+                else if (!string.IsNullOrWhiteSpace(userText))
                 {
                     yield return new JsonObject
                     {
@@ -385,7 +423,7 @@ public static class QueryModelHttpRequestFactory
         {
             if (string.Equals(message.Role, "user", StringComparison.Ordinal))
             {
-                var textParts = message.Content
+                var contentParts = message.Content
                     .Where(block => string.Equals(block.Type, "text", StringComparison.Ordinal))
                     .Select(
                         block => new JsonObject
@@ -394,14 +432,27 @@ public static class QueryModelHttpRequestFactory
                             ["text"] = block.Text ?? string.Empty
                         })
                     .Cast<JsonNode>()
+                    .Concat(
+                        message.Content
+                            .Where(block =>
+                                string.Equals(block.Type, "image", StringComparison.Ordinal) &&
+                                block.ImageSource is not null &&
+                                !string.IsNullOrWhiteSpace(block.ImageSource.MediaType) &&
+                                !string.IsNullOrWhiteSpace(block.ImageSource.Data))
+                            .Select(
+                                block => (JsonNode)new JsonObject
+                                {
+                                    ["type"] = "input_image",
+                                    ["image_url"] = BuildDataUrl(block.ImageSource!.MediaType, block.ImageSource.Data)
+                                }))
                     .ToArray();
-                if (textParts.Length > 0)
+                if (contentParts.Length > 0)
                 {
                     yield return new JsonObject
                     {
                         ["type"] = "message",
                         ["role"] = "user",
-                        ["content"] = new JsonArray(textParts)
+                        ["content"] = new JsonArray(contentParts)
                     };
                 }
 
@@ -472,6 +523,11 @@ public static class QueryModelHttpRequestFactory
         }
 
         return ($"fc_{value}", value);
+    }
+
+    private static string BuildDataUrl(string mediaType, string base64Data)
+    {
+        return $"data:{mediaType};base64,{base64Data}";
     }
 
     private static string BuildOpenAiChatCompletionsUrl(QueryModelHttpClientConfig config, string model)

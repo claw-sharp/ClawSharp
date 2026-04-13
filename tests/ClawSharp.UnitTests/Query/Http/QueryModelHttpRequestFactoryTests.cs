@@ -40,6 +40,47 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Shapes_Anthropic_User_Image_Content_As_Native_Image_Block()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-anthropic-image",
+                "claude-haiku-4-5-20251001",
+                [new QuerySystemPromptBlock("system")],
+                [
+                    new QueryRequestMessage(
+                        "user",
+                        [
+                            new QueryRequestContentBlock("text", Text: "Describe this picture"),
+                            new QueryRequestContentBlock(
+                                "image",
+                                ImageSource: new QueryRequestImageSource("base64", "image/png", "YWJjMTIz"))
+                        ])
+                ],
+                [],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig("https://api.anthropic.test", ApiKey: "test-key"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var userMessage = body["messages"]![0]!.AsObject();
+        var content = userMessage["content"]!.AsArray();
+
+        Assert.Equal("user", userMessage["role"]?.GetValue<string>());
+        Assert.Equal("text", content[0]!["type"]?.GetValue<string>());
+        Assert.Equal("Describe this picture", content[0]!["text"]?.GetValue<string>());
+        Assert.Equal("image", content[1]!["type"]?.GetValue<string>());
+        Assert.Equal("base64", content[1]!["source"]!["type"]?.GetValue<string>());
+        Assert.Equal("image/png", content[1]!["source"]!["media_type"]?.GetValue<string>());
+        Assert.Equal("YWJjMTIz", content[1]!["source"]!["data"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void CreateRequestBody_Includes_MaxTokens_For_Default_Builder_Request()
     {
         var builder = new QueryRequestBuilder();
@@ -103,6 +144,51 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Shapes_OpenAi_User_Image_Content_As_ImageUrl_Parts()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-openai-image",
+                "gpt-4o",
+                [new QuerySystemPromptBlock("system")],
+                [
+                    new QueryRequestMessage(
+                        "user",
+                        [
+                            new QueryRequestContentBlock("text", Text: "Describe this picture"),
+                            new QueryRequestContentBlock(
+                                "image",
+                                ImageSource: new QueryRequestImageSource("base64", "image/png", "YWJjMTIz"))
+                        ])
+                ],
+                [],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                "https://api.openai.test/v1",
+                ApiKey: "openai-key",
+                TransportKind: ModelTransportKind.OpenAiChatCompletions,
+                ProviderKind: ApiProviderKind.OpenAi),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var userMessage = body["messages"]![1]!.AsObject();
+        var content = userMessage["content"]!.AsArray();
+
+        Assert.Equal("user", userMessage["role"]?.GetValue<string>());
+        Assert.Equal("text", content[0]!["type"]?.GetValue<string>());
+        Assert.Equal("Describe this picture", content[0]!["text"]?.GetValue<string>());
+        Assert.Equal("image_url", content[1]!["type"]?.GetValue<string>());
+        Assert.Equal(
+            "data:image/png;base64,YWJjMTIz",
+            content[1]!["image_url"]!["url"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task CreateStreamingRequest_Shapes_Codex_Request()
     {
         var request = CreateStreamingRequest();
@@ -131,6 +217,50 @@ public sealed class QueryModelHttpRequestFactoryTests
         Assert.Equal("auto", body["tool_choice"]?.GetValue<string>());
         Assert.True(body["parallel_tool_calls"]?.GetValue<bool>());
         Assert.NotNull(body["input"]);
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Shapes_Codex_User_Image_Content_As_InputImage_Parts()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-image",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [
+                    new QueryRequestMessage(
+                        "user",
+                        [
+                            new QueryRequestContentBlock("text", Text: "Describe this picture"),
+                            new QueryRequestContentBlock(
+                                "image",
+                                ImageSource: new QueryRequestImageSource("base64", "image/png", "YWJjMTIz"))
+                        ])
+                ],
+                [],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var inputMessage = body["input"]![0]!.AsObject();
+        var content = inputMessage["content"]!.AsArray();
+
+        Assert.Equal("message", inputMessage["type"]?.GetValue<string>());
+        Assert.Equal("user", inputMessage["role"]?.GetValue<string>());
+        Assert.Equal("input_text", content[0]!["type"]?.GetValue<string>());
+        Assert.Equal("Describe this picture", content[0]!["text"]?.GetValue<string>());
+        Assert.Equal("input_image", content[1]!["type"]?.GetValue<string>());
+        Assert.Equal("data:image/png;base64,YWJjMTIz", content[1]!["image_url"]?.GetValue<string>());
     }
 
     [Fact]
