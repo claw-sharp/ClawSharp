@@ -67,6 +67,107 @@ public sealed class SearchToolTests
     }
 
     [Fact]
+    public async Task GlobTool_Accepts_Path_Only_When_Path_Contains_Glob_Wildcards()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-glob-path-only-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var grammarDir = Path.Combine(tempDir, "grammar", "topic");
+            Directory.CreateDirectory(grammarDir);
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "prefix.md"), "alpha");
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "prelude.md"), "beta");
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "other.txt"), "gamma");
+
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+
+            var result = await registry.ExecuteAsync(
+                "Glob",
+                $$"""{"path":"{{Path.Combine(tempDir, "grammar", "**", "pre*.md").Replace("\\", "\\\\")}}"}""",
+                session,
+                new ClawSharpSettings());
+
+            Assert.True(result.Success, result.Output);
+            var data = Assert.IsType<JsonObject>(result.StructuredOutput);
+            var filenames = Assert.IsType<JsonArray>(data["filenames"]);
+            Assert.Equal(2, data["numFiles"]?.GetValue<int>());
+            Assert.Contains("grammar/topic/prefix.md", filenames.Select(item => item!.GetValue<string>()));
+            Assert.Contains("grammar/topic/prelude.md", filenames.Select(item => item!.GetValue<string>()));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task GlobTool_Accepts_Backslash_Patterns_Across_Platforms()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-glob-backslash-pattern-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempDir, "src", "nested"));
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "src", "one.ts"), "alpha");
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "src", "nested", "two.ts"), "beta");
+
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+
+            var result = await registry.ExecuteAsync(
+                "Glob",
+                """{"pattern":"src\\**\\*.ts"}""",
+                session,
+                new ClawSharpSettings());
+
+            Assert.True(result.Success, result.Output);
+            var data = Assert.IsType<JsonObject>(result.StructuredOutput);
+            var filenames = Assert.IsType<JsonArray>(data["filenames"]);
+            Assert.Contains("src/one.ts", filenames.Select(item => item!.GetValue<string>()));
+            Assert.Contains("src/nested/two.ts", filenames.Select(item => item!.GetValue<string>()));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void GlobTool_RenderToolUseMessage_Parses_Windows_Drive_Path_Glob()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        Assert.True(registry.TryResolve("Glob", out var tool));
+
+        var message = tool!.RenderToolUseMessage(
+            """{"path":"C:\\Users\\hadoan\\Documents\\GitHub\\german-b2\\grammar\\**\\pre*.md"}""");
+
+        Assert.Contains("pattern: \"**/pre*.md\"", message, StringComparison.Ordinal);
+        Assert.Contains("path: \"C:\\\\Users\\\\hadoan\\\\Documents\\\\GitHub\\\\german-b2\\\\grammar\"", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GlobTool_RenderToolUseMessage_Parses_Unc_Path_Glob()
+    {
+        var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());
+        Assert.True(registry.TryResolve("Glob", out var tool));
+
+        var message = tool!.RenderToolUseMessage(
+            """{"path":"\\\\server\\share\\german-b2\\grammar\\**\\pre*.md"}""");
+
+        Assert.Contains("pattern: \"**/pre*.md\"", message, StringComparison.Ordinal);
+        Assert.Contains("path: \"\\\\\\\\server\\\\share\\\\german-b2\\\\grammar\"", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GrepTool_Supports_Content_Files_And_Count_Modes()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-grep-tests", Guid.NewGuid().ToString("N"));

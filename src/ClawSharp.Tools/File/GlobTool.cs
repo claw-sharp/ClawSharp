@@ -179,15 +179,146 @@ internal sealed class GlobTool : BaseTool
             return false;
         }
 
-        var pattern = jsonObject["pattern"]?.GetValue<string>();
+        var pattern = jsonObject["pattern"]?.GetValue<string>()?.Trim();
+        var path = jsonObject["path"]?.GetValue<string>()?.Trim();
+        if (string.IsNullOrWhiteSpace(pattern) &&
+            TryDeriveSearchPathAndPattern(path, out var derivedPath, out var derivedPattern))
+        {
+            input = new GlobInput(derivedPattern, derivedPath);
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(pattern))
         {
             errorMessage = "Glob requires a non-empty pattern. Provide a concrete glob such as \"**/*\", \"*.cs\", or \"src/**/*.ts\".";
             return false;
         }
 
-        input = new GlobInput(pattern, jsonObject["path"]?.GetValue<string>());
+        if (string.IsNullOrWhiteSpace(path) &&
+            TryDeriveSearchPathAndPattern(pattern, out var normalizedPath, out var normalizedPattern) &&
+            !string.IsNullOrWhiteSpace(normalizedPath))
+        {
+            input = new GlobInput(normalizedPattern, normalizedPath);
+            return true;
+        }
+
+        input = new GlobInput(NormalizeGlobPattern(pattern), path);
         return true;
+    }
+
+    private static bool TryDeriveSearchPathAndPattern(string? path, out string? searchPath, out string pattern)
+    {
+        searchPath = null;
+        pattern = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var normalizedPath = path.Trim();
+        var firstWildcardIndex = IndexOfFirstWildcard(normalizedPath);
+        if (firstWildcardIndex < 0)
+        {
+            return false;
+        }
+
+        var separatorIndex = normalizedPath[..firstWildcardIndex].LastIndexOfAny(['/', '\\']);
+        if (separatorIndex < 0)
+        {
+            pattern = NormalizeGlobPattern(normalizedPath);
+            return true;
+        }
+
+        var root = GetLogicalRoot(normalizedPath);
+        searchPath = !string.IsNullOrEmpty(root) && separatorIndex < root.Length
+            ? root
+            : normalizedPath[..separatorIndex];
+        if (string.IsNullOrWhiteSpace(searchPath))
+        {
+            searchPath = root;
+        }
+
+        pattern = NormalizeGlobPattern(normalizedPath[(separatorIndex + 1)..]);
+        return !string.IsNullOrWhiteSpace(pattern);
+    }
+
+    private static string NormalizeGlobPattern(string pattern)
+    {
+        return pattern.Replace('\\', '/');
+    }
+
+    private static int IndexOfFirstWildcard(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            switch (value[index])
+            {
+                case '*':
+                case '?':
+                case '[':
+                case '{':
+                    return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string? GetLogicalRoot(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        if (path.Length >= 3 &&
+            char.IsLetter(path[0]) &&
+            path[1] == ':' &&
+            IsDirectorySeparator(path[2]))
+        {
+            return path[..3];
+        }
+
+        if (path.Length >= 2 &&
+            IsDirectorySeparator(path[0]) &&
+            IsDirectorySeparator(path[1]))
+        {
+            var serverStart = 2;
+            var serverEnd = FindNextSeparator(path, serverStart);
+            if (serverEnd < 0)
+            {
+                return path;
+            }
+
+            var shareStart = serverEnd + 1;
+            if (shareStart >= path.Length)
+            {
+                return path[..shareStart];
+            }
+
+            var shareEnd = FindNextSeparator(path, shareStart);
+            return shareEnd < 0 ? path : path[..(shareEnd + 1)];
+        }
+
+        return IsDirectorySeparator(path[0]) ? path[..1] : null;
+    }
+
+    private static int FindNextSeparator(string path, int startIndex)
+    {
+        for (var index = startIndex; index < path.Length; index++)
+        {
+            if (IsDirectorySeparator(path[index]))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsDirectorySeparator(char value)
+    {
+        return value is '/' or '\\';
     }
 
     private static string ToDisplayPath(string workspaceRoot, string path)

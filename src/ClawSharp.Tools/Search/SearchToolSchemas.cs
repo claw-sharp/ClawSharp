@@ -8,12 +8,11 @@ internal static class SearchToolSchemas
         ToolJsonSchemaFactory.StrictObject(
             [
                 ("pattern", ToolJsonSchemaFactory.String(
-                    "The non-empty glob pattern to match files against. Use patterns such as \"**/*\", \"*.cs\", or \"src/**/*.ts\". Do not pass an empty string.",
+                    "The non-empty glob pattern to match files against. Use patterns such as \"**/*\", \"*.cs\", or \"src/**/*.ts\". Optional when path already contains the full glob expression.",
                     minLength: 1)),
                 ("path", ToolJsonSchemaFactory.String(
-                    "The directory to search in. If omitted, the current working directory is used. Must be a valid directory path if provided."))
-            ],
-            required: ["pattern"]);
+                    "The directory to search in. If omitted, the current working directory is used. This may also be a full path containing glob wildcards when pattern is omitted."))
+            ]);
 
     public static JsonObject GlobOutputSchema =>
         ToolJsonSchemaFactory.StrictObject(
