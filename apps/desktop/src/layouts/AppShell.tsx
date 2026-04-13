@@ -42,6 +42,37 @@ export const AppShell = () => {
     }
   };
 
+  const renderWorkspace = () => {
+    if (ui.activeView !== 'threads') {
+      return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {renderCenter()}
+        </div>
+      );
+    }
+
+    return (
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel
+          defaultSize={ui.rightPanelCollapsed ? 100 : 72}
+          minSize={45}
+        >
+          <div className="flex h-full flex-col overflow-hidden">
+            {renderCenter()}
+          </div>
+        </ResizablePanel>
+        {!ui.rightPanelCollapsed && (
+          <>
+            <ResizableHandle className="hidden shrink-0 lg:flex" />
+            <ResizablePanel defaultSize={28} minSize={20} maxSize={45} className="hidden lg:flex">
+              <ReviewPanel />
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
+    );
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden surface-1">
       <TopBar />
@@ -51,23 +82,7 @@ export const AppShell = () => {
             <Sidebar />
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex flex-1 overflow-hidden">
-                {ui.activeView === 'threads' ? (
-                  <ResizablePanelGroup direction="horizontal">
-                    <ResizablePanel defaultSize={72} minSize={45}>
-                      <div className="flex h-full flex-col overflow-hidden">
-                        {renderCenter()}
-                      </div>
-                    </ResizablePanel>
-                    <ResizableHandle className="hidden lg:flex" />
-                    <ResizablePanel defaultSize={28} minSize={20} maxSize={45} className="hidden lg:flex">
-                      <ReviewPanel />
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
-                ) : (
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    {renderCenter()}
-                  </div>
-                )}
+                {renderWorkspace()}
               </div>
               <div className="shrink-0" style={{ height: ui.bottomDrawerOpen ? '200px' : '36px' }}>
                 <BottomDrawer />
@@ -79,23 +94,7 @@ export const AppShell = () => {
             <Sidebar />
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex flex-1 overflow-hidden">
-                {ui.activeView === 'threads' ? (
-                  <ResizablePanelGroup direction="horizontal">
-                    <ResizablePanel defaultSize={72} minSize={45}>
-                      <div className="flex h-full flex-col overflow-hidden">
-                        {renderCenter()}
-                      </div>
-                    </ResizablePanel>
-                    <ResizableHandle className="hidden shrink-0 lg:flex" />
-                    <ResizablePanel defaultSize={28} minSize={20} maxSize={45} className="hidden lg:flex">
-                      <ReviewPanel />
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
-                ) : (
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    {renderCenter()}
-                  </div>
-                )}
+                {renderWorkspace()}
               </div>
               <div className="shrink-0" style={{ height: ui.bottomDrawerOpen ? '200px' : '36px' }}>
                 <BottomDrawer />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@/store';
 import { StatusBadge } from '@/components/StatusBadge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -15,7 +15,7 @@ import { buildPromptWithAttachments, parsePromptAttachments, type PromptAttachme
 export const ThreadView = () => {
   const {
     selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings, skills, skillsLoading, workspaceFiles, workspaceFilesLoading,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills, loadWorkspaceFiles,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills, loadWorkspaceFiles, openExternalEditor,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
@@ -28,13 +28,28 @@ export const ThreadView = () => {
   const isBrowserPreview = settings.settingsIssues.some((issue) =>
     issue.includes('Browser preview uses mock AgentHost data.'));
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const shouldPromptForProviderKeys = !settings.hasAnyConfiguredProviderCredential;
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (stickToBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [threadMessages.length, run.isStreaming]);
+
+  useEffect(() => {
+    stickToBottomRef.current = true;
+  }, [selectedThreadId]);
+
+  const handleTranscriptScroll = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    stickToBottomRef.current = distanceFromBottom <= 80;
+  }, []);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -174,7 +189,12 @@ export const ThreadView = () => {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div
+        ref={scrollRef}
+        data-testid="thread-message-list"
+        onScroll={handleTranscriptScroll}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+      >
         {history?.hasMoreMessages && (
           <div className="flex justify-center">
             <button
@@ -217,8 +237,14 @@ export const ThreadView = () => {
             Browser preview is using mock AgentHost data. Run <code>npm run dev</code> for the real desktop shell, or <code>npm run dev:codex</code> to force the Codex dev path.
           </div>
         )}
-        {threadMessages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
+        {threadMessages.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            projectPath={project.path}
+            editorPath={settings.editorPath}
+            openExternalEditor={openExternalEditor}
+          />
         ))}
         {run.isRunning && run.isStreaming && (
           <div className="flex items-center gap-2 text-xs text-status-running py-2">
@@ -291,13 +317,21 @@ export const ThreadView = () => {
   );
 };
 
-const MessageBubble = ({ message }: { message: Message }) => {
-  const { selectedProjectId, projects, openExternalEditor, settings } = useAppStore();
+const MessageBubble = memo(({
+  message,
+  projectPath,
+  editorPath,
+  openExternalEditor,
+}: {
+  message: Message;
+  projectPath: string;
+  editorPath: string;
+  openExternalEditor: ReturnType<typeof useAppStore>['openExternalEditor'];
+}) => {
   const isUser = message.role === 'user';
-  const parsedPrompt = parsePromptAttachments(message.content);
+  const parsedPrompt = useMemo(() => parsePromptAttachments(message.content), [message.content]);
   const hasText = parsedPrompt.prompt.trim().length > 0;
   const [copied, setCopied] = useState(false);
-  const project = projects.find((item) => item.id === selectedProjectId);
 
   useEffect(() => {
     if (!copied) {
@@ -308,30 +342,26 @@ const MessageBubble = ({ message }: { message: Message }) => {
     return () => window.clearTimeout(timeoutId);
   }, [copied]);
 
-  const openFileFromMessage = (match: FileReferenceMatch) => {
-    if (!project) {
-      return;
-    }
-
+  const openFileFromMessage = useCallback((match: FileReferenceMatch) => {
     const absolutePath = isAbsoluteFilePath(match.path)
       ? match.path
-      : `${project.path}/${match.path}`.replace(/\/+/g, '/');
+      : `${projectPath}/${match.path}`.replace(/\/+/g, '/');
     void openExternalEditor({
       kind: 'position',
       path: absolutePath,
       line: match.line,
       column: match.column,
-      editorCommand: settings.editorPath,
+      editorCommand: editorPath,
     });
-  };
+  }, [editorPath, openExternalEditor, projectPath]);
 
-  const openAttachment = (attachment: PromptAttachment) => {
+  const openAttachment = useCallback((attachment: PromptAttachment) => {
     void openExternalEditor({
       kind: 'file',
       path: attachment.path,
-      editorCommand: settings.editorPath,
+      editorCommand: editorPath,
     });
-  };
+  }, [editorPath, openExternalEditor]);
 
   const copyMessage = async () => {
     if (!hasText) {
@@ -342,8 +372,17 @@ const MessageBubble = ({ message }: { message: Message }) => {
     setCopied(true);
   };
 
+  const renderedMessageContent = useMemo(
+    () => (
+      isUser
+        ? renderPlainTextMessageContent(parsedPrompt.prompt, openFileFromMessage)
+        : renderMarkdownMessageContent(parsedPrompt.prompt, openFileFromMessage)
+    ),
+    [isUser, openFileFromMessage, parsedPrompt.prompt],
+  );
+
   return (
-    <div className={cn('flex gap-3', isUser ? '' : '')}>
+    <div className={cn('flex gap-3 [content-visibility:auto] [contain-intrinsic-size:0_180px]', isUser ? '' : '')}>
       <div className={cn(
         'flex h-6 w-6 shrink-0 items-center justify-center rounded-md mt-0.5',
         isUser ? 'bg-accent' : 'bg-primary/10'
@@ -363,8 +402,8 @@ const MessageBubble = ({ message }: { message: Message }) => {
           )}
         </div>
         {hasText && (
-          <div className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
-            {renderMessageContent(parsedPrompt.prompt, openFileFromMessage)}
+          <div className="text-sm text-secondary-foreground leading-relaxed">
+            {renderedMessageContent}
             {message.isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 animate-stream-cursor" />}
           </div>
         )}
@@ -389,9 +428,9 @@ const MessageBubble = ({ message }: { message: Message }) => {
       </div>
     </div>
   );
-};
+});
 
-const AttachmentPills = ({
+const AttachmentPills = memo(({
   attachments,
   onOpenAttachment,
 }: {
@@ -411,7 +450,7 @@ const AttachmentPills = ({
       </button>
     ))}
   </div>
-);
+));
 
 
 type FileReferenceMatch = {
@@ -424,7 +463,20 @@ type FileReferenceMatch = {
   appearance: 'plain' | 'code' | 'markdown';
 };
 
-function renderMessageContent(content: string, onOpenFile: (match: FileReferenceMatch) => void) {
+type InlineMarkdownToken =
+  | { kind: 'link'; index: number; length: number; label: string; target: string }
+  | { kind: 'code'; index: number; length: number; value: string }
+  | { kind: 'bold'; index: number; length: number; value: string }
+  | { kind: 'italic'; index: number; length: number; value: string };
+
+type MarkdownBlock =
+  | { type: 'paragraph'; content: string }
+  | { type: 'heading'; content: string; depth: number }
+  | { type: 'blockquote'; lines: string[] }
+  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'code'; content: string; language: string | null };
+
+function renderPlainTextMessageContent(content: string, onOpenFile: (match: FileReferenceMatch) => void) {
   const tokens = findMessageTokens(content);
   if (tokens.length === 0) {
     return content;
@@ -459,6 +511,384 @@ function renderMessageContent(content: string, onOpenFile: (match: FileReference
     }
 
     cursor = token.end;
+  });
+
+  if (cursor < content.length) {
+    nodes.push(content.slice(cursor));
+  }
+
+  return nodes;
+}
+
+function renderMarkdownMessageContent(content: string, onOpenFile: (match: FileReferenceMatch) => void) {
+  const blocks = parseMarkdownBlocks(content);
+
+  return blocks.map((block, index) => {
+    const key = `markdown-block-${index}`;
+
+    switch (block.type) {
+      case 'heading': {
+        const HeadingTag = `h${Math.min(block.depth, 6)}` as keyof JSX.IntrinsicElements;
+        return (
+          <HeadingTag
+            key={key}
+            className={cn(
+              'font-semibold text-foreground',
+              block.depth === 1 && 'text-xl',
+              block.depth === 2 && 'text-lg',
+              block.depth >= 3 && 'text-base',
+            )}
+          >
+            {renderMarkdownInline(block.content, onOpenFile, key)}
+          </HeadingTag>
+        );
+      }
+      case 'blockquote':
+        return (
+          <blockquote key={key} className="border-l-2 border-border/80 pl-3 text-secondary-foreground italic space-y-1">
+            {block.lines.map((line, lineIndex) => (
+              <p key={`${key}-line-${lineIndex}`} className="whitespace-pre-wrap">
+                {renderMarkdownInline(line, onOpenFile, `${key}-line-${lineIndex}`)}
+              </p>
+            ))}
+          </blockquote>
+        );
+      case 'list':
+        return block.ordered ? (
+          <ol key={key} className="list-inside list-decimal space-y-1 pl-1">
+            {block.items.map((item, itemIndex) => (
+              <li key={`${key}-item-${itemIndex}`} className="text-secondary-foreground">
+                {renderMarkdownInline(item, onOpenFile, `${key}-item-${itemIndex}`)}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <ul key={key} className="list-inside list-disc space-y-1 pl-1">
+            {block.items.map((item, itemIndex) => (
+              <li key={`${key}-item-${itemIndex}`} className="text-secondary-foreground">
+                {renderMarkdownInline(item, onOpenFile, `${key}-item-${itemIndex}`)}
+              </li>
+            ))}
+          </ul>
+        );
+      case 'code':
+        return (
+          <pre
+            key={key}
+            className="overflow-x-auto rounded-md border border-border/70 bg-black/20 px-3 py-2 font-mono text-[12px] leading-relaxed text-secondary-foreground"
+          >
+            {block.language && <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{block.language}</div>}
+            <code>{block.content}</code>
+          </pre>
+        );
+      case 'paragraph':
+      default:
+        return (
+          <p key={key} className="whitespace-pre-wrap text-secondary-foreground">
+            {renderMarkdownInline(block.content, onOpenFile, key)}
+          </p>
+        );
+    }
+  });
+}
+
+function parseMarkdownBlocks(content: string): MarkdownBlock[] {
+  const normalized = content.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+  const blocks: MarkdownBlock[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0) {
+      index += 1;
+      continue;
+    }
+
+    const fencedCodeMatch = trimmed.match(/^```([^`]*)$/);
+    if (fencedCodeMatch) {
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith('```')) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) {
+        index += 1;
+      }
+      blocks.push({
+        type: 'code',
+        content: codeLines.join('\n'),
+        language: fencedCodeMatch[1].trim() || null,
+      });
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: 'heading',
+        depth: headingMatch[1].length,
+        content: headingMatch[2],
+      });
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith('>')) {
+      const quoteLines: string[] = [];
+      while (index < lines.length) {
+        const quoteLine = lines[index].trim();
+        if (!quoteLine.startsWith('>')) {
+          break;
+        }
+        quoteLines.push(quoteLine.replace(/^>\s?/, ''));
+        index += 1;
+      }
+      blocks.push({ type: 'blockquote', lines: quoteLines });
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (orderedMatch) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const match = lines[index].match(/^\d+\.\s+(.+)$/);
+        if (!match) {
+          break;
+        }
+        items.push(match[1]);
+        index += 1;
+      }
+      blocks.push({ type: 'list', ordered: true, items });
+      continue;
+    }
+
+    const unorderedMatch = line.match(/^[-*+]\s+(.+)$/);
+    if (unorderedMatch) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const match = lines[index].match(/^[-*+]\s+(.+)$/);
+        if (!match) {
+          break;
+        }
+        items.push(match[1]);
+        index += 1;
+      }
+      blocks.push({ type: 'list', ordered: false, items });
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length) {
+      const paragraphLine = lines[index];
+      const paragraphTrimmed = paragraphLine.trim();
+      if (
+        paragraphTrimmed.length === 0 ||
+        paragraphTrimmed.startsWith('```') ||
+        /^(#{1,6})\s+/.test(paragraphLine) ||
+        paragraphTrimmed.startsWith('>') ||
+        /^\d+\.\s+/.test(paragraphLine) ||
+        /^[-*+]\s+/.test(paragraphLine)
+      ) {
+        break;
+      }
+      paragraphLines.push(paragraphLine);
+      index += 1;
+    }
+    blocks.push({ type: 'paragraph', content: paragraphLines.join('\n') });
+  }
+
+  return blocks;
+}
+
+function renderMarkdownInline(
+  content: string,
+  onOpenFile: (match: FileReferenceMatch) => void,
+  keyPrefix: string,
+) {
+  const nodes: Array<string | JSX.Element> = [];
+  let cursor = 0;
+  let tokenIndex = 0;
+
+  while (cursor < content.length) {
+    const token = findNextInlineMarkdownToken(content.slice(cursor));
+    if (!token) {
+      nodes.push(...renderPlainTextSegment(content.slice(cursor), onOpenFile, `${keyPrefix}-plain-${tokenIndex}`));
+      break;
+    }
+
+    if (token.index > 0) {
+      nodes.push(...renderPlainTextSegment(
+        content.slice(cursor, cursor + token.index),
+        onOpenFile,
+        `${keyPrefix}-plain-${tokenIndex}`,
+      ));
+      tokenIndex += 1;
+    }
+
+    const key = `${keyPrefix}-${token.kind}-${tokenIndex}`;
+    switch (token.kind) {
+      case 'link': {
+        const parsedTarget = parseFileReferenceTarget(token.target);
+        nodes.push(parsedTarget ? (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onOpenFile({
+              ...parsedTarget,
+              label: token.label,
+              start: 0,
+              end: token.label.length,
+              appearance: 'markdown',
+            })}
+            className="font-mono text-primary underline underline-offset-2 hover:text-primary/80"
+          >
+            {token.label}
+          </button>
+        ) : (
+          <a
+            key={key}
+            href={token.target}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline underline-offset-2 hover:text-primary/80"
+          >
+            {token.label}
+          </a>
+        ));
+        break;
+      }
+      case 'code': {
+        const parsedTarget = parseFileReferenceTarget(token.value);
+        nodes.push(parsedTarget ? (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onOpenFile({
+              ...parsedTarget,
+              label: token.value,
+              start: 0,
+              end: token.value.length,
+              appearance: 'code',
+            })}
+            className="rounded-sm bg-muted px-1 font-mono text-primary underline underline-offset-2 hover:text-primary/80"
+          >
+            {token.value}
+          </button>
+        ) : (
+          <code key={key} className="rounded-sm bg-muted px-1 font-mono text-foreground">
+            {token.value}
+          </code>
+        ));
+        break;
+      }
+      case 'bold':
+        nodes.push(
+          <strong key={key} className="font-semibold text-foreground">
+            {renderMarkdownInline(token.value, onOpenFile, key)}
+          </strong>,
+        );
+        break;
+      case 'italic':
+        nodes.push(
+          <em key={key} className="italic">
+            {renderMarkdownInline(token.value, onOpenFile, key)}
+          </em>,
+        );
+        break;
+    }
+
+    cursor += token.index + token.length;
+    tokenIndex += 1;
+  }
+
+  return nodes;
+}
+
+function findNextInlineMarkdownToken(content: string): InlineMarkdownToken | null {
+  const candidates: InlineMarkdownToken[] = [];
+  const linkMatch = content.match(/\[([^\]\n]+)\]\((<([^>\n]+)>|([^) \n]+))\)/);
+  if (linkMatch && linkMatch.index !== undefined) {
+    candidates.push({
+      kind: 'link',
+      index: linkMatch.index,
+      length: linkMatch[0].length,
+      label: linkMatch[1],
+      target: linkMatch[3] ?? linkMatch[4] ?? '',
+    });
+  }
+
+  const codeMatch = content.match(/`([^`\n]+)`/);
+  if (codeMatch && codeMatch.index !== undefined) {
+    candidates.push({
+      kind: 'code',
+      index: codeMatch.index,
+      length: codeMatch[0].length,
+      value: codeMatch[1],
+    });
+  }
+
+  const boldMatch = content.match(/\*\*([^*\n]+)\*\*/);
+  if (boldMatch && boldMatch.index !== undefined) {
+    candidates.push({
+      kind: 'bold',
+      index: boldMatch.index,
+      length: boldMatch[0].length,
+      value: boldMatch[1],
+    });
+  }
+
+  const italicMatch = content.match(/(^|[^*])\*([^*\n]+)\*/);
+  if (italicMatch && italicMatch.index !== undefined) {
+    candidates.push({
+      kind: 'italic',
+      index: italicMatch.index + italicMatch[1].length,
+      length: italicMatch[0].length - italicMatch[1].length,
+      value: italicMatch[2],
+    });
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates.reduce((best, candidate) => (
+    candidate.index < best.index ? candidate : best
+  ));
+}
+
+function renderPlainTextSegment(
+  content: string,
+  onOpenFile: (match: FileReferenceMatch) => void,
+  keyPrefix: string,
+) {
+  const matches = findPlainFileReferenceMatches(content);
+  if (matches.length === 0) {
+    return [content];
+  }
+
+  const nodes: Array<string | JSX.Element> = [];
+  let cursor = 0;
+
+  matches.forEach((match, index) => {
+    if (cursor < match.start) {
+      nodes.push(content.slice(cursor, match.start));
+    }
+
+    nodes.push(
+      <button
+        key={`${keyPrefix}-${match.path}-${index}`}
+        type="button"
+        onClick={() => onOpenFile(match)}
+        className="font-mono text-primary underline underline-offset-2 hover:text-primary/80"
+      >
+        {match.label}
+      </button>,
+    );
+    cursor = match.end;
   });
 
   if (cursor < content.length) {
@@ -620,11 +1050,11 @@ function isAbsoluteFilePath(path: string) {
   return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path);
 }
 
-const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
-  const summary = summarizeToolEvents(events);
+const ToolProgressList = memo(({ events }: { events: ToolProgressEvent[] }) => {
+  const summary = useMemo(() => summarizeToolEvents(events), [events]);
 
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+    <div className="mt-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20 [content-visibility:auto] [contain-intrinsic-size:0_220px]">
       <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
         <FileCode className="h-3.5 w-3.5" />
         <span className="font-medium text-foreground">{summary.title}</span>
@@ -637,9 +1067,9 @@ const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
       </div>
     </div>
   );
-};
+});
 
-const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
+const ToolProgressCard = memo(({ event }: { event: ToolProgressEvent }) => {
   const [expanded, setExpanded] = useState(false);
   const Icon = iconForToolEvent(event);
   const stateLabel = event.status ?? (event.completed ? 'completed' : 'running');
@@ -719,7 +1149,7 @@ const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
       </div>
     </div>
   );
-};
+});
 
 function summarizeToolEvents(events: ToolProgressEvent[]) {
   const running = events.filter((event) => (event.status ?? (event.completed ? 'completed' : 'running')) === 'running').length;
@@ -1342,7 +1772,7 @@ function getEmptySuggestionText(activeQuery: ComposerQuery | null): string {
   }
 }
 
-const ContextUsageBadge = ({
+const ContextUsageBadge = memo(({
   usedPercent,
   usedTokens,
   effectiveContextWindow,
@@ -1382,7 +1812,7 @@ const ContextUsageBadge = ({
       </HoverCardContent>
     </HoverCard>
   );
-};
+});
 
 const COMPACT_BOUNDARY_LABEL = 'Conversation compacted';
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;

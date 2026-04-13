@@ -182,6 +182,96 @@ describe('ThreadView', () => {
     });
   });
 
+  it('does not force-scroll back to the bottom while streaming if the user has scrolled up', () => {
+    const storeState = {
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/tmp/clawsharp',
+          branch: 'main',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-13T00:00:00Z',
+          description: '/tmp/clawsharp',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Sticky scroll',
+          summary: 'Keeps manual scroll position',
+          branch: 'main',
+          status: 'running',
+          changedFilesCount: 0,
+          pinned: false,
+          lastUpdated: '2026-04-13T00:00:00Z',
+          messageCount: 2,
+          model: 'claude-haiku-4-5-20251001',
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'user-1',
+            threadId: 'thread-1',
+            role: 'user',
+            content: 'First message',
+            timestamp: '2026-04-13T00:00:00Z',
+          },
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'Streaming reply',
+            timestamp: '2026-04-13T00:00:10Z',
+            isStreaming: true,
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        ...baseStoreState.connection,
+        isConnected: true,
+      },
+    };
+
+    mockedUseAppStore.mockReturnValue(storeState as ReturnType<typeof useAppStore>);
+
+    const { rerender } = render(<ThreadView />);
+    const messageList = screen.getByTestId('thread-message-list');
+
+    Object.defineProperty(messageList, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(messageList, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(messageList, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 120,
+    });
+
+    fireEvent.scroll(messageList);
+
+    mockedUseAppStore.mockReturnValue({
+      ...storeState,
+      run: {
+        ...storeState.run,
+        isRunning: true,
+        isStreaming: true,
+        progressLabel: 'Still working',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    rerender(<ThreadView />);
+
+    expect(messageList.scrollTop).toBe(120);
+  });
+
   it('prompts the user to configure provider keys when none are configured', () => {
     const toggleSettings = vi.fn();
     const openProjectPicker = vi.fn();
@@ -357,6 +447,72 @@ describe('ThreadView', () => {
     expect(screen.getByText('Output')).toBeInTheDocument();
     expect(screen.getByText(/src\/App\.tsx/)).toBeInTheDocument();
     expect(screen.getByText(/src\/main\.tsx/)).toBeInTheDocument();
+  });
+
+  it('renders assistant markdown responses with headings, emphasis, and lists', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: 'D:/Working/ClawSharp',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Markdown response',
+          summary: 'Testing assistant markdown rendering',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: '## Answers\n1. **Weil ich krank bin, bleibe ich zu Hause.**\n2. **Ich denke, dass er morgen kommt.**\n3. **Wenn ich Zeit habe, rufe ich dich an.**\n\nIf you want, I can give you:\n- an **A2 lesson**,\n- a **B2 lesson**,\n- or **10 practice questions**.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    expect(screen.getByRole('heading', { name: 'Answers' })).toBeInTheDocument();
+    expect(screen.getByText('Weil ich krank bin, bleibe ich zu Hause.')).toBeInTheDocument();
+    expect(screen.getByText('Ich denke, dass er morgen kommt.')).toBeInTheDocument();
+    expect(screen.getByText('Wenn ich Zeit habe, rufe ich dich an.')).toBeInTheDocument();
+    expect(screen.getByText('A2 lesson')).toBeInTheDocument();
+    expect(screen.getByText('B2 lesson')).toBeInTheDocument();
+    expect(screen.getByText('10 practice questions')).toBeInTheDocument();
+    expect(screen.queryByText('## Answers')).not.toBeInTheDocument();
+    expect(screen.queryByText(/\*\*Weil ich krank bin/)).not.toBeInTheDocument();
   });
 
 

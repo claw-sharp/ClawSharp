@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Settings, Bell, ChevronDown, Loader2, Code2, Folder, Rocket, TerminalSquare } from 'lucide-react';
+import { Search, Settings, Bell, ChevronDown, Loader2, Code2, Folder, Rocket, TerminalSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 const projectLaunchTargets = [
@@ -21,7 +21,7 @@ export const TopBar = () => {
   const {
     selectedProjectId, projects, inboxItems, run, connection,
     openProjectPicker,
-    toggleSettings, toggleCommandPalette, setActiveView, ui, openExternalEditor,
+    toggleSettings, toggleCommandPalette, setActiveView, ui, openExternalEditor, toggleRightPanel,
   } = useAppStore();
   const { resolvedTheme } = useTheme();
   const project = projects.find(p => p.id === selectedProjectId);
@@ -149,6 +149,21 @@ export const TopBar = () => {
         >
           <Settings className="h-4 w-4" />
         </button>
+
+        {ui.activeView === 'threads' && (
+          <button
+            type="button"
+            onClick={toggleRightPanel}
+            aria-label={ui.rightPanelCollapsed ? 'Expand review panel' : 'Collapse review panel'}
+            title={ui.rightPanelCollapsed ? 'Expand review panel' : 'Collapse review panel'}
+            className={cn(
+              'ml-2 hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex',
+              !ui.rightPanelCollapsed && 'bg-accent/60 text-foreground',
+            )}
+          >
+            {ui.rightPanelCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+          </button>
+        )}
       </div>
     </div>
   );

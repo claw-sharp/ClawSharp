@@ -49,10 +49,12 @@ const baseStoreState = {
   openProjectPicker: vi.fn(),
   toggleSettings: vi.fn(),
   toggleCommandPalette: vi.fn(),
+  toggleRightPanel: vi.fn(),
   setActiveView: vi.fn(),
   openExternalEditor: vi.fn(),
   ui: {
     activeView: 'threads',
+    rightPanelCollapsed: false,
   },
 };
 
@@ -120,5 +122,39 @@ describe('TopBar', () => {
     expect(await screen.findByText('VS Code')).toBeInTheDocument();
     expect(await screen.findByText('Antigravity')).toBeInTheDocument();
     expect(await screen.findByText('Terminal')).toBeInTheDocument();
+  });
+
+  it('toggles the review panel from the header action', () => {
+    const toggleRightPanel = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      toggleRightPanel,
+      ui: {
+        ...baseStoreState.ui,
+        activeView: 'threads',
+        rightPanelCollapsed: false,
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<TopBar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse review panel/i }));
+
+    expect(toggleRightPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an expand action when the review panel is collapsed', () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      ui: {
+        ...baseStoreState.ui,
+        activeView: 'threads',
+        rightPanelCollapsed: true,
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<TopBar />);
+
+    expect(screen.getByRole('button', { name: /expand review panel/i })).toBeInTheDocument();
   });
 });

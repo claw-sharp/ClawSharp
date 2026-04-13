@@ -104,6 +104,7 @@ interface AppStore {
   resolveApproval: (approvalId: string, decision: 'approved' | 'always_allow' | 'rejected') => Promise<void>;
   openExternalEditor: (request: OpenExternalEditorRequest) => Promise<void>;
   toggleLeftSidebar: () => void;
+  toggleRightPanel: () => void;
   toggleBottomDrawer: () => void;
   setBottomDrawerTab: (tab: UIState['bottomDrawerTab']) => void;
   setRightPanelTab: (tab: UIState['rightPanelTab']) => void;
@@ -195,6 +196,7 @@ const emptyRunState: RunState = {
 
 const defaultUi: UIState = {
   leftSidebarCollapsed: false,
+  rightPanelCollapsed: false,
   rightPanelTab: 'files',
   bottomDrawerTab: 'logs',
   bottomDrawerOpen: true,
@@ -1282,6 +1284,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   toggleLeftSidebar: () => set((state) => ({
     ui: { ...state.ui, leftSidebarCollapsed: !state.ui.leftSidebarCollapsed },
+  })),
+
+  toggleRightPanel: () => set((state) => ({
+    ui: { ...state.ui, rightPanelCollapsed: !state.ui.rightPanelCollapsed },
   })),
 
   toggleBottomDrawer: () => set((state) => ({

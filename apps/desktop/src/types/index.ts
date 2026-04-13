@@ -249,6 +249,7 @@ export interface NavigationLoadingState {
 
 export interface UIState {
   leftSidebarCollapsed: boolean;
+  rightPanelCollapsed: boolean;
   rightPanelTab: 'files' | 'diff';
   bottomDrawerTab: 'logs' | 'terminal' | 'diagnostics';
   bottomDrawerOpen: boolean;
