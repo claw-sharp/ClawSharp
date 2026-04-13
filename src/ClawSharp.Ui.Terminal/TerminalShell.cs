@@ -388,14 +388,27 @@ public sealed class TerminalShell
                 return true;
             }
 
-            var userMessage = ChatMessageFactory.CreateText(MessageRole.User, scheduledPrompt);
-            session.Add(userMessage);
-            await _transcriptStore.RecordTranscriptAsync(session, session.Messages, cancellationToken);
+            var targetSession = session;
+            if (!string.IsNullOrWhiteSpace(job.SessionId) &&
+                !string.Equals(job.SessionId, session.Id, StringComparison.Ordinal))
+            {
+                var resumedSession = await _sessionFactory.ResumeAsync(job.SessionId, cancellationToken);
+                if (resumedSession is null)
+                {
+                    return false;
+                }
 
-            var request = await BuildTerminalTurnRequestAsync(session, scheduledPrompt, cancellationToken);
+                targetSession = resumedSession;
+            }
+
+            var userMessage = ChatMessageFactory.CreateText(MessageRole.User, scheduledPrompt);
+            targetSession.Add(userMessage);
+            await _transcriptStore.RecordTranscriptAsync(targetSession, targetSession.Messages, cancellationToken);
+
+            var request = await BuildTerminalTurnRequestAsync(targetSession, scheduledPrompt, cancellationToken);
             var description = $"Scheduled job {job.JobId}";
             await _localMainSessionTaskService.StartBackgroundSessionAsync(
-                session,
+                targetSession,
                 request,
                 description,
                 cancellationToken);

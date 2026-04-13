@@ -7,6 +7,7 @@ public sealed record CronFireRequest(
     string Prompt,
     bool Recurring,
     bool Durable,
+    string? SessionId,
     string? AgentId);
 
 public sealed class CronSchedulerService : IAsyncDisposable
@@ -127,7 +128,7 @@ public sealed class CronSchedulerService : IAsyncDisposable
                 }
 
                 var fired = await _onFireAsync(
-                    new CronFireRequest(job.Id, job.Prompt, job.Recurring, job.Durable, job.AgentId),
+                    new CronFireRequest(job.Id, job.Prompt, job.Recurring, job.Durable, job.SessionId, job.AgentId),
                     cancellationToken).ConfigureAwait(false);
                 if (!fired)
                 {

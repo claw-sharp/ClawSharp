@@ -73,25 +73,13 @@ public sealed class RunCoordinator
             "run:start-session-resolved",
             $"projectId={request.ProjectId} threadId={request.ThreadId} workspace={project.Path}");
 
-        app.AppStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
-
-        var runId = Guid.NewGuid().ToString("N");
-        var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        if (!_runs.TryAdd(runId, new RunExecution(runId, request.ProjectId, request.ThreadId, runCts)))
-        {
-            runCts.Dispose();
-            throw new AgentHostException("run_conflict", "Failed to allocate run id.");
-        }
-
-        _ = Task.Run(
-            () => ExecuteRunAsync(runId, request.ProjectId, session, request.Prompt.Trim(), app, runCts),
-            CancellationToken.None);
-
-        AgentHostLog.Info(
-            "run:start-accepted",
-            $"runId={runId} projectId={request.ProjectId} threadId={request.ThreadId}");
-
-        return new StartRunResponse(runId, request.ThreadId, DateTimeOffset.UtcNow);
+        return QueueRun(
+            request.ProjectId,
+            session,
+            request.Prompt.Trim(),
+            app,
+            cancellationToken,
+            "run:start-accepted");
     }
 
     public async Task<StartRunResponse> RetryRunAsync(
@@ -131,6 +119,61 @@ public sealed class RunCoordinator
         return Task.FromResult(new CancelRunResponse(request.RunId, false, DateTimeOffset.UtcNow));
     }
 
+    public async Task<bool> TryStartScheduledRunAsync(
+        string projectId,
+        string threadId,
+        string prompt,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(projectId) ||
+            string.IsNullOrWhiteSpace(threadId) ||
+            string.IsNullOrWhiteSpace(prompt))
+        {
+            return false;
+        }
+
+        if (_runs.Values.Any(run => string.Equals(run.ThreadId, threadId, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        try
+        {
+            var project = await _recentProjectStore.FindByIdAsync(projectId, cancellationToken);
+            if (project is null)
+            {
+                return false;
+            }
+
+            var app = await _applicationRegistry.GetOrCreateAsync(project.Path, cancellationToken);
+            var session = await app.SessionFactory.ResumeAsync(threadId, cancellationToken);
+            if (session is null)
+            {
+                return false;
+            }
+
+            QueueRun(
+                projectId,
+                session,
+                prompt.Trim(),
+                app,
+                cancellationToken,
+                "run:scheduled-accepted");
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            AgentHostLog.Warn(
+                "run:scheduled-rejected",
+                $"projectId={projectId} threadId={threadId} error={error.GetType().Name}: {error.Message}");
+            return false;
+        }
+    }
+
     private async Task<(string ProjectId, ConversationSession Session)> ResolveSessionAsync(
         string? projectId,
         string threadId,
@@ -166,6 +209,35 @@ public sealed class RunCoordinator
         }
 
         throw new AgentHostException("thread_not_found", $"Thread '{threadId}' was not found.");
+    }
+
+    private StartRunResponse QueueRun(
+        string projectId,
+        ConversationSession session,
+        string prompt,
+        Infrastructure.ClawSharpApplication app,
+        CancellationToken cancellationToken,
+        string acceptedLogName)
+    {
+        app.AppStateStore.SetState(state => ClawSharpAppStateMutations.WithActiveSession(state, session));
+
+        var runId = Guid.NewGuid().ToString("N");
+        var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (!_runs.TryAdd(runId, new RunExecution(runId, projectId, session.Id, runCts)))
+        {
+            runCts.Dispose();
+            throw new AgentHostException("run_conflict", "Failed to allocate run id.");
+        }
+
+        _ = Task.Run(
+            () => ExecuteRunAsync(runId, projectId, session, prompt, app, runCts),
+            CancellationToken.None);
+
+        AgentHostLog.Info(
+            acceptedLogName,
+            $"runId={runId} projectId={projectId} threadId={session.Id}");
+
+        return new StartRunResponse(runId, session.Id, DateTimeOffset.UtcNow);
     }
 
     private static string ResolveRetryPrompt(ConversationSession session, string? fromMessageId)

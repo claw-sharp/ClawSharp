@@ -145,6 +145,7 @@ internal sealed class CronCreateTool : BaseTool
             input.Prompt,
             input.Recurring ?? true,
             input.Durable ?? false,
+            context.Session.Id,
             context.AgentId);
         var nextRun = expression.GetNextOccurrence(DateTimeOffset.UtcNow, TimeZoneInfo.Local);
         if (nextRun is null)
@@ -388,6 +389,7 @@ internal sealed record CronJobDefinition(
     bool Durable,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? LastFiredAtUtc = null,
+    string? SessionId = null,
     string? AgentId = null);
 
 internal static class CronJobStore
@@ -401,6 +403,7 @@ internal static class CronJobStore
         string prompt,
         bool recurring,
         bool durable,
+        string? sessionId,
         string? agentId)
     {
         var job = new CronJobDefinition(
@@ -411,6 +414,7 @@ internal static class CronJobStore
             durable,
             DateTimeOffset.UtcNow,
             LastFiredAtUtc: null,
+            SessionId: sessionId,
             AgentId: agentId);
 
         if (durable)

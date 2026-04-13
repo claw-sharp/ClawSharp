@@ -33,6 +33,7 @@ try
     var threadCatalog = new ThreadCatalogService(applicationRegistry, recentProjectStore, threadStateStore);
     var projectCatalog = new ProjectCatalogService(recentProjectStore, threadCatalog);
     var runCoordinator = new RunCoordinator(applicationRegistry, recentProjectStore, eventDispatcher);
+    await using var cronSchedulerService = new AgentHostCronSchedulerService(recentProjectStore, applicationRegistry, runCoordinator);
     var reviewService = new WorkspaceReviewService(recentProjectStore);
     var diagnosticsService = new DiagnosticsCatalogService(applicationRegistry, recentProjectStore, runtimeState);
     var pluginCatalog = new PluginCatalogService(applicationRegistry, recentProjectStore);
@@ -54,6 +55,7 @@ try
         externalEditorService,
         approvalCatalog);
     var host = new AgentHostStdioServer(Console.In, Console.Out, commandRouter, eventDispatcher);
+    cronSchedulerService.Start();
     AgentHostLog.Info("boot", "AgentHost services initialized. Entering stdio server loop.");
 
     await host.RunAsync();
