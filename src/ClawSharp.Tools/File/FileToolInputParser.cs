@@ -73,7 +73,8 @@ internal static class FileToolInputParser
                     return false;
                 }
 
-                pages = pagesElement.GetString();
+                var rawPages = pagesElement.GetString();
+                pages = string.IsNullOrWhiteSpace(rawPages) ? null : rawPages.Trim();
             }
 
             input = new ReadToolInput(filePathElement.GetString()!.Trim(), offset == 0 ? 1 : offset, limit, pages);

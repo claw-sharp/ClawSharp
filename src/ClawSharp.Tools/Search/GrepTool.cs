@@ -37,9 +37,13 @@ internal sealed class GrepTool : BaseTool
             return null;
         }
 
+        var renderedPattern = string.IsNullOrWhiteSpace(input.Pattern) && string.Equals(input.OutputMode, "content", StringComparison.Ordinal)
+            ? ".*"
+            : input.Pattern;
+
         var parts = new List<string>
         {
-            $"pattern: {ToolUseRenderFormatting.Quote(input.Pattern)}"
+            $"pattern: {ToolUseRenderFormatting.Quote(renderedPattern)}"
         };
 
         if (!string.IsNullOrWhiteSpace(input.Path))
@@ -74,6 +78,11 @@ internal sealed class GrepTool : BaseTool
             return ToolValidationResult.Invalid($"Path does not exist: {searchPath}");
         }
 
+        if (!TryResolveEffectivePattern(input, permissionResolution.ResolvedPath, out _, out errorMessage))
+        {
+            return ToolValidationResult.Invalid(errorMessage ?? "Grep requires a pattern.");
+        }
+
         return ToolValidationResult.Valid();
     }
 
@@ -101,11 +110,16 @@ internal sealed class GrepTool : BaseTool
             return Failure($"Path does not exist: {searchPath}");
         }
 
+        if (!TryResolveEffectivePattern(input, permissionResolution.ResolvedPath, out var effectivePattern, out errorMessage))
+        {
+            return Failure(errorMessage ?? "Grep requires a pattern.");
+        }
+
         IReadOnlyList<string> results;
         try
         {
             results = await RipgrepRunner.RunLinesAsync(
-                BuildArguments(input),
+                BuildArguments(input with { Pattern = effectivePattern }),
                 permissionResolution.ResolvedPath,
                 cancellationToken);
         }
@@ -469,12 +483,7 @@ internal sealed class GrepTool : BaseTool
             return false;
         }
 
-        var pattern = jsonObject["pattern"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(pattern))
-        {
-            errorMessage = "Grep requires a non-empty pattern. Use Glob to list files, or provide a concrete regex such as \"foo\", \"TODO\", or \".*\".";
-            return false;
-        }
+        var pattern = jsonObject["pattern"]?.GetValue<string>()?.Trim() ?? string.Empty;
 
         input = new GrepInput(
             pattern,
@@ -492,6 +501,31 @@ internal sealed class GrepTool : BaseTool
             GetOptionalInt(jsonObject, "offset") ?? 0,
             GetOptionalBool(jsonObject, "multiline") ?? false);
         return true;
+    }
+
+    private static bool TryResolveEffectivePattern(
+        GrepInput input,
+        string resolvedPath,
+        out string effectivePattern,
+        out string? errorMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(input.Pattern))
+        {
+            effectivePattern = input.Pattern;
+            errorMessage = null;
+            return true;
+        }
+
+        if (string.Equals(input.OutputMode, "content", StringComparison.Ordinal) && File.Exists(resolvedPath))
+        {
+            effectivePattern = ".*";
+            errorMessage = null;
+            return true;
+        }
+
+        effectivePattern = string.Empty;
+        errorMessage = "Grep requires a non-empty pattern. Use Glob to list files, use Read to inspect a specific file, or provide a concrete regex such as \"foo\", \"TODO\", or \".*\".";
+        return false;
     }
 
     private static int? GetOptionalInt(JsonObject jsonObject, string key)

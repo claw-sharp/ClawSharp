@@ -141,6 +141,38 @@ public sealed class SearchToolTests
     }
 
     [Fact]
+    public async Task GrepTool_Defaults_To_Match_All_When_Content_Mode_Targets_A_Single_File_Without_A_Pattern()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-grep-fallback-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "ThreadView.tsx"), "first line\nsecond line\n");
+
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+
+            var result = await registry.ExecuteAsync(
+                "Grep",
+                """{"path":"ThreadView.tsx","glob":"ThreadView.tsx","output_mode":"content","-n":true}""",
+                session,
+                new ClawSharpSettings());
+
+            Assert.True(result.Success, result.Output);
+            Assert.Contains("ThreadView.tsx:1:first line", result.Output, StringComparison.Ordinal);
+            Assert.Contains("ThreadView.tsx:2:second line", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task GlobTool_Rejects_Empty_Pattern_With_Actionable_Message()
     {
         var registry = new ToolRegistry(Environment.CurrentDirectory, new TaskRegistry());

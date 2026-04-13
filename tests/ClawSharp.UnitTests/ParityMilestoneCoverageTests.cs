@@ -406,6 +406,29 @@ public class ParityMilestoneCoverageTests
     }
 
     [Fact]
+    public async Task Read_Ignores_Blank_Pages_Parameter()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-read-blank-pages-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "sample.txt");
+        await File.WriteAllTextAsync(filePath, "line 1\nline 2\n");
+
+        var registry = new ToolRegistry(tempDir, new TaskRegistry());
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var settings = new ClawSharpSettings();
+
+        var result = await registry.ExecuteAsync(
+            "Read",
+            """{"file_path":"sample.txt","pages":"","offset":1,"limit":20}""",
+            session,
+            settings);
+
+        Assert.True(result.Success);
+        Assert.Contains("line 1", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Invalid pages parameter", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Read_Returns_Image_Structured_Output_For_Png()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-read-image-tests", Guid.NewGuid().ToString("N"));
