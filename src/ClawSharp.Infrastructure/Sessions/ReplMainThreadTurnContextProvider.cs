@@ -1,4 +1,4 @@
-// TS parity status: ports the default REPL model-turn context assembly for the current C# runtime, including the TypeScript-guided system prompt foundation, environment block, current-date user context, and git-status snapshot system context; CLAUDE.md memory loading and other dynamic prompt sections remain blocked.
+// TS parity status: ports the default REPL model-turn context assembly for the current C# runtime, including the TypeScript-guided system prompt foundation, CLAUDE.md loading, environment block, current-date user context, and git-status snapshot system context; file-triggered nested CLAUDE.md attachments and other dynamic prompt sections remain blocked.
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ClawSharp.Core;
@@ -25,6 +25,7 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
     private readonly ClawSharpSettings _settings;
     private readonly ToolRegistry? _toolRegistry;
     private readonly MemoryStorageService? _memoryStorageService;
+    private readonly ClaudeMdPromptService? _claudeMdPromptService;
     private readonly StartupEnvironment? _startupEnvironment;
     private readonly IClawSharpAppStateStore? _appStateStore;
 
@@ -33,6 +34,7 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
         ClawSharpSettings settings,
         ToolRegistry? toolRegistry = null,
         MemoryStorageService? memoryStorageService = null,
+        ClaudeMdPromptService? claudeMdPromptService = null,
         StartupEnvironment? startupEnvironment = null,
         IClawSharpAppStateStore? appStateStore = null)
     {
@@ -40,6 +42,7 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
         _settings = settings;
         _toolRegistry = toolRegistry;
         _memoryStorageService = memoryStorageService;
+        _claudeMdPromptService = claudeMdPromptService;
         _startupEnvironment = startupEnvironment;
         _appStateStore = appStateStore;
     }
@@ -97,6 +100,9 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
         var toolsSection = GetUsingToolsSection();
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] build-system-prompt-tools count={_toolRegistry?.All.Count ?? 0}");
+        var claudeMdSection = await BuildClaudeMdSectionAsync(cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] build-system-prompt-claudemd loaded={!string.IsNullOrWhiteSpace(claudeMdSection)}");
         var autoMemorySection = await BuildAutoMemorySectionAsync(cancellationToken);
         ClawSharpTelemetry.LogDebug(
             $"[ReplMainThreadTurnContextProvider] build-system-prompt-memory loaded={!string.IsNullOrWhiteSpace(autoMemorySection)}");
@@ -112,6 +118,7 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             GetActionsSection(),
             toolsSection,
             QueryRequestBuilder.SystemPromptDynamicBoundary,
+            claudeMdSection,
             autoMemorySection,
             envInfoSection,
             GetSimpleToneAndStyleSection(),
@@ -122,6 +129,21 @@ public sealed class ReplMainThreadTurnContextProvider : IQueryModelTurnContextPr
             .Where(static section => !string.IsNullOrWhiteSpace(section))
             .Cast<string>()
             .ToArray();
+    }
+
+    private async Task<string?> BuildClaudeMdSectionAsync(CancellationToken cancellationToken)
+    {
+        if (_claudeMdPromptService is null)
+        {
+            return null;
+        }
+
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] claudemd-start workspace={_workspaceRoot}");
+        var prompt = await _claudeMdPromptService.LoadPromptAsync(_workspaceRoot, cancellationToken);
+        ClawSharpTelemetry.LogDebug(
+            $"[ReplMainThreadTurnContextProvider] claudemd-complete loaded={!string.IsNullOrWhiteSpace(prompt)}");
+        return prompt;
     }
 
     private async Task<string?> BuildAutoMemorySectionAsync(CancellationToken cancellationToken)

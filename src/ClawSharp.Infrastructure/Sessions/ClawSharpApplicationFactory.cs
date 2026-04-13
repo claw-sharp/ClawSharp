@@ -187,6 +187,7 @@ public static class ClawSharpApplicationFactory
                 var desktopDeepLinkService = new DesktopDeepLinkService();
                 var memoryPathResolver = new DefaultMemoryPathResolver(currentSettings, workspaceRoot);
                 var memoryStorageService = new MemoryStorageService(memoryPathResolver);
+                var claudeMdPromptService = new ClaudeMdPromptService();
                 var commands = LogSyncPhase(
                     workspaceRoot,
                     "command-registry",
@@ -288,6 +289,7 @@ public static class ClawSharpApplicationFactory
                     currentSettings,
                     tools,
                     memoryStorageService,
+                    claudeMdPromptService,
                     startupEnvironment,
                     appStateStore);
                 var queryEngine = LogSyncPhase(
