@@ -327,7 +327,55 @@ public sealed class ToolRegistry
             return new ToolExecutionResult(false, validation.ErrorMessage ?? "Tool validation failed.");
         }
 
+        await EnsureReadStateForEditAsync(tool, context, cancellationToken);
         return await tool.ExecuteAsync(context, cancellationToken);
+    }
+
+    private static async Task EnsureReadStateForEditAsync(
+        IClawSharpTool tool,
+        ToolExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(tool.Descriptor.Name, "Edit", StringComparison.OrdinalIgnoreCase) ||
+            !FileToolInputParser.TryParseEdit(context.Arguments, out var input, out _) ||
+            input is null)
+        {
+            return;
+        }
+
+        var permissionResolution = await FileToolPermissionEvaluator.ResolveForWriteAsync(
+            input.FilePath,
+            context.WorkspaceRoot,
+            context.ToolPermissionContext,
+            context.PermissionPrompter,
+            allowCreate: false,
+            cancellationToken);
+        if (!permissionResolution.Allowed || permissionResolution.ResolvedPath is null)
+        {
+            return;
+        }
+
+        var resolvedPath = permissionResolution.ResolvedPath;
+        if (!File.Exists(resolvedPath))
+        {
+            return;
+        }
+
+        var existingState = context.ReadFileState.Get(resolvedPath);
+        if (existingState is not null && !existingState.IsPartialView)
+        {
+            return;
+        }
+
+        var metadata = await Task.Run(() => FileTextOperations.ReadFileWithMetadata(resolvedPath), cancellationToken);
+        context.ReadFileState.Set(
+            resolvedPath,
+            new FileState(
+                metadata.Content,
+                new DateTimeOffset(File.GetLastWriteTimeUtc(resolvedPath)).ToUnixTimeMilliseconds(),
+                Offset: null,
+                Limit: null,
+                IsPartialView: false));
     }
 
     private IReadOnlyList<IClawSharpTool> BuildPublishedToolPool()

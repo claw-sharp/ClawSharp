@@ -872,6 +872,62 @@ public class ParityMilestoneCoverageTests
     }
 
     [Fact]
+    public async Task Edit_Json_Input_AutoReads_When_File_Has_Not_Been_Read()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-edit-autoread-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "sample.txt");
+        await File.WriteAllTextAsync(filePath, "alpha\nalpha\n");
+
+        var registry = new ToolRegistry(tempDir, new TaskRegistry());
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var settings = new ClawSharpSettings();
+
+        var editResult = await registry.ExecuteAsync(
+            "Edit",
+            """{"file_path":"sample.txt","old_string":"alpha","new_string":"omega"}""",
+            session,
+            settings);
+
+        Assert.True(editResult.Success);
+        Assert.Equal("omega\nalpha\n", await File.ReadAllTextAsync(filePath));
+        Assert.Equal("omega\nalpha\n", registry.ReadFileState.Get(filePath)?.Content);
+        Assert.False(registry.ReadFileState.Get(filePath)?.IsPartialView);
+    }
+
+    [Fact]
+    public async Task Edit_Json_Input_AutoRefreshes_After_Partial_Read()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-edit-partial-autoread-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "sample.txt");
+        await File.WriteAllTextAsync(filePath, "alpha\nbeta\nalpha\n");
+
+        var registry = new ToolRegistry(tempDir, new TaskRegistry());
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var settings = new ClawSharpSettings();
+
+        var readResult = await registry.ExecuteAsync(
+            "Read",
+            """{"file_path":"sample.txt","offset":1,"limit":1}""",
+            session,
+            settings);
+        Assert.True(readResult.Success);
+        Assert.True(registry.ReadFileState.Get(filePath)?.IsPartialView);
+
+        var editResult = await registry.ExecuteAsync(
+            "Edit",
+            """{"file_path":"sample.txt","old_string":"alpha","new_string":"omega","replace_all":true}""",
+            session,
+            settings);
+
+        Assert.True(editResult.Success);
+        Assert.Equal("omega\nbeta\nomega\n", await File.ReadAllTextAsync(filePath));
+        Assert.Equal("omega\nbeta\nomega\n", registry.ReadFileState.Get(filePath)?.Content);
+        Assert.False(registry.ReadFileState.Get(filePath)?.IsPartialView);
+    }
+
+    [Fact]
     public async Task Edit_Json_Input_Honors_ReplaceAll_True()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-edit-replace-all-tests", Guid.NewGuid().ToString("N"));
