@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   Send, Square, Bot, User, FileCode,
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
-  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge, Paperclip, ImagePlus, X,
+  TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge, Paperclip, ImagePlus, X, Copy, Check,
 } from 'lucide-react';
 import type { Message, Skill, ToolProgressEvent } from '@/types';
 import { buildPromptWithAttachments, parsePromptAttachments, type PromptAttachment } from '@/features/chat/promptAttachments';
@@ -296,7 +296,17 @@ const MessageBubble = ({ message }: { message: Message }) => {
   const isUser = message.role === 'user';
   const parsedPrompt = parsePromptAttachments(message.content);
   const hasText = parsedPrompt.prompt.trim().length > 0;
+  const [copied, setCopied] = useState(false);
   const project = projects.find((item) => item.id === selectedProjectId);
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, [copied]);
 
   const openFileFromMessage = (match: FileReferenceMatch) => {
     if (!project) {
@@ -321,6 +331,15 @@ const MessageBubble = ({ message }: { message: Message }) => {
       path: attachment.path,
       editorCommand: settings.editorPath,
     });
+  };
+
+  const copyMessage = async () => {
+    if (!hasText) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(parsedPrompt.prompt);
+    setCopied(true);
   };
 
   return (
@@ -354,6 +373,18 @@ const MessageBubble = ({ message }: { message: Message }) => {
         )}
         {message.toolProgress && message.toolProgress.length > 0 && (
           <ToolProgressList events={message.toolProgress} />
+        )}
+        {hasText && (
+          <div className="flex flex-col items-end">
+            <button
+              type="button"
+              onClick={() => void copyMessage()}
+              aria-label={copied ? 'Copied message' : 'Copy message'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -590,35 +621,30 @@ function isAbsoluteFilePath(path: string) {
 }
 
 const ToolProgressList = ({ events }: { events: ToolProgressEvent[] }) => {
-  const [collapsed, setCollapsed] = useState(true);
   const summary = summarizeToolEvents(events);
 
   return (
     <div className="mt-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
         <FileCode className="h-3.5 w-3.5" />
         <span className="font-medium text-foreground">{summary.title}</span>
         <span className="text-[10px] text-muted-foreground">{summary.subtitle}</span>
-        <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', collapsed && '-rotate-90')} />
-      </button>
-      {!collapsed && (
-        <div className="space-y-2 border-t border-border/70 px-3 py-3">
-          {events.map(e => (
-            <ToolProgressCard key={e.id} event={e} />
-          ))}
-        </div>
-      )}
+      </div>
+      <div className="space-y-2 border-t border-border/70 px-3 py-3">
+        {events.map(e => (
+          <ToolProgressCard key={e.id} event={e} />
+        ))}
+      </div>
     </div>
   );
 };
 
 const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
+  const [expanded, setExpanded] = useState(false);
   const Icon = iconForToolEvent(event);
   const stateLabel = event.status ?? (event.completed ? 'completed' : 'running');
   const toolName = event.toolName ?? event.label;
+  const hasExpandableContent = Boolean(event.label || event.detail);
 
   return (
     <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2">
@@ -648,12 +674,28 @@ const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
             )}>
               {stateLabel}
             </span>
+            {hasExpandableContent && (
+              <button
+                type="button"
+                onClick={() => setExpanded((current) => !current)}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? 'Collapse' : 'Expand'} ${toolName}`}
+                className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <span>{expanded ? 'Collapse' : 'Expand'}</span>
+                <ChevronDown className={cn('h-3 w-3 transition-transform', !expanded && '-rotate-90')} />
+              </button>
+            )}
           </div>
-          <p className="text-xs text-foreground">{event.label}</p>
-          {event.detail && (
-            <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
-              {event.detail}
-            </pre>
+          {expanded && (
+            <>
+              {event.label && <p className="text-xs text-foreground">{event.label}</p>}
+              {event.detail && (
+                <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
+                  {event.detail}
+                </pre>
+              )}
+            </>
           )}
         </div>
         {stateLabel === 'failed' ? (

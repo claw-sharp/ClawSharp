@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadView } from '@/features/chat/ThreadView';
 import { agentHostClient } from '@/lib/agentHostClient';
@@ -17,6 +17,7 @@ vi.mock('@/lib/agentHostClient', () => ({
 
 const mockedUseAppStore = vi.mocked(useAppStore);
 const mockedAgentHostClient = vi.mocked(agentHostClient);
+const writeClipboardText = vi.fn();
 const baseStoreState = {
   selectedProjectId: '',
   selectedThreadId: '',
@@ -94,6 +95,14 @@ const baseStoreState = {
 
 describe('ThreadView', () => {
   beforeEach(() => {
+    writeClipboardText.mockReset();
+    writeClipboardText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: writeClipboardText,
+      },
+    });
     mockedAgentHostClient.pickPromptFiles.mockReset();
     mockedAgentHostClient.pickPromptFiles.mockResolvedValue([]);
     mockedAgentHostClient.pickPromptImages.mockReset();
@@ -282,12 +291,12 @@ describe('ThreadView', () => {
     render(<ThreadView />);
 
     expect(screen.getByText('Tool activity')).toBeInTheDocument();
-    expect(screen.queryByText('functions.exec_command')).not.toBeInTheDocument();
+    expect(screen.getByText('functions.exec_command')).toBeInTheDocument();
     expect(screen.queryByText('Ran `rg --files`')).not.toBeInTheDocument();
     expect(screen.queryByText(/src\/App\.tsx/)).not.toBeInTheDocument();
     expect(screen.queryByText(/src\/main\.tsx/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /tool activity/i }));
+    fireEvent.click(screen.getByRole('button', { name: /expand functions\.exec_command/i }));
 
     expect(screen.getByText('functions.exec_command')).toBeInTheDocument();
     expect(screen.getByText('Ran `rg --files`')).toBeInTheDocument();
@@ -497,6 +506,69 @@ describe('ThreadView', () => {
       line: 281,
       column: null,
       editorCommand: '/usr/local/bin/code',
+    });
+  });
+
+  it('copies message text from the transcript', async () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Copy message',
+          summary: 'Testing transcript copy action',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      messages: {
+        'thread-1': [
+          {
+            id: 'assistant-1',
+            threadId: 'thread-1',
+            role: 'assistant',
+            content: 'Copy this response.',
+            timestamp: '2026-04-10T10:00:10Z',
+          },
+        ],
+      },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }));
+
+    expect(writeClipboardText).toHaveBeenCalledWith('Copy this response.');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied message' })).toBeInTheDocument();
     });
   });
 
