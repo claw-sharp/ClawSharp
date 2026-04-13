@@ -33,6 +33,7 @@ public static class AgentHostProtocol
         "listDiagnostics",
         "listPlugins",
         "listSkills",
+        "createSkill",
         "listWorkspaceFiles",
         "getSettings",
         "updateSettings",

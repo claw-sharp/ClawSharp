@@ -10,6 +10,8 @@ import type {
   AgentHostEventEnvelope,
   AgentHostStateEvent,
   CancelRunResponse,
+  CreateSkillRequest,
+  CreateSkillResponse,
   DeletePluginOptionsRequest,
   GetDiffResponse,
   GetSettingsResponse,
@@ -125,6 +127,10 @@ class AgentHostClient {
 
   async listSkills(projectId?: string | null): Promise<ListSkillsResponse> {
     return await this.request('listSkills', { projectId: projectId ?? null });
+  }
+
+  async createSkill(request: CreateSkillRequest): Promise<CreateSkillResponse> {
+    return await this.request('createSkill', request);
   }
 
   async listWorkspaceFiles(projectId?: string | null): Promise<ListWorkspaceFilesResponse> {

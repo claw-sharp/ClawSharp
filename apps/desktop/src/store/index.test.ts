@@ -15,6 +15,7 @@ const mockClient = {
   openExternalEditor: vi.fn(),
   listDiagnostics: vi.fn(),
   listSkills: vi.fn(),
+  createSkill: vi.fn(),
   listWorkspaceFiles: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -46,6 +47,7 @@ describe('useAppStore', () => {
     mockClient.openExternalEditor.mockReset();
     mockClient.listDiagnostics.mockReset();
     mockClient.listSkills.mockReset();
+    mockClient.createSkill.mockReset();
     mockClient.listWorkspaceFiles.mockReset();
     mockClient.getSettings.mockReset();
     mockClient.updateSettings.mockReset();
@@ -285,6 +287,57 @@ describe('useAppStore', () => {
     expect(assistantMessage?.toolProgress).toHaveLength(1);
     expect(assistantMessage?.toolProgress?.[0]?.toolName).toBe('functions.exec_command');
     expect(assistantMessage?.toolProgress?.[0]?.detail).toBe('src/App.tsx\nsrc/main.tsx');
+  });
+
+  it('creates a skill and updates the skill catalog', async () => {
+    const { useAppStore } = await import('@/store');
+    useAppStore.setState({
+      selectedProjectId: 'proj-1',
+    });
+
+    mockClient.createSkill.mockResolvedValue({
+      projectId: 'proj-1',
+      workspaceRoot: '/repo',
+      skill: {
+        name: 'release-notes',
+        source: 'projectSettings',
+        filePath: '/repo/.clawsharp/skills/release-notes/SKILL.md',
+        baseDirectory: '/repo/.clawsharp/skills/release-notes',
+      },
+      skills: [
+        {
+          name: 'release-notes',
+          source: 'projectSettings',
+          filePath: '/repo/.clawsharp/skills/release-notes/SKILL.md',
+          baseDirectory: '/repo/.clawsharp/skills/release-notes',
+        },
+      ],
+    });
+
+    const createdSkill = await useAppStore.getState().createSkill(
+      'release-notes',
+      'Summarize the release.',
+      '1. Review the merged changes.\n2. Draft concise notes.',
+    );
+
+    expect(mockClient.createSkill).toHaveBeenCalledWith({
+      projectId: 'proj-1',
+      name: 'release-notes',
+      description: 'Summarize the release.',
+      instructions: '1. Review the merged changes.\n2. Draft concise notes.',
+    });
+    expect(createdSkill).toMatchObject({
+      name: 'release-notes',
+      filePath: '/repo/.clawsharp/skills/release-notes/SKILL.md',
+    });
+    expect(useAppStore.getState().skills).toEqual([
+      {
+        name: 'release-notes',
+        source: 'projectSettings',
+        filePath: '/repo/.clawsharp/skills/release-notes/SKILL.md',
+        baseDirectory: '/repo/.clawsharp/skills/release-notes',
+      },
+    ]);
   });
 
   it('skips ancillary refresh requests after a text-only run completes', async () => {

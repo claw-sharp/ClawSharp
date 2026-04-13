@@ -76,6 +76,7 @@ public sealed class AgentHostCommandRouter
             "listDiagnostics" => await _diagnosticsService.ListDiagnosticsAsync(DeserializePayload<ListDiagnosticsRequest>(request), cancellationToken),
             "listPlugins" => await _pluginCatalog.ListPluginsAsync(DeserializePayload<ListPluginsRequest>(request), cancellationToken),
             "listSkills" => await _skillCatalog.ListSkillsAsync(DeserializePayload<ListSkillsRequest>(request), cancellationToken),
+            "createSkill" => await _skillCatalog.CreateSkillAsync(DeserializePayload<CreateSkillRequest>(request), cancellationToken),
             "listWorkspaceFiles" => await _workspaceFileCatalog.ListAsync(DeserializePayload<ListWorkspaceFilesRequest>(request), cancellationToken),
             "getSettings" => await _providerCatalog.GetSettingsAsync(DeserializePayload<GetSettingsRequest>(request), cancellationToken),
             "updateSettings" => await _providerCatalog.UpdateSettingsAsync(DeserializePayload<UpdateSettingsRequest>(request), cancellationToken),

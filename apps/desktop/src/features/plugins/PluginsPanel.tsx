@@ -1,8 +1,21 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Plug, RefreshCw, Settings2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Plus, Plug, RefreshCw, Settings2 } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store';
-import type { Plugin, PluginOption } from '@/types';
+import type { Plugin, PluginOption, Skill } from '@/types';
 
 type FilterMode = 'all' | 'enabled' | 'disabled' | 'issues';
 type DraftValues = Record<string, string | boolean>;
@@ -21,25 +34,39 @@ export const PluginsPanel = () => {
     pluginCatalog,
     pluginCatalogLoading,
     pluginCatalogError,
+    skills,
+    skillsLoading,
+    skillsError,
     loadPlugins,
+    loadSkills,
+    createSkill,
     refreshPlugins,
     setPluginEnabled,
     savePluginOptions,
     deletePluginOptions,
+    openExternalEditor,
   } = useAppStore();
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [draftValues, setDraftValues] = useState<DraftValues>({});
   const [touchedOptions, setTouchedOptions] = useState<string[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [skillNameInput, setSkillNameInput] = useState('');
+  const [skillDescriptionInput, setSkillDescriptionInput] = useState('');
+  const [skillInstructionsInput, setSkillInstructionsInput] = useState('');
+  const [openInEditor, setOpenInEditor] = useState(true);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creatingSkill, setCreatingSkill] = useState(false);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
 
   useEffect(() => {
     if (selectedProjectId) {
       void loadPlugins(selectedProjectId);
+      void loadSkills(selectedProjectId);
     }
-  }, [loadPlugins, selectedProjectId]);
+  }, [loadPlugins, loadSkills, selectedProjectId]);
 
   const filteredPlugins = useMemo(() => {
     return pluginCatalog.filter((plugin) => {
@@ -85,6 +112,66 @@ export const PluginsPanel = () => {
   const hasDraftChanges = touchedOptions.length > 0;
   const enabledCount = pluginCatalog.filter((plugin) => plugin.enabled).length;
   const issueCount = pluginCatalog.reduce((count, plugin) => count + plugin.validationIssues.length, 0);
+  const skillCount = skills.length;
+  const skillNameError = validateSkillName(skillNameInput, skills);
+  const canSubmitSkill = !creatingSkill && skillNameError === null && skillInstructionsInput.trim().length > 0;
+
+  const resetCreateDialog = () => {
+    setSkillNameInput('');
+    setSkillDescriptionInput('');
+    setSkillInstructionsInput('');
+    setOpenInEditor(true);
+    setCreateError(null);
+    setCreatingSkill(false);
+  };
+
+  const handleCreateDialogChange = (open: boolean) => {
+    setCreateDialogOpen(open);
+    if (!open) {
+      resetCreateDialog();
+    }
+  };
+
+  const handleCreateSkill = async () => {
+    const normalizedName = skillNameInput.trim();
+    const instructions = skillInstructionsInput.trim();
+    const validationError = validateSkillName(normalizedName, skills);
+    if (validationError) {
+      setCreateError(validationError);
+      return;
+    }
+
+    if (!instructions) {
+      setCreateError('Guidance is required.');
+      return;
+    }
+
+    setCreatingSkill(true);
+    setCreateError(null);
+    const createdSkill = await createSkill(
+      normalizedName,
+      skillDescriptionInput.trim() || null,
+      instructions,
+    );
+    setCreatingSkill(false);
+
+    if (!createdSkill) {
+      setCreateError('Skill creation failed. Check the panel status and try again.');
+      return;
+    }
+
+    if (openInEditor) {
+      void openExternalEditor({
+        kind: 'file',
+        path: createdSkill.filePath,
+      });
+    }
+
+    toast.success(`Created $${createdSkill.name}`, {
+      description: createdSkill.filePath,
+    });
+    handleCreateDialogChange(false);
+  };
 
   if (!selectedProjectId || !selectedProject) {
     return (
@@ -112,7 +199,15 @@ export const PluginsPanel = () => {
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill label={`${pluginCatalog.length} total`} tone="neutral" />
             <StatusPill label={`${enabledCount} enabled`} tone="success" />
+            <StatusPill label={`${skillCount} skills`} tone="neutral" />
             <StatusPill label={`${issueCount} issues`} tone={issueCount > 0 ? 'warning' : 'neutral'} />
+            <button
+              onClick={() => setCreateDialogOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
+              Add skill
+            </button>
             <button
               onClick={() => void refreshPlugins()}
               disabled={pluginCatalogLoading}
@@ -289,6 +384,38 @@ export const PluginsPanel = () => {
                 )}
               </Section>
 
+              <Section title="Discovered Skills">
+                {skillsError ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                    {skillsError}
+                  </div>
+                ) : skillsLoading ? (
+                  <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    Loading discovered skills…
+                  </div>
+                ) : skills.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    No project skills are available yet. Add one to make it available from the chat composer with `$`.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {skills.map((skill) => (
+                      <button
+                        key={skill.filePath}
+                        onClick={() => void openExternalEditor({ kind: 'file', path: skill.filePath })}
+                        className="rounded-xl border border-border p-4 text-left transition-colors hover:bg-accent/40"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-foreground">${skill.name}</div>
+                          <StatusPill label={formatSkillSource(skill.source)} tone="neutral" />
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">{skill.baseDirectory}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
               <Section title="Diagnostics">
                 {selectedPlugin.validationIssues.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
@@ -332,6 +459,93 @@ export const PluginsPanel = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={createDialogOpen} onOpenChange={handleCreateDialogChange}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Skill</DialogTitle>
+            <DialogDescription>
+              Create a project skill under `{selectedProject.path}/.clawsharp/skills` so it appears in the composer with `$`.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="skill-name">Skill name</Label>
+              <Input
+                id="skill-name"
+                value={skillNameInput}
+                onChange={(event) => {
+                  setSkillNameInput(event.target.value);
+                  setCreateError(null);
+                }}
+                placeholder="release-notes"
+                autoFocus
+              />
+              <div className="text-xs text-muted-foreground">
+                Use letters, numbers, `_`, or `-`. The skill will be invoked as `${skillNameInput.trim() || 'release-notes'}`.
+              </div>
+              {skillNameError && (
+                <div className="text-xs text-destructive">{skillNameError}</div>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="skill-description">Short description</Label>
+              <Input
+                id="skill-description"
+                value={skillDescriptionInput}
+                onChange={(event) => setSkillDescriptionInput(event.target.value)}
+                placeholder="Summarize when this skill should be used."
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="skill-guidance">Guidance</Label>
+              <Textarea
+                id="skill-guidance"
+                value={skillInstructionsInput}
+                onChange={(event) => {
+                  setSkillInstructionsInput(event.target.value);
+                  setCreateError(null);
+                }}
+                rows={10}
+                placeholder={'Use this skill when...\n\n## Workflow\n\n1. ...'}
+              />
+            </div>
+
+            <label className="flex items-center gap-3 rounded-xl border border-border px-3 py-2 text-sm text-foreground">
+              <Checkbox
+                checked={openInEditor}
+                onCheckedChange={(checked) => setOpenInEditor(checked === true)}
+              />
+              Open the new skill in the external editor after creating it
+            </label>
+
+            {createError && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {createError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => handleCreateDialogChange(false)}
+              className="rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleCreateSkill()}
+              disabled={!canSubmitSkill}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {creatingSkill ? 'Creating…' : 'Create skill'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -546,4 +760,34 @@ function formatDateTime(value: string | null | undefined): string {
   }
 
   return parsed.toLocaleString();
+}
+
+function validateSkillName(value: string, skills: Skill[]): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Skill name is required.';
+  }
+
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(trimmed)) {
+    return 'Use letters, numbers, underscores, or hyphens only.';
+  }
+
+  if (skills.some((skill) => skill.name.toLowerCase() === trimmed.toLowerCase())) {
+    return 'That skill name is already in use.';
+  }
+
+  return null;
+}
+
+function formatSkillSource(source: string): string {
+  switch (source) {
+    case 'projectSettings':
+      return 'project';
+    case 'userSettings':
+      return 'user';
+    case 'policySettings':
+      return 'policy';
+    default:
+      return source;
+  }
 }

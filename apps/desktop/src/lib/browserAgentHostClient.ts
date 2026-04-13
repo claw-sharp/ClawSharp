@@ -18,6 +18,8 @@ import type {
   AgentHostThreadMessage,
   AgentHostThreadSummary,
   CancelRunResponse,
+  CreateSkillRequest,
+  CreateSkillResponse,
   CreateThreadResponse,
   DeletePluginOptionsRequest,
   GetDiffResponse,
@@ -512,6 +514,7 @@ export class BrowserAgentHostClient {
         'listDiagnostics',
         'listPlugins',
         'listSkills',
+        'createSkill',
         'listWorkspaceFiles',
         'getSettings',
         'updateSettings',
@@ -859,6 +862,45 @@ export class BrowserAgentHostClient {
       projectId: resolvedProjectId,
       workspaceRoot: project.path,
       skills: deepClone(this.skillsByProject[resolvedProjectId] ?? []),
+    };
+  }
+
+  async createSkill(request: CreateSkillRequest): Promise<CreateSkillResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const skillName = request.name.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(skillName)) {
+      throw new Error('Skill names must start with a letter or number and only use letters, numbers, underscores, or hyphens.');
+    }
+
+    const existingSkills = this.skillsByProject[resolvedProjectId] ?? [];
+    if (existingSkills.some((skill) => skill.name.toLowerCase() === skillName.toLowerCase())) {
+      throw new Error(`A skill named '${skillName}' is already available in this project.`);
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    const skill: AgentHostSkill = {
+      name: skillName,
+      source: 'projectSettings',
+      filePath: `${project.path}/.clawsharp/skills/${skillName}/SKILL.md`,
+      baseDirectory: `${project.path}/.clawsharp/skills/${skillName}`,
+    };
+
+    this.skillsByProject[resolvedProjectId] = [...existingSkills, skill]
+      .sort((left, right) => left.name.localeCompare(right.name));
+    this.workspaceFilesByProject[resolvedProjectId] = [
+      ...(this.workspaceFilesByProject[resolvedProjectId] ?? []),
+      `.clawsharp/skills/${skillName}/SKILL.md`,
+    ];
+
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      skill: deepClone(skill),
+      skills: deepClone(this.skillsByProject[resolvedProjectId]),
     };
   }
 

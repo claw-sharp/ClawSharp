@@ -26,6 +26,7 @@ import type {
   RunToolProgressEvent as AgentHostRunToolProgressEvent,
   RunToolResultEvent,
   OpenExternalEditorRequest,
+  CreateSkillResponse,
   ListPluginsResponse,
   ListSkillsResponse,
   ListWorkspaceFilesResponse,
@@ -84,6 +85,7 @@ interface AppStore {
   initialize: () => Promise<void>;
   loadPlugins: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   loadSkills: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  createSkill: (name: string, description: string | null, instructions: string) => Promise<Skill | null>;
   loadWorkspaceFiles: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   refreshPlugins: () => Promise<void>;
   setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
@@ -468,6 +470,48 @@ export const useAppStore = create<AppStore>((set, get) => ({
           statusLabel: 'Workspace file load failed',
         },
       }));
+    }
+  },
+
+  createSkill: async (name, description, instructions) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return null;
+    }
+
+    set({
+      skillsLoading: true,
+      skillsError: null,
+    });
+
+    try {
+      const response = await agentHostClient.createSkill({
+        projectId,
+        name,
+        description,
+        instructions,
+      });
+      set((state) => ({
+        ...applyCreateSkillResponse(response)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: `Created $${response.skill.name}`,
+        },
+      }));
+      void get().loadWorkspaceFiles(projectId, { force: true });
+      return mapSkill(response.skill);
+    } catch (error) {
+      set((state) => ({
+        skillsLoading: false,
+        skillsError: toErrorMessage(error, 'Failed to create skill.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to create skill.'),
+          statusLabel: 'Skill creation failed',
+        },
+      }));
+      return null;
     }
   },
 
@@ -1634,6 +1678,20 @@ function applySkillCatalogResponse(response: ListSkillsResponse) {
       ...state.connection,
       errorMessage: null,
       statusLabel: `Loaded ${response.skills.length} skill${response.skills.length === 1 ? '' : 's'}`,
+    },
+  });
+}
+
+function applyCreateSkillResponse(response: CreateSkillResponse) {
+  return (state: AppStore) => ({
+    skills: response.skills.map(mapSkill),
+    skillsProjectId: response.projectId,
+    skillsLoading: false,
+    skillsError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Created $${response.skill.name}`,
     },
   });
 }
