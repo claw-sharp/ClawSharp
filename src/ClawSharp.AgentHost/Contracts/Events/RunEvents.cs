@@ -26,6 +26,7 @@ public sealed record RunToolProgressEvent(
     string? ParentToolUseId,
     string ToolName,
     string Label,
+    string? Input,
     string? Detail,
     string Stage,
     DateTimeOffset Timestamp);

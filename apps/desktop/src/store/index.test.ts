@@ -143,7 +143,7 @@ describe('useAppStore', () => {
     mockClient.listPendingApprovals.mockResolvedValue({ approvals: [] });
   });
 
-  it('keeps tool output on the assistant message after the final response arrives', async () => {
+  it('keeps tool input and output on the assistant message after the final response arrives', async () => {
     let onEvent: ((event: { event: string; timestamp: string; payload: unknown }) => void) | undefined;
 
     mockClient.subscribe.mockImplementation(async (eventHandler) => {
@@ -247,6 +247,7 @@ describe('useAppStore', () => {
         toolUseId: 'tool-1',
         toolName: 'functions.exec_command',
         label: 'Ran `rg --files`',
+        input: '{"cmd":"rg --files"}',
         detail: null,
         stage: 'tool',
         timestamp: '2026-04-08T10:02:01.000Z',
@@ -286,6 +287,7 @@ describe('useAppStore', () => {
     expect(assistantMessage?.content).toBe('I found the relevant files.');
     expect(assistantMessage?.toolProgress).toHaveLength(1);
     expect(assistantMessage?.toolProgress?.[0]?.toolName).toBe('functions.exec_command');
+    expect(assistantMessage?.toolProgress?.[0]?.input).toBe('{"cmd":"rg --files"}');
     expect(assistantMessage?.toolProgress?.[0]?.detail).toBe('src/App.tsx\nsrc/main.tsx');
   });
 

@@ -644,7 +644,7 @@ const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
   const Icon = iconForToolEvent(event);
   const stateLabel = event.status ?? (event.completed ? 'completed' : 'running');
   const toolName = event.toolName ?? event.label;
-  const hasExpandableContent = Boolean(event.label || event.detail);
+  const hasExpandableContent = Boolean(event.label || event.input || event.detail);
 
   return (
     <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2">
@@ -689,11 +689,22 @@ const ToolProgressCard = ({ event }: { event: ToolProgressEvent }) => {
           </div>
           {expanded && (
             <>
-              {event.label && <p className="text-xs text-foreground">{event.label}</p>}
+              {event.label && event.label !== toolName && <p className="text-xs text-foreground">{event.label}</p>}
+              {event.input && (
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Input</p>
+                  <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
+                    {event.input}
+                  </pre>
+                </div>
+              )}
               {event.detail && (
-                <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
-                  {event.detail}
-                </pre>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{event.input ? 'Output' : 'Detail'}</p>
+                  <pre className="overflow-x-auto rounded-md bg-black/20 px-2 py-2 font-mono text-[11px] leading-relaxed text-secondary-foreground whitespace-pre-wrap">
+                    {event.detail}
+                  </pre>
+                </div>
               )}
             </>
           )}
@@ -802,6 +813,12 @@ const PromptComposer = ({
     : activeQuery?.trigger === '/'
       ? 'Commands'
       : 'Skills';
+
+  useEffect(() => {
+    if (!isRunning && !isBrowserPreview) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [threadId, isRunning, isBrowserPreview]);
 
   useEffect(() => {
     setSelectedSuggestionIndex(0);

@@ -35,6 +35,7 @@ export interface ToolProgressEvent {
   type: 'reading' | 'planning' | 'editing' | 'reviewing' | 'finalizing' | 'searching' | 'testing' | 'running' | 'waiting' | 'tool';
   toolName?: string;
   label: string;
+  input?: string;
   detail?: string;
   timestamp: string;
   completed: boolean;

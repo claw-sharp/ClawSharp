@@ -2051,6 +2051,7 @@ function handleRunToolProgress(
         type: mapToolProgressType(payload.stage, payload.toolName),
         toolName: payload.toolName,
         label: payload.label,
+        input: payload.input ?? undefined,
         detail: payload.detail ?? undefined,
         timestamp: payload.timestamp,
         completed: false,
@@ -2330,8 +2331,17 @@ function createToolActivityMessage(
 }
 
 function mergeToolProgress(entries: ToolProgressEvent[], nextEntry: ToolProgressEvent): ToolProgressEvent[] {
+  const existing = entries.find((entry) => entry.id === nextEntry.id);
+  const mergedEntry = existing
+    ? {
+        ...existing,
+        ...nextEntry,
+        input: nextEntry.input ?? existing.input,
+        detail: nextEntry.detail ?? existing.detail,
+      }
+    : nextEntry;
   const remaining = entries.filter((entry) => entry.id !== nextEntry.id);
-  return [...remaining, nextEntry].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  return [...remaining, mergedEntry].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
 }
 
 function mergeToolProgressCollections(...collections: ToolProgressEvent[][]): ToolProgressEvent[] {

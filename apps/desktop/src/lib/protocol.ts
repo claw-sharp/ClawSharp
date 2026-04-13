@@ -559,6 +559,7 @@ export interface RunToolProgressEvent {
   parentToolUseId?: string | null;
   toolName: string;
   label: string;
+  input?: string | null;
   detail?: string | null;
   stage: string;
   timestamp: string;

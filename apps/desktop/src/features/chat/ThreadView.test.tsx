@@ -131,6 +131,57 @@ describe('ThreadView', () => {
     expect(screen.queryByText('Open Project')).not.toBeInTheDocument();
   });
 
+  it('focuses the chat input when a thread is open', async () => {
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/tmp/clawsharp',
+          branch: 'main',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-13T00:00:00Z',
+          description: '/tmp/clawsharp',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'New thread',
+          summary: 'New thread summary',
+          branch: 'main',
+          status: 'idle',
+          changedFilesCount: 0,
+          pinned: false,
+          lastUpdated: '2026-04-13T00:00:00Z',
+          messageCount: 0,
+          model: 'claude-haiku-4-5-20251001',
+        },
+      ],
+      messages: { 'thread-1': [] },
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        ...baseStoreState.connection,
+        isConnected: true,
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const input = screen.getByPlaceholderText('Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills.');
+
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
+  });
+
   it('prompts the user to configure provider keys when none are configured', () => {
     const toggleSettings = vi.fn();
     const openProjectPicker = vi.fn();
@@ -266,6 +317,7 @@ describe('ThreadView', () => {
                 type: 'tool',
                 toolName: 'functions.exec_command',
                 label: 'Ran `rg --files`',
+                input: '{"cmd":"rg --files"}',
                 detail: 'src/App.tsx\nsrc/main.tsx',
                 timestamp: '2026-04-10T10:00:10Z',
                 completed: true,
@@ -300,6 +352,9 @@ describe('ThreadView', () => {
 
     expect(screen.getByText('functions.exec_command')).toBeInTheDocument();
     expect(screen.getByText('Ran `rg --files`')).toBeInTheDocument();
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('{"cmd":"rg --files"}')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
     expect(screen.getByText(/src\/App\.tsx/)).toBeInTheDocument();
     expect(screen.getByText(/src\/main\.tsx/)).toBeInTheDocument();
   });

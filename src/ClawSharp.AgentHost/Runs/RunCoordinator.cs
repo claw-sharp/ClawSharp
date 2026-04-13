@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Ipc;
@@ -14,6 +15,11 @@ namespace ClawSharp.AgentHost.Runs;
 
 public sealed class RunCoordinator
 {
+    private static readonly JsonSerializerOptions ToolInputJsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private readonly WorkspaceApplicationRegistry _applicationRegistry;
     private readonly RecentProjectStore _recentProjectStore;
     private readonly AgentHostEventDispatcher _eventDispatcher;
@@ -409,6 +415,7 @@ public sealed class RunCoordinator
                             toolName,
                             toolName,
                             detail,
+                            null,
                             "requested",
                             message.Timestamp),
                         cancellationToken);
@@ -431,6 +438,7 @@ public sealed class RunCoordinator
                             parentToolUseId,
                             toolName,
                             label,
+                            null,
                             detail,
                             stage,
                             message.Timestamp),
@@ -491,7 +499,7 @@ public sealed class RunCoordinator
         try
         {
             var json = JsonNode.Parse(arguments);
-            return json?.ToJsonString();
+            return json?.ToJsonString(ToolInputJsonOptions);
         }
         catch
         {
