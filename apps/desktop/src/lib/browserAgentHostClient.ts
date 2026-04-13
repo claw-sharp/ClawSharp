@@ -290,7 +290,7 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
           gitCommitSha: null,
           commands: [],
           agents: [],
-          skills: ['skills/review-changes', 'skills/cleanup-diff', 'skills/react-review'],
+          skills: ['skills/review-changes', 'skills/security-review', 'skills/cleanup-diff', 'skills/react-review'],
           outputStyles: [],
           hookFiles: [],
           hookEvents: [],
@@ -415,6 +415,7 @@ function createSkillCatalog(projects: AgentHostProject[]): Record<string, AgentH
       const workspacePath = project.path;
       const skills: AgentHostSkill[] = [
         ['review-changes', 'reviewer'],
+        ['security-review', 'reviewer'],
         ['cleanup-diff', 'reviewer'],
         ['react-review', 'reviewer'],
         ['browser-verify', 'verification'],

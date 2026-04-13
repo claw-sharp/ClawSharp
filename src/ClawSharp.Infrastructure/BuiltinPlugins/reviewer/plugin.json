@@ -5,6 +5,7 @@
   "defaultEnabled": true,
   "skills": [
     "skills/review-changes",
+    "skills/security-review",
     "skills/cleanup-diff",
     "skills/react-review"
   ]
