@@ -11,6 +11,7 @@ internal sealed partial class PromptAttachmentReferenceService
     private const int MaxCharactersToAttach = 16_000;
     private const int MaxLinesToAttach = 400;
     private const long MaxImageBytes = (5 * 1024 * 1024 * 3) / 4;
+    private static readonly HashSet<string> PdfExtensions = [".pdf"];
 
     [GeneratedRegex(@"<clawsharp-attachment>(?<json>.*?)</clawsharp-attachment>", RegexOptions.Singleline)]
     private static partial Regex AttachmentMarkerPattern();
@@ -106,6 +107,16 @@ internal sealed partial class PromptAttachmentReferenceService
             {
                 hydratedAttachments.Add(attachment);
                 userContext[$"Attached file {attachment.Name}"] = fileContext;
+                continue;
+            }
+
+            if (TryBuildReferencedFileAttachmentContext(
+                    attachment,
+                    out var referencedAttachment,
+                    out var referencedFileContext))
+            {
+                hydratedAttachments.Add(referencedAttachment);
+                userContext[$"Attached file {referencedAttachment.Name}"] = referencedFileContext;
             }
         }
 
@@ -161,6 +172,41 @@ internal sealed partial class PromptAttachmentReferenceService
 
         var (content, wasTruncated) = TruncateContent(metadata.Content);
         context = BuildFileAttachmentContext(attachment.Name, fullPath, content, wasTruncated);
+        return true;
+    }
+
+    private static bool TryBuildReferencedFileAttachmentContext(
+        QueryPromptAttachment attachment,
+        out QueryPromptAttachment hydratedAttachment,
+        out string context)
+    {
+        hydratedAttachment = attachment;
+        context = string.Empty;
+
+        var fullPath = ResolveAbsolutePath(attachment.Path);
+        if (fullPath is null || !File.Exists(fullPath))
+        {
+            return false;
+        }
+
+        FileInfo fileInfo;
+        try
+        {
+            fileInfo = new FileInfo(fullPath);
+        }
+        catch
+        {
+            return false;
+        }
+
+        hydratedAttachment = attachment with
+        {
+            Path = fullPath
+        };
+
+        context = IsPdfExtension(fullPath)
+            ? BuildPdfAttachmentReferenceContext(attachment.Name, fullPath, fileInfo.Length)
+            : BuildBinaryAttachmentReferenceContext(attachment.Name, fullPath, fileInfo.Length);
         return true;
     }
 
@@ -246,6 +292,38 @@ internal sealed partial class PromptAttachmentReferenceService
         return builder.ToString().TrimEnd();
     }
 
+    private static string BuildPdfAttachmentReferenceContext(string name, string absolutePath, long sizeBytes)
+    {
+        var builder = new StringBuilder();
+        builder.Append("Name: ");
+        builder.AppendLine(name);
+        builder.Append("Absolute path: ");
+        builder.AppendLine(absolutePath.Replace('\\', '/'));
+        builder.AppendLine("Type: PDF document");
+        builder.Append("Size: ");
+        builder.AppendLine(FormatFileSize(sizeBytes));
+        builder.AppendLine("This PDF was attached for the current turn, but it is not inlined into the prompt as text.");
+        builder.AppendLine("Use the Read tool with the exact absolute path above to inspect it.");
+        builder.AppendLine("If the PDF is long, use the pages parameter to read a smaller page range first.");
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildBinaryAttachmentReferenceContext(string name, string absolutePath, long sizeBytes)
+    {
+        var builder = new StringBuilder();
+        builder.Append("Name: ");
+        builder.AppendLine(name);
+        builder.Append("Absolute path: ");
+        builder.AppendLine(absolutePath.Replace('\\', '/'));
+        builder.Append("Type: ");
+        builder.AppendLine(GetFileTypeDescription(absolutePath));
+        builder.Append("Size: ");
+        builder.AppendLine(FormatFileSize(sizeBytes));
+        builder.AppendLine("This file was attached for the current turn, but it is not inlined into the prompt as text.");
+        builder.AppendLine("Use the Read tool with the exact absolute path above if you need to inspect it.");
+        return builder.ToString().TrimEnd();
+    }
+
     private static string BuildImageAttachmentContext(QueryPromptAttachment attachment)
     {
         var builder = new StringBuilder();
@@ -257,6 +335,38 @@ internal sealed partial class PromptAttachmentReferenceService
         builder.AppendLine(attachment.MediaType ?? "image/png");
         builder.AppendLine("The image is attached as native model input for this turn.");
         return builder.ToString().TrimEnd();
+    }
+
+    private static bool IsPdfExtension(string filePath)
+    {
+        return PdfExtensions.Contains(Path.GetExtension(filePath));
+    }
+
+    private static string GetFileTypeDescription(string filePath)
+    {
+        var extension = Path.GetExtension(filePath);
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            return "Attached file";
+        }
+
+        return $"{extension.ToLowerInvariant()} file";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        var kilobytes = bytes / 1024d;
+        if (kilobytes < 1024)
+        {
+            return $"{kilobytes:0.#} KB";
+        }
+
+        return $"{kilobytes / 1024d:0.#} MB";
     }
 
     private static bool TryParseKind(string? rawKind, out QueryPromptAttachmentKind kind)

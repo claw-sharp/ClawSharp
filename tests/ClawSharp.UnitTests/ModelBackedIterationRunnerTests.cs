@@ -221,6 +221,43 @@ public sealed class ModelBackedIterationRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_Persists_Previous_Response_Metadata_For_PostTool_Follow_Up_Turn()
+    {
+        var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sessionRoot);
+        var taskRegistry = new TaskRegistry();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(sessionRoot, taskRegistry);
+        toolRegistry.RegisterOrReplace(new ModelBackedToolUseTestTool());
+        var runner = new ModelBackedIterationRunner(
+            new PostSamplingHookRegistry(),
+            new QueryModelIterationRequestBuilder(),
+            new CompletedToolUseWithResponseIdModelCallExecutor(),
+            toolOrchestrator: new ToolOrchestrator(toolRegistry, eventSink));
+        var session = new ConversationSession("session-model-tooluse-response-id", sessionRoot, Path.Combine(sessionRoot, "session.jsonl"));
+        var state = QueryLoopStateFactory.CreateInitial(
+            [ChatMessageFactory.CreateText(MessageRole.User, "hello")],
+            QueryToolUseContextStateFactory.CreateFromToolRegistry(toolRegistry));
+
+        var result = await runner.RunAsync(
+            QueryTurnRequest.Create(session, "hello"),
+            state,
+            session,
+            new ClawSharpSettings(),
+            static (_, _) => Task.CompletedTask);
+
+        var continuation = Assert.IsType<QueryContinueIterationResult>(result);
+        Assert.Equal("resp_tooluse_123", continuation.State.PreviousResponseId);
+        Assert.Equal(2, continuation.State.PreviousResponseMessageCount);
+        Assert.Equal(
+            [
+                """{"type":"reasoning","id":"rs_123","summary":[]}""",
+                """{"type":"function_call","id":"fc_123","call_id":"call_123","name":"ModelTool","arguments":"{\"path\":\"note.txt\"}"}"""
+            ],
+            continuation.State.PreviousResponseItems);
+    }
+
+    [Fact]
     public async Task RunAsync_Does_Not_Run_Stop_Hooks_Before_PostTool_FollowUp_Turn()
     {
         var sessionRoot = Path.Combine(Path.GetTempPath(), "clawsharp-model-backed-runner-tests", Guid.NewGuid().ToString("N"));
@@ -1206,6 +1243,38 @@ public sealed class ModelBackedIterationRunnerTests
                     new QueryTerminalIterationResult(
                         new QueryLoopTerminal(QueryTerminalReason.Completed),
                         completedState)));
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class CompletedToolUseWithResponseIdModelCallExecutor : IQueryModelCallExecutor
+    {
+        public async IAsyncEnumerable<QueryModelCallUpdate> StreamAsync(
+            QueryModelHttpStreamingRequest streamingRequest,
+            QueryTurnRequest request,
+            QueryLoopState state,
+            ConversationSession session,
+            ClawSharpSettings settings,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var assistantMessage = ChatMessageFactory.CreateToolUse(
+                [("tooluse-model-1", "ModelTool", "{\"path\":\"note.txt\"}")]);
+            var completedState = state with
+            {
+                Messages = state.Messages.Concat([assistantMessage]).ToArray()
+            };
+            yield return new QueryModelCallUpdate(new QueryMessageRuntimeEvent(assistantMessage));
+            yield return new QueryModelCallUpdate(
+                AttemptResult: QueryModelCallAttemptResult.Completed(
+                    new QueryTerminalIterationResult(
+                        new QueryLoopTerminal(QueryTerminalReason.Completed),
+                        completedState),
+                    responseId: "resp_tooluse_123",
+                    responseOutputItems:
+                    [
+                        """{"type":"reasoning","id":"rs_123","summary":[]}""",
+                        """{"type":"function_call","id":"fc_123","call_id":"call_123","name":"ModelTool","arguments":"{\"path\":\"note.txt\"}"}"""
+                    ]));
             await Task.CompletedTask;
         }
     }

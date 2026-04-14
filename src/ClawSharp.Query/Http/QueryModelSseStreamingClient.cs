@@ -349,6 +349,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                                 {
                                     ["type"] = "tool_use",
                                     ["id"] = toolUseId,
+                                    ["tool_call_item_id"] = toolUseId,
                                     ["name"] = name,
                                     ["input"] = new JsonObject()
                                 }
@@ -545,6 +546,8 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
     {
         private readonly string _model;
         private readonly Dictionary<string, ToolBlockState> _toolBlocksByItemId = [];
+        private readonly Dictionary<string, JsonObject> _outputItemsByKey = [];
+        private readonly List<string> _outputItemOrder = [];
         private int _nextContentBlockIndex;
         private int? _activeTextBlockIndex;
         private bool _started;
@@ -600,6 +603,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 case "response.output_item.added":
                 {
                     var item = payload["item"]?.AsObject();
+                    RegisterOrUpdateOutputItem(item);
                     if (item?["type"]?.GetValue<string>() == "function_call")
                     {
                         foreach (var update in CloseActiveTextBlock())
@@ -623,6 +627,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                             {
                                 ["type"] = "tool_use",
                                 ["id"] = toolUseId,
+                                ["tool_call_item_id"] = itemId,
                                 ["name"] = item["name"]?.GetValue<string>() ?? "tool",
                                 ["input"] = new JsonObject()
                             }
@@ -661,6 +666,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                     var itemId = payload["item_id"]?.GetValue<string>() ?? string.Empty;
                     if (_toolBlocksByItemId.TryGetValue(itemId, out var toolBlock))
                     {
+                        AppendOutputItemArguments(itemId, payload["delta"]?.GetValue<string>() ?? string.Empty);
                         yield return CreateInputJsonDelta(
                             toolBlock.Index,
                             payload["delta"]?.GetValue<string>() ?? string.Empty);
@@ -671,6 +677,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 case "response.output_item.done":
                 {
                     var item = payload["item"]?.AsObject();
+                    RegisterOrUpdateOutputItem(item);
                     var itemType = item?["type"]?.GetValue<string>();
                     if (itemType == "function_call")
                     {
@@ -697,6 +704,7 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 case "response.completed":
                 case "response.incomplete":
                     _finalResponse = payload["response"]?.AsObject();
+                    RegisterCompletedOutputItems();
                     break;
                 case "response.failed":
                     yield return new JsonObject
@@ -746,6 +754,8 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                     ["stop_reason"] = DetermineStopReason(),
                     ["stop_sequence"] = null
                 },
+                ["response_id"] = _finalResponse?["id"]?.GetValue<string>(),
+                ["response_output_items"] = BuildResponseOutputItems(),
                 ["usage"] = new JsonObject
                 {
                     ["input_tokens"] = _finalResponse?["usage"]?["input_tokens"]?.GetValue<int?>() ?? 0,
@@ -812,6 +822,86 @@ public sealed class QueryModelSseStreamingClient : IQueryModelHttpStreamingClien
                 ["index"] = _activeTextBlockIndex
             };
             _activeTextBlockIndex = null;
+        }
+
+        private void RegisterCompletedOutputItems()
+        {
+            var items = _finalResponse?["output"]?.AsArray();
+            if (items is null)
+            {
+                return;
+            }
+
+            foreach (var item in items.OfType<JsonObject>())
+            {
+                RegisterOrUpdateOutputItem(item);
+            }
+        }
+
+        private void RegisterOrUpdateOutputItem(JsonObject? item)
+        {
+            if (item is null)
+            {
+                return;
+            }
+
+            var key = GetOutputItemKey(item);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            if (!_outputItemsByKey.ContainsKey(key))
+            {
+                _outputItemOrder.Add(key);
+            }
+
+            _outputItemsByKey[key] = item.DeepClone().AsObject();
+        }
+
+        private void AppendOutputItemArguments(string itemId, string delta)
+        {
+            if (string.IsNullOrEmpty(itemId) ||
+                string.IsNullOrEmpty(delta) ||
+                !_outputItemsByKey.TryGetValue(itemId, out var item))
+            {
+                return;
+            }
+
+            var existingArguments = item["arguments"]?.GetValue<string>() ?? string.Empty;
+            item["arguments"] = existingArguments + delta;
+        }
+
+        private JsonArray BuildResponseOutputItems()
+        {
+            var items = new JsonArray();
+            foreach (var key in _outputItemOrder)
+            {
+                if (_outputItemsByKey.TryGetValue(key, out var item))
+                {
+                    items.Add(item.DeepClone());
+                }
+            }
+
+            return items;
+        }
+
+        private static string? GetOutputItemKey(JsonObject item)
+        {
+            var id = item["id"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                return id;
+            }
+
+            var callId = item["call_id"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(callId))
+            {
+                return $"call:{callId}";
+            }
+
+            var type = item["type"]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(type) ? null : $"{type}:{item.ToJsonString()}";
         }
 
         private static JsonObject CreateInputJsonDelta(int blockIndex, string partialJson)

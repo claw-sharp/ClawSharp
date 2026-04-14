@@ -227,6 +227,23 @@ internal sealed class ReadTool : BaseTool
         {
             if (input.Pages is not null)
             {
+                if (!await ReadToolPdfPageExtractor.IsPageRenderingAvailableAsync(cancellationToken))
+                {
+                    try
+                    {
+                        var fallbackText = await Task.Run(
+                            () => ReadToolPdfFallbackReader.Read(resolvedPath, input.Pages),
+                            cancellationToken);
+                        return Success(
+                            $"PDF fallback text extracted for {input.FilePath} because page rendering is unavailable.",
+                            BuildTextStructuredOutput(input.FilePath, fallbackText));
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        return Failure(exception.Message);
+                    }
+                }
+
                 try
                 {
                     ReadToolPolicies.TryParsePdfPageRange(input.Pages, out var range);
@@ -318,20 +335,7 @@ internal sealed class ReadTool : BaseTool
                 output = output[..ReadToolPolicies.MaxReturnedCharacters] + Environment.NewLine + "[truncated]";
             }
 
-            var structuredOutput = new JsonObject
-            {
-                ["type"] = "text",
-                ["file"] = new JsonObject
-                {
-                    ["filePath"] = input.FilePath,
-                    ["content"] = output,
-                    ["numLines"] = CountLines(output),
-                    ["startLine"] = startLine,
-                    ["totalLines"] = totalLines
-                }
-            };
-
-            return Success(output, structuredOutput);
+            return Success(output, BuildTextStructuredOutput(input.FilePath, output, startLine, totalLines));
         }
         catch (InvalidOperationException exception)
         {
@@ -377,6 +381,23 @@ internal sealed class ReadTool : BaseTool
         }
 
         return lineCount;
+    }
+
+    private static JsonObject BuildTextStructuredOutput(string filePath, string content, int startLine = 1, int? totalLines = null)
+    {
+        var effectiveTotalLines = totalLines ?? CountLines(content);
+        return new JsonObject
+        {
+            ["type"] = "text",
+            ["file"] = new JsonObject
+            {
+                ["filePath"] = filePath,
+                ["content"] = content,
+                ["numLines"] = CountLines(content),
+                ["startLine"] = startLine,
+                ["totalLines"] = effectiveTotalLines
+            }
+        };
     }
 
     private static string SliceLines(string content, int startLine, int limit)

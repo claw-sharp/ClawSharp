@@ -20,6 +20,7 @@ export interface AgentHostCommandMap {
   listWorkspaceFiles: { request: ListWorkspaceFilesRequest; response: ListWorkspaceFilesResponse };
   getSettings: { request: GetSettingsRequest; response: GetSettingsResponse };
   updateSettings: { request: UpdateSettingsRequest; response: UpdateSettingsResponse };
+  installPlugin: { request: InstallPluginRequest; response: InstallPluginResponse };
   setPluginEnabled: { request: SetPluginEnabledRequest; response: ListPluginsResponse };
   savePluginOptions: { request: SavePluginOptionsRequest; response: ListPluginsResponse };
   deletePluginOptions: { request: DeletePluginOptionsRequest; response: ListPluginsResponse };
@@ -197,6 +198,19 @@ export interface UpdateSettingsRequest {
   clearAuthToken?: boolean | null;
   clearAccountId?: boolean | null;
   useExternalCredential?: boolean | null;
+}
+
+export interface InstallPluginRequest {
+  projectId?: string | null;
+  pluginId: string;
+}
+
+export interface InstallPluginResponse {
+  projectId: string;
+  pluginId: string;
+  enabled: boolean;
+  authenticated: boolean;
+  message: string;
 }
 
 export interface SetPluginEnabledRequest {
@@ -387,12 +401,19 @@ export interface AgentHostPluginOption {
   max?: number | null;
 }
 
+export interface AgentHostPluginMcpServer {
+  name: string;
+  type: string;
+  endpoint?: string | null;
+}
+
 export interface AgentHostPlugin {
   pluginId: string;
   name: string;
   description?: string | null;
   version?: string | null;
   enabled: boolean;
+  authenticated?: boolean;
   isBundled: boolean;
   installPath: string;
   scope: string;
@@ -407,6 +428,7 @@ export interface AgentHostPlugin {
   hookEvents: string[];
   validationIssues: AgentHostPluginValidationIssue[];
   options: AgentHostPluginOption[];
+  mcpServers: AgentHostPluginMcpServer[];
 }
 
 export interface ListPluginsResponse {

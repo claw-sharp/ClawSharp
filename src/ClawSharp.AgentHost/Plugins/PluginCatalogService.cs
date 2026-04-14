@@ -5,6 +5,7 @@ using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
+using ClawSharp.Tools.Mcp;
 
 namespace ClawSharp.AgentHost.Plugins;
 
@@ -57,7 +58,121 @@ public sealed class PluginCatalogService
         var updatedSettings = CloneSettings(state.Settings, enabledPlugins, state.Settings.PluginConfigs);
         await SaveAppSettingsAsync(app, updatedSettings, cancellationToken);
         await RefreshPluginsAsync(app, cancellationToken);
+        await SyncRuntimeMcpAsync(app, cancellationToken);
         return BuildCatalog(projectId, app);
+    }
+
+    public async Task<InstallPluginResponse> InstallPluginAsync(
+        InstallPluginRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.PluginId))
+        {
+            throw new AgentHostException("invalid_request", "pluginId is required.");
+        }
+
+        var (projectId, app) = await ResolveApplicationAsync(request.ProjectId, cancellationToken);
+        var state = app.AppStateStore.GetState();
+        EnsurePluginExists(state, request.PluginId);
+
+        if (!state.Settings.EnabledPlugins.TryGetValue(request.PluginId, out var existingEnabledSetting) || existingEnabledSetting.Enabled != true)
+        {
+            var enabledPlugins = new Dictionary<string, PluginEnabledSetting>(state.Settings.EnabledPlugins, StringComparer.Ordinal)
+            {
+                [request.PluginId] = new PluginEnabledSetting
+                {
+                    Enabled = true,
+                    VersionConstraints = existingEnabledSetting?.VersionConstraints
+                }
+            };
+
+            var updatedSettings = CloneSettings(state.Settings, enabledPlugins, state.Settings.PluginConfigs);
+            await SaveAppSettingsAsync(app, updatedSettings, cancellationToken);
+            await RefreshPluginsAsync(app, cancellationToken);
+        }
+
+        state = app.AppStateStore.GetState();
+        var plugin = ResolvePlugin(state, request.PluginId);
+        var pluginMcpResolver = new PluginMcpServerResolver(_secureStorage);
+        var (pluginMcpServers, pluginMcpErrors) = pluginMcpResolver.Resolve([plugin], state.Settings);
+
+        foreach (var error in pluginMcpErrors)
+        {
+            ClawSharpTelemetry.LogDebug(
+                $"[PluginCatalogService:install] scope={error.Metadata.Scope} path={error.Path} message={error.Message}",
+                error.Metadata.Severity == McpConfigErrorSeverity.Fatal ? DebugLogLevel.Warn : DebugLogLevel.Info);
+        }
+
+        if (pluginMcpServers.Count == 0)
+        {
+            if (pluginMcpErrors.Count > 0)
+            {
+                return new InstallPluginResponse(
+                    projectId,
+                    request.PluginId,
+                    Enabled: true,
+                    Authenticated: false,
+                    Message: pluginMcpErrors[0].Message);
+            }
+
+            return new InstallPluginResponse(
+                projectId,
+                request.PluginId,
+                Enabled: true,
+                Authenticated: true,
+                Message: $"Installed {plugin.Name}.");
+        }
+
+        var connections = new List<McpServerConnection>();
+        foreach (var server in pluginMcpServers)
+        {
+            var connection = await app.McpLifecycleManager.ReconnectToServerAsync(
+                server.Key,
+                server.Value,
+                cancellationToken: cancellationToken);
+            connections.Add(connection);
+        }
+
+        if (app.IsRuntimeInitialized)
+        {
+            var runtime = await app.EnsureRuntimeAsync(cancellationToken);
+            await app.McpToolRegistrationService.RegisterToolsAsync(runtime.Tools, connections, cancellationToken);
+            await app.McpCommandResourceRegistrationService.RegisterForConnectionsAsync(runtime.Tools, connections, cancellationToken);
+        }
+
+        var connectedNames = connections
+            .OfType<ConnectedMcpServerConnection>()
+            .Select(static connection => connection.Name)
+            .ToArray();
+        if (connectedNames.Length > 0)
+        {
+            return new InstallPluginResponse(
+                projectId,
+                request.PluginId,
+                Enabled: true,
+                Authenticated: true,
+                Message: $"Installed {plugin.Name} and authenticated {string.Join(", ", connectedNames)}.");
+        }
+
+        var failed = connections.OfType<FailedMcpServerConnection>().FirstOrDefault();
+        if (failed is not null)
+        {
+            return new InstallPluginResponse(
+                projectId,
+                request.PluginId,
+                Enabled: true,
+                Authenticated: false,
+                Message: string.IsNullOrWhiteSpace(failed.Error)
+                    ? $"Installed {plugin.Name}, but authentication failed."
+                    : failed.Error!);
+        }
+
+        return new InstallPluginResponse(
+            projectId,
+            request.PluginId,
+            Enabled: true,
+            Authenticated: false,
+            Message: $"Installed {plugin.Name}, but authentication did not complete.");
     }
 
     public async Task<ListPluginsResponse> SavePluginOptionsAsync(
@@ -91,6 +206,7 @@ public sealed class PluginCatalogService
             out var updatedSettings);
 
         await SaveAppSettingsAsync(app, updatedSettings, cancellationToken);
+        await SyncRuntimeMcpAsync(app, cancellationToken);
         return BuildCatalog(projectId, app);
     }
 
@@ -110,6 +226,7 @@ public sealed class PluginCatalogService
         var optionService = new PluginOptionService(_secureStorage);
         var updatedSettings = optionService.DeletePluginOptions(request.PluginId, state.Settings);
         await SaveAppSettingsAsync(app, updatedSettings, cancellationToken);
+        await SyncRuntimeMcpAsync(app, cancellationToken);
         return BuildCatalog(projectId, app);
     }
 
@@ -119,6 +236,7 @@ public sealed class PluginCatalogService
     {
         var (projectId, app) = await ResolveApplicationAsync(request.ProjectId, cancellationToken);
         await RefreshPluginsAsync(app, cancellationToken);
+        await SyncRuntimeMcpAsync(app, cancellationToken);
         return BuildCatalog(projectId, app);
     }
 
@@ -174,12 +292,14 @@ public sealed class PluginCatalogService
             .Select(plugin =>
             {
                 installationLookup.TryGetValue(plugin.PluginId, out var installation);
+                var authenticated = IsPluginAuthenticated(plugin, state.Settings, app.McpAuthStateService, _secureStorage);
                 return new PluginSummaryDto(
                     plugin.PluginId,
                     plugin.Name,
                     plugin.Manifest?.Description,
                     installation?.Version ?? plugin.Manifest?.Version,
                     plugin.Enabled,
+                    authenticated,
                     plugin.IsBundled,
                     plugin.InstallPath,
                     ResolvePluginScope(plugin, installation),
@@ -195,11 +315,56 @@ public sealed class PluginCatalogService
                     plugin.ValidationIssues
                         .Select(static issue => new PluginValidationIssueDto(issue.Path, issue.Message, issue.IsWarning))
                         .ToArray(),
-                    MapPluginOptions(plugin, state.Settings, optionService));
+                    MapPluginOptions(plugin, state.Settings, optionService),
+                    MapPluginMcpServers(plugin));
             })
             .ToArray();
 
         return new ListPluginsResponse(projectId, state.WorkspaceRoot, plugins);
+    }
+
+    private static bool IsPluginAuthenticated(
+        DiscoveredPlugin plugin,
+        ClawSharpSettings settings,
+        McpAuthStateService authStateService,
+        IMcpSecureStorage secureStorage)
+    {
+        if (plugin.Manifest?.McpServers.Count is not > 0)
+        {
+            return false;
+        }
+
+        var resolver = new PluginMcpServerResolver(secureStorage);
+        var (resolvedServers, _) = resolver.Resolve([plugin], settings);
+        if (resolvedServers.Count == 0)
+        {
+            return false;
+        }
+
+        var authCapableServers = resolvedServers
+            .Where(static entry => entry.Value.Config is McpHttpServerConfig or McpSseServerConfig)
+            .Where(entry =>
+            {
+                var oauthEntry = authStateService.GetOAuthEntry(entry.Key, entry.Value.Config);
+                return oauthEntry is not null ||
+                       authStateService.HasDiscoveryButNoToken(entry.Key, entry.Value.Config) ||
+                       entry.Value.Config switch
+                       {
+                           McpHttpServerConfig http => http.OAuth is not null,
+                           McpSseServerConfig sse => sse.OAuth is not null,
+                           _ => false
+                       };
+            })
+            .ToArray();
+
+        return authCapableServers.Length > 0 &&
+               authCapableServers.All(entry =>
+               {
+                   var oauthEntry = authStateService.GetOAuthEntry(entry.Key, entry.Value.Config);
+                   return oauthEntry is not null &&
+                          (!string.IsNullOrWhiteSpace(oauthEntry.AccessToken) ||
+                           !string.IsNullOrWhiteSpace(oauthEntry.RefreshToken));
+               });
     }
 
     private static IReadOnlyList<PluginOptionDto> MapPluginOptions(
@@ -234,6 +399,28 @@ public sealed class PluginCatalogService
                     definition.Max);
             })
             .ToArray();
+    }
+
+    private static IReadOnlyList<PluginMcpServerDto> MapPluginMcpServers(DiscoveredPlugin plugin)
+    {
+        return plugin.Manifest?.McpServers
+            .Select(static server => new PluginMcpServerDto(
+                server.Name,
+                server.Config.Type,
+                server.Config switch
+                {
+                    McpHttpServerConfig http => http.Url,
+                    McpSseServerConfig sse => sse.Url,
+                    McpWebSocketServerConfig webSocket => webSocket.Url,
+                    McpSseIdeServerConfig sseIde => sseIde.Url,
+                    McpWebSocketIdeServerConfig webSocketIde => webSocketIde.Url,
+                    McpSdkServerConfig sdk => sdk.Name,
+                    McpClaudeAiProxyServerConfig proxy => proxy.Url,
+                    McpStdioServerConfig stdio => stdio.Command,
+                    _ => null
+                }))
+            .ToArray()
+            ?? [];
     }
 
     private static IReadOnlyDictionary<string, object?> ParseRequestedOptionValues(
@@ -392,6 +579,46 @@ public sealed class PluginCatalogService
             new ExtensionBootstrapper(builtInPluginRegistry: BuiltInPluginCatalog.CreateRegistry()),
             app.AppStateStore);
         await refreshService.RefreshAsync(cancellationToken);
+    }
+
+    private async Task SyncRuntimeMcpAsync(
+        ClawSharpApplication app,
+        CancellationToken cancellationToken)
+    {
+        if (!app.IsRuntimeInitialized)
+        {
+            return;
+        }
+
+        var runtime = await app.EnsureRuntimeAsync(cancellationToken);
+        runtime.Tools.UnregisterWhere(
+            name => name.StartsWith("mcp__", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, ListMcpResourcesTool.ToolName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, ReadMcpResourceTool.ToolName, StringComparison.OrdinalIgnoreCase));
+        app.McpPromptCommands.UnregisterWhere(name => name.StartsWith("mcp__", StringComparison.OrdinalIgnoreCase));
+        runtime.Tools.McpResources.Clear();
+        app.McpResourceCatalog.Clear();
+
+        var state = app.AppStateStore.GetState();
+        var pluginMcpResolver = new PluginMcpServerResolver(_secureStorage);
+        var (pluginMcpServers, pluginMcpErrors) = pluginMcpResolver.Resolve(state.Plugins, state.Settings);
+        var (configuredMcpServers, mcpConfigErrors) = app.McpConfigService.GetAllConfigs(pluginMcpServers);
+
+        foreach (var error in pluginMcpErrors.Concat(mcpConfigErrors))
+        {
+            ClawSharpTelemetry.LogDebug(
+                $"[PluginCatalogService:mcp-sync] scope={error.Metadata.Scope} path={error.Path} message={error.Message}",
+                error.Metadata.Severity == McpConfigErrorSeverity.Fatal ? DebugLogLevel.Warn : DebugLogLevel.Info);
+        }
+
+        if (configuredMcpServers.Count == 0)
+        {
+            return;
+        }
+
+        var connections = await app.McpLifecycleManager.ConnectServersAsync(configuredMcpServers, cancellationToken: cancellationToken);
+        await app.McpToolRegistrationService.RegisterToolsAsync(runtime.Tools, connections, cancellationToken);
+        await app.McpCommandResourceRegistrationService.RegisterForConnectionsAsync(runtime.Tools, connections, cancellationToken);
     }
 
     private static ClawSharpSettings CloneSettings(

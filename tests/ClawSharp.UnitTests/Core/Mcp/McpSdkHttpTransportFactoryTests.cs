@@ -139,6 +139,29 @@ public sealed class McpSdkHttpTransportFactoryTests
         var discoveryState = authState.GetDiscoveryState("server", server.Config);
         Assert.NotNull(discoveryState);
         Assert.Equal("https://issuer.example.test/", discoveryState!.AuthorizationServerUrl);
+        Assert.Equal("https://example.test/.well-known/oauth-protected-resource", discoveryState.ResourceMetadataUrl);
+    }
+
+    [Fact]
+    public async Task CreateAsync_PersistsRootProtectedResourceMetadataUrlForPathBasedEndpoint()
+    {
+        var storage = new InMemoryMcpSecureStorage();
+        var authState = new McpAuthStateService(storage);
+        var factory = new McpSdkHttpTransportFactory(storage, authState);
+        var server = new ScopedMcpServerConfig(
+            "linear",
+            new McpHttpServerConfig(
+                "https://mcp.linear.app/mcp",
+                null,
+                null,
+                null),
+            McpConfigScope.Dynamic);
+
+        _ = await factory.CreateAsync("linear", server, skipBrowserOpen: true);
+
+        var discoveryState = authState.GetDiscoveryState("linear", server.Config);
+        Assert.NotNull(discoveryState);
+        Assert.Equal("https://mcp.linear.app/.well-known/oauth-protected-resource", discoveryState!.ResourceMetadataUrl);
     }
 
     [Fact]

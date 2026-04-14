@@ -15,6 +15,8 @@ import type {
   DeletePluginOptionsRequest,
   GetDiffResponse,
   GetSettingsResponse,
+  InstallPluginRequest,
+  InstallPluginResponse,
   ListSkillsResponse,
   ListWorkspaceFilesResponse,
   ListPluginsResponse,
@@ -143,6 +145,10 @@ class AgentHostClient {
 
   async updateSettings(request: UpdateSettingsRequest): Promise<UpdateSettingsResponse> {
     return await this.request('updateSettings', request);
+  }
+
+  async installPlugin(request: InstallPluginRequest): Promise<InstallPluginResponse> {
+    return await this.request('installPlugin', request);
   }
 
   async setPluginEnabled(request: SetPluginEnabledRequest): Promise<ListPluginsResponse> {

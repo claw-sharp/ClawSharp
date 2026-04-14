@@ -12,9 +12,9 @@ public sealed class McpToolRegistrationService
     internal const int MaxMcpDescriptionLength = 2048;
     private const string ClaudeAiServerPrefix = "claude.ai ";
 
-    private readonly McpLifecycleManager _lifecycleManager;
+    private readonly IMcpLifecycleManager _lifecycleManager;
 
-    public McpToolRegistrationService(McpLifecycleManager lifecycleManager)
+    public McpToolRegistrationService(IMcpLifecycleManager lifecycleManager)
     {
         _lifecycleManager = lifecycleManager;
     }
@@ -178,13 +178,13 @@ public sealed class McpToolRegistrationService
     private sealed class RegisteredMcpTool : IClawSharpTool
     {
         private const int MaxSessionRetries = 1;
-        private readonly McpLifecycleManager _lifecycleManager;
+        private readonly IMcpLifecycleManager _lifecycleManager;
         private readonly string _serverName;
         private readonly ScopedMcpServerConfig _serverConfig;
         private readonly McpToolDefinition _tool;
 
         public RegisteredMcpTool(
-            McpLifecycleManager lifecycleManager,
+            IMcpLifecycleManager lifecycleManager,
             string serverName,
             ScopedMcpServerConfig serverConfig,
             McpToolDefinition tool,
@@ -295,18 +295,20 @@ public sealed class McpToolRegistrationService
                     }
                 }
 
+                var elapsedTimeMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
+                var finalStatus = result.IsError ? "failed" : "completed";
                 context.ReportProgress(
                     Descriptor.Name,
                     new JsonObject
                     {
                         ["type"] = "mcp_progress",
-                        ["status"] = "completed",
+                        ["status"] = finalStatus,
                         ["serverName"] = _serverName,
                         ["toolName"] = _tool.Name,
-                        ["elapsedTimeMs"] = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds
+                        ["elapsedTimeMs"] = elapsedTimeMs
                     });
 
-                return new ToolExecutionResult(true, result.Content, result.StructuredContent);
+                return new ToolExecutionResult(!result.IsError, result.Content, result.StructuredContent);
             }
             catch
             {

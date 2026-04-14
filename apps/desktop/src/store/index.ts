@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from '@/components/ui/sonner';
 import { agentHostClient } from '@/lib/agentHostClient';
 import { logToDesktop } from '@/lib/desktopLogger';
 import type {
@@ -88,6 +89,7 @@ interface AppStore {
   createSkill: (name: string, description: string | null, instructions: string) => Promise<Skill | null>;
   loadWorkspaceFiles: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   refreshPlugins: () => Promise<void>;
+  installPlugin: (pluginId: string) => Promise<void>;
   setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
   savePluginOptions: (pluginId: string, values: Record<string, unknown>) => Promise<void>;
   deletePluginOptions: (pluginId: string) => Promise<void>;
@@ -549,6 +551,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  installPlugin: async (pluginId) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+
+    set({
+      pluginCatalogLoading: true,
+      pluginCatalogError: null,
+    });
+
+    try {
+      const installResponse = await agentHostClient.installPlugin({ projectId, pluginId });
+      const pluginsResponse = await agentHostClient.listPlugins(projectId);
+      set((state) => ({
+        ...applyPluginCatalogResponse(pluginsResponse)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: installResponse.message,
+        },
+      }));
+      void get().loadSkills(projectId, { force: true });
+
+      if (installResponse.authenticated) {
+        toast.success(installResponse.message);
+      } else {
+        toast.error(installResponse.message);
+      }
+    } catch (error) {
+      const message = toErrorMessage(error, 'Failed to install plugin.');
+      set((state) => ({
+        pluginCatalogLoading: false,
+        pluginCatalogError: message,
+        connection: {
+          ...state.connection,
+          errorMessage: message,
+          statusLabel: 'Plugin install failed',
+        },
+      }));
+      toast.error(message);
+    }
+  },
+
   setPluginEnabled: async (pluginId, enabled) => {
     const projectId = get().selectedProjectId;
     if (!projectId) {
@@ -761,6 +807,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         },
       }));
 
+      void get().loadPlugins(id);
       void get().loadSkills(id);
       void get().loadWorkspaceFiles(id);
 
@@ -1609,6 +1656,7 @@ function mapPlugin(plugin: AgentHostPlugin): Plugin {
     description: plugin.description ?? null,
     version: plugin.version ?? null,
     enabled: plugin.enabled,
+    authenticated: plugin.authenticated ?? false,
     isBundled: plugin.isBundled,
     installPath: plugin.installPath,
     scope: plugin.scope,
@@ -1623,6 +1671,11 @@ function mapPlugin(plugin: AgentHostPlugin): Plugin {
     hookEvents: plugin.hookEvents,
     validationIssues: plugin.validationIssues.map(mapPluginValidationIssue),
     options: plugin.options.map(mapPluginOption),
+    mcpServers: plugin.mcpServers.map((server) => ({
+      name: server.name,
+      type: server.type,
+      endpoint: server.endpoint ?? null,
+    })),
   };
 }
 

@@ -80,6 +80,11 @@ public sealed class McpSdkHttpTransportFactory
             scopedConfig,
             oauthConfig,
             cancellationToken).ConfigureAwait(false);
+        PersistDiscoveryState(
+            serverName,
+            scopedConfig,
+            endpoint,
+            configuredAuthServerIssuer);
 
         return new HttpClientTransportOptions
         {
@@ -157,6 +162,31 @@ public sealed class McpSdkHttpTransportFactory
             scopedConfig.Config,
             new McpOAuthDiscoveryState(issuer.AbsoluteUri));
         return issuer;
+    }
+
+    private void PersistDiscoveryState(
+        string serverName,
+        ScopedMcpServerConfig scopedConfig,
+        Uri endpoint,
+        Uri? configuredAuthServerIssuer)
+    {
+        var existing = _authStateService.GetDiscoveryState(serverName, scopedConfig.Config);
+        var next = new McpOAuthDiscoveryState(
+            configuredAuthServerIssuer?.AbsoluteUri ?? existing?.AuthorizationServerUrl,
+            BuildProtectedResourceMetadataUrl(endpoint));
+
+        _authStateService.SaveDiscoveryState(serverName, scopedConfig.Config, next);
+    }
+
+    private static string BuildProtectedResourceMetadataUrl(Uri endpoint)
+    {
+        var builder = new UriBuilder(endpoint)
+        {
+            Path = "/.well-known/oauth-protected-resource",
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+        return builder.Uri.AbsoluteUri;
     }
 
     private static Uri? SelectConfiguredAuthServer(Uri configuredAuthServerIssuer, IReadOnlyList<Uri> availableServers)

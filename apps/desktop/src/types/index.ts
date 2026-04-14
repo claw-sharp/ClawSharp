@@ -144,12 +144,19 @@ export interface PluginOption {
   max?: number | null;
 }
 
+export interface PluginMcpServer {
+  name: string;
+  type: string;
+  endpoint?: string | null;
+}
+
 export interface Plugin {
   pluginId: string;
   name: string;
   description?: string | null;
   version?: string | null;
   enabled: boolean;
+  authenticated?: boolean;
   isBundled: boolean;
   installPath: string;
   scope: string;
@@ -164,6 +171,7 @@ export interface Plugin {
   hookEvents: string[];
   validationIssues: PluginValidationIssue[];
   options: PluginOption[];
+  mcpServers: PluginMcpServer[];
 }
 
 export interface Skill {

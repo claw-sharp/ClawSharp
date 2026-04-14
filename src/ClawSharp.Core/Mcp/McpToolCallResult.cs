@@ -5,4 +5,5 @@ namespace ClawSharp.Core;
 public sealed record McpToolCallResult(
     string Content,
     JsonObject? Meta = null,
-    JsonNode? StructuredContent = null);
+    JsonNode? StructuredContent = null,
+    bool IsError = false);

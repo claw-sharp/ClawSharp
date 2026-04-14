@@ -80,6 +80,7 @@ public sealed class AgentHostCommandRouter
             "listWorkspaceFiles" => await _workspaceFileCatalog.ListAsync(DeserializePayload<ListWorkspaceFilesRequest>(request), cancellationToken),
             "getSettings" => await _providerCatalog.GetSettingsAsync(DeserializePayload<GetSettingsRequest>(request), cancellationToken),
             "updateSettings" => await _providerCatalog.UpdateSettingsAsync(DeserializePayload<UpdateSettingsRequest>(request), cancellationToken),
+            "installPlugin" => await _pluginCatalog.InstallPluginAsync(DeserializePayload<InstallPluginRequest>(request), cancellationToken),
             "setPluginEnabled" => await _pluginCatalog.SetPluginEnabledAsync(DeserializePayload<SetPluginEnabledRequest>(request), cancellationToken),
             "savePluginOptions" => await _pluginCatalog.SavePluginOptionsAsync(DeserializePayload<SavePluginOptionsRequest>(request), cancellationToken),
             "deletePluginOptions" => await _pluginCatalog.DeletePluginOptionsAsync(DeserializePayload<DeletePluginOptionsRequest>(request), cancellationToken),

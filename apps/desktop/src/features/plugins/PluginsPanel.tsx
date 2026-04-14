@@ -19,6 +19,16 @@ import type { Plugin, PluginOption, Skill } from '@/types';
 
 type FilterMode = 'all' | 'enabled' | 'disabled' | 'issues';
 type DraftValues = Record<string, string | boolean>;
+type PluginInstallDialogConfig = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  appBadgeLabel: string;
+  sections: Array<{
+    title: string;
+    description: string;
+  }>;
+};
 
 const filterModes: Array<{ id: FilterMode; label: string }> = [
   { id: 'all', label: 'All' },
@@ -41,6 +51,7 @@ export const PluginsPanel = () => {
     loadSkills,
     createSkill,
     refreshPlugins,
+    installPlugin,
     setPluginEnabled,
     savePluginOptions,
     deletePluginOptions,
@@ -52,6 +63,7 @@ export const PluginsPanel = () => {
   const [draftValues, setDraftValues] = useState<DraftValues>({});
   const [touchedOptions, setTouchedOptions] = useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [installDialogPluginId, setInstallDialogPluginId] = useState<string | null>(null);
   const [skillNameInput, setSkillNameInput] = useState('');
   const [skillDescriptionInput, setSkillDescriptionInput] = useState('');
   const [skillInstructionsInput, setSkillInstructionsInput] = useState('');
@@ -95,6 +107,8 @@ export const PluginsPanel = () => {
     ?? filteredPlugins[0]
     ?? pluginCatalog[0]
     ?? null;
+  const installDialogPlugin = pluginCatalog.find((plugin) => plugin.pluginId === installDialogPluginId) ?? null;
+  const installDialogConfig = installDialogPlugin ? getPluginInstallDialogConfig(installDialogPlugin) : null;
 
   useEffect(() => {
     if (!selectedPlugin) {
@@ -130,6 +144,30 @@ export const PluginsPanel = () => {
     if (!open) {
       resetCreateDialog();
     }
+  };
+
+  const handleInstallDialogChange = (open: boolean) => {
+    if (!open) {
+      setInstallDialogPluginId(null);
+    }
+  };
+
+  const handlePluginToggle = async (plugin: Plugin) => {
+    if (!plugin.enabled && shouldPromptForInstall(plugin)) {
+      setInstallDialogPluginId(plugin.pluginId);
+      return;
+    }
+
+    await setPluginEnabled(plugin.pluginId, !plugin.enabled);
+  };
+
+  const handleConfirmInstall = async () => {
+    if (!installDialogPlugin) {
+      return;
+    }
+
+    await installPlugin(installDialogPlugin.pluginId);
+    setInstallDialogPluginId(null);
   };
 
   const handleCreateSkill = async () => {
@@ -274,7 +312,12 @@ export const PluginsPanel = () => {
                         <div className="text-sm font-semibold text-foreground">{plugin.name}</div>
                         <div className="mt-1 text-xs text-muted-foreground">{plugin.pluginId}</div>
                       </div>
-                      <StatusPill label={plugin.enabled ? 'Enabled' : 'Disabled'} tone={plugin.enabled ? 'success' : 'neutral'} />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {plugin.enabled && plugin.authenticated === true && (
+                          <StatusPill label="Authenticated" tone="success" />
+                        )}
+                        <StatusPill label={plugin.enabled ? 'Enabled' : 'Disabled'} tone={plugin.enabled ? 'success' : 'neutral'} />
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <StatusPill label={plugin.scope} tone="neutral" />
@@ -302,6 +345,9 @@ export const PluginsPanel = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-semibold text-foreground">{selectedPlugin.name}</h2>
                     <StatusPill label={selectedPlugin.enabled ? 'Enabled' : 'Disabled'} tone={selectedPlugin.enabled ? 'success' : 'neutral'} />
+                    {selectedPlugin.enabled && selectedPlugin.authenticated === true && (
+                      <StatusPill label="Authenticated" tone="success" />
+                    )}
                     <StatusPill label={selectedPlugin.scope} tone="neutral" />
                     {selectedPlugin.version && <StatusPill label={`v${selectedPlugin.version}`} tone="neutral" />}
                   </div>
@@ -309,7 +355,7 @@ export const PluginsPanel = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => void setPluginEnabled(selectedPlugin.pluginId, !selectedPlugin.enabled)}
+                    onClick={() => void handlePluginToggle(selectedPlugin)}
                     disabled={pluginCatalogLoading}
                     className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -332,10 +378,36 @@ export const PluginsPanel = () => {
                   <MetricCard label="Commands" values={selectedPlugin.commands} />
                   <MetricCard label="Agents" values={selectedPlugin.agents} />
                   <MetricCard label="Skills" values={selectedPlugin.skills} />
+                  <MetricCard
+                    label="MCP servers"
+                    values={selectedPlugin.mcpServers.map((server) => `${server.name} (${server.type})`)}
+                  />
                   <MetricCard label="Hook events" values={selectedPlugin.hookEvents} />
                   <MetricCard label="Hook files" values={selectedPlugin.hookFiles} />
                   <MetricCard label="Output styles" values={selectedPlugin.outputStyles} />
                 </div>
+              </Section>
+
+              <Section title="Bundled MCP">
+                {selectedPlugin.mcpServers.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    This plugin does not bundle any MCP servers.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {selectedPlugin.mcpServers.map((server) => (
+                      <div key={`${server.name}:${server.type}`} className="rounded-xl border border-border p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-foreground">{server.name}</div>
+                          <StatusPill label={server.type} tone="neutral" />
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {server.endpoint || 'No endpoint metadata available.'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Section>
 
               <Section title="Configuration">
@@ -546,6 +618,54 @@ export const PluginsPanel = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={installDialogPlugin !== null} onOpenChange={handleInstallDialogChange}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader className="items-center text-center sm:items-center sm:text-center">
+            <div className="flex items-center gap-3">
+              <PluginAvatar label="C" />
+              <div className="h-px w-8 bg-border" />
+              <PluginAvatar label={installDialogConfig?.appBadgeLabel || getPluginMonogram(installDialogPlugin)} accent />
+            </div>
+            <DialogTitle className="mt-4 text-3xl font-semibold">
+              {installDialogConfig?.title || 'Install plugin'}
+            </DialogTitle>
+            <DialogDescription className="max-w-md text-center">
+              {installDialogConfig?.description || buildDefaultInstallDialogDescription(installDialogPlugin)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {installDialogConfig && (
+            <div className="rounded-2xl border border-border/80 bg-accent/20 p-5">
+              <div className="space-y-4">
+                {installDialogConfig.sections.map((section) => (
+                  <InstallDialogItem
+                    key={`${section.title}:${section.description}`}
+                    title={section.title}
+                    description={section.description}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="sm:justify-center">
+            <button
+              onClick={() => setInstallDialogPluginId(null)}
+              className="rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleConfirmInstall()}
+              disabled={pluginCatalogLoading || installDialogPlugin === null}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {installDialogConfig?.actionLabel || 'Install'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -592,6 +712,114 @@ const MetadataRow = ({ label, value }: { label: string; value: string }) => (
     <div className="mt-2 break-all text-sm text-foreground">{value}</div>
   </div>
 );
+
+const PluginAvatar = ({ label, accent = false }: { label: string; accent?: boolean }) => (
+  <div
+    className={cn(
+      'flex h-14 w-14 items-center justify-center rounded-2xl border text-lg font-semibold shadow-sm',
+      accent
+        ? 'border-border bg-card text-foreground'
+        : 'border-black/80 bg-black text-white'
+    )}
+  >
+    {label}
+  </div>
+);
+
+const InstallDialogItem = ({ title, description }: { title: string; description: string }) => (
+  <div className="border-b border-border/70 pb-4 last:border-b-0 last:pb-0">
+    <div className="text-sm font-semibold text-foreground">{title}</div>
+    <div className="mt-1 text-sm leading-6 text-muted-foreground">{description}</div>
+  </div>
+);
+
+function shouldPromptForInstall(plugin: Plugin): boolean {
+  return plugin.mcpServers.length > 0;
+}
+
+function buildDefaultInstallDialogDescription(plugin: Plugin | null): string {
+  if (!plugin) {
+    return 'Enable this plugin to connect its bundled MCP server.';
+  }
+
+  return `Enable ${plugin.name} to connect its bundled MCP server and authenticate when access is needed.`;
+}
+
+function getPluginMonogram(plugin: Plugin | null): string {
+  return plugin?.name.trim().charAt(0).toUpperCase() || 'P';
+}
+
+function getPluginInstallDialogConfig(plugin: Plugin): PluginInstallDialogConfig {
+  const override = pluginInstallDialogOverrides[getPluginInstallDialogKey(plugin)];
+  if (override) {
+    return override(plugin);
+  }
+
+  return buildDefaultPluginInstallDialogConfig(plugin);
+}
+
+function getPluginInstallDialogKey(plugin: Plugin): string {
+  return normalizePluginInstallKey(plugin.pluginId);
+}
+
+function buildDefaultPluginInstallDialogConfig(plugin: Plugin): PluginInstallDialogConfig {
+  const primaryServer = plugin.mcpServers[0];
+  const serverLabel = primaryServer?.name || plugin.name;
+  const endpointLabel = primaryServer?.endpoint || 'This plugin includes an MCP server connection.';
+
+  return {
+    title: `Install ${plugin.name}`,
+    description: buildDefaultInstallDialogDescription(plugin),
+    actionLabel: `Install ${plugin.name}`,
+    appBadgeLabel: getPluginMonogram(plugin),
+    sections: [
+      {
+        title: 'Authenticate in browser',
+        description: `ClawSharp will ask you to sign in when ${serverLabel} first needs access.`,
+      },
+      {
+        title: 'Only this plugin is enabled',
+        description: 'You can disable it again from this panel at any time.',
+      },
+      {
+        title: 'Bundled MCP server',
+        description: endpointLabel,
+      },
+    ],
+  };
+}
+
+const pluginInstallDialogOverrides: Record<string, (plugin: Plugin) => PluginInstallDialogConfig> = {
+  linear: (plugin) => {
+    const primaryServer = plugin.mcpServers[0];
+    return {
+      title: 'Install Linear',
+      description: 'Enable Linear to connect its bundled MCP server and authenticate when access is needed.',
+      actionLabel: 'Install Linear',
+      appBadgeLabel: 'L',
+      sections: [
+        {
+          title: 'Authenticate in browser',
+          description: 'ClawSharp will ask you to sign in when Linear first needs access.',
+        },
+        {
+          title: 'Only this plugin is enabled',
+          description: 'You can disable it again from this panel at any time.',
+        },
+        {
+          title: 'Bundled MCP server',
+          description: primaryServer?.endpoint || 'https://mcp.linear.app/mcp',
+        },
+      ],
+    };
+  },
+};
+
+function normalizePluginInstallKey(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const scopeSeparator = normalized.indexOf('@');
+  return scopeSeparator >= 0 ? normalized.slice(0, scopeSeparator) : normalized;
+}
 
 const OptionEditor = ({
   option,

@@ -42,6 +42,11 @@ public static class ReadToolPdfPageExtractor
         return count;
     }
 
+    public static Task<bool> IsPageRenderingAvailableAsync(CancellationToken cancellationToken = default)
+    {
+        return IsPdftoppmAvailableAsync(cancellationToken);
+    }
+
     public static async Task<PdfExtractPagesResult> ExtractPagesAsync(
         string filePath,
         ConversationSession session,

@@ -10,6 +10,16 @@ public sealed class McpPromptCommandRegistry
         _handlers[handler.Descriptor.Name] = handler;
     }
 
+    public void UnregisterWhere(Func<string, bool> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+
+        foreach (var name in _handlers.Keys.Where(predicate).ToArray())
+        {
+            _handlers.Remove(name);
+        }
+    }
+
     public IReadOnlyList<CommandDescriptor> GetAllDescriptors()
     {
         return _handlers.Values

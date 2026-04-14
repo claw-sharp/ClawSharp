@@ -37,6 +37,7 @@ public static class AgentHostProtocol
         "listWorkspaceFiles",
         "getSettings",
         "updateSettings",
+        "installPlugin",
         "setPluginEnabled",
         "savePluginOptions",
         "deletePluginOptions",

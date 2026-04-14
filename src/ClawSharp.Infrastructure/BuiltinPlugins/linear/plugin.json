@@ -1,0 +1,15 @@
+{
+  "name": "linear",
+  "description": "Connect Linear issues, projects, and workflows through Linear's official MCP server.",
+  "version": "1.0.0",
+  "defaultEnabled": false,
+  "mcpServers": {
+    "linear": {
+      "type": "http",
+      "url": "https://mcp.linear.app/mcp",
+      "oauth": {
+        "authServerMetadataUrl": "https://mcp.linear.app/.well-known/oauth-authorization-server"
+      }
+    }
+  }
+}

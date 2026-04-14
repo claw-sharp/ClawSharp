@@ -6,6 +6,7 @@ public sealed record QueryRequestContentBlock(
     string? Text = null,
     string? Name = null,
     string? ToolUseId = null,
+    string? ToolCallItemId = null,
     string? Input = null,
     string? StructuredOutput = null,
     QueryRequestCacheControl? CacheControl = null,

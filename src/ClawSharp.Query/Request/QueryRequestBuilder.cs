@@ -254,7 +254,10 @@ public sealed class QueryRequestBuilder
             .Select(
                 (message, index) =>
                 {
+                    var canOverrideLastUserMessage = message.ContentBlocks.All(
+                        block => block.Kind != MessageContentKind.ToolResult);
                     var shouldOverrideLastUserMessage = index == lastUserMessageIndex &&
+                        canOverrideLastUserMessage &&
                         (request.ResolvedUserInput is not null || request.EffectivePromptAttachments.Count > 0);
 
                     return message.Role == MessageRole.User
@@ -625,6 +628,9 @@ public sealed class QueryRequestBuilder
                 Name: block.Name,
                 ToolUseId: block.Metadata is not null && block.Metadata.TryGetValue("toolUseId", out var toolUseId)
                     ? toolUseId
+                    : null,
+                ToolCallItemId: block.Metadata is not null && block.Metadata.TryGetValue("toolCallItemId", out var toolCallItemId)
+                    ? toolCallItemId
                     : null,
                 Input: block.Value),
             MessageContentKind.ToolResult => new QueryRequestContentBlock(

@@ -10,6 +10,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/ui/sonner', () => ({
   toast: {
     success: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -30,6 +31,7 @@ describe('PluginsPanel', () => {
       loadSkills: vi.fn(),
       createSkill: vi.fn(),
       refreshPlugins: vi.fn(),
+      installPlugin: vi.fn(),
       setPluginEnabled: vi.fn(),
       savePluginOptions: vi.fn(),
       deletePluginOptions: vi.fn(),
@@ -65,6 +67,7 @@ describe('PluginsPanel', () => {
           description: 'Review-focused helpers bundled into the app.',
           version: '1.0.0',
           enabled: true,
+          authenticated: true,
           isBundled: true,
           installPath: '/builtin/reviewer',
           scope: 'builtin',
@@ -82,6 +85,13 @@ describe('PluginsPanel', () => {
               path: 'plugin.json',
               message: 'Example warning',
               isWarning: true,
+            },
+          ],
+          mcpServers: [
+            {
+              name: 'linear',
+              type: 'http',
+              endpoint: 'https://mcp.linear.app/mcp',
             },
           ],
           options: [
@@ -118,6 +128,7 @@ describe('PluginsPanel', () => {
       loadSkills,
       createSkill: vi.fn(),
       refreshPlugins: vi.fn(),
+      installPlugin: vi.fn(),
       setPluginEnabled: vi.fn(),
       savePluginOptions: vi.fn(),
       deletePluginOptions: vi.fn(),
@@ -130,9 +141,218 @@ describe('PluginsPanel', () => {
     expect(loadSkills).toHaveBeenCalledWith('proj-1');
     expect(screen.getAllByText('reviewer')[0]).toBeInTheDocument();
     expect(screen.getByText('Review-focused helpers bundled into the app.')).toBeInTheDocument();
+    expect(screen.getAllByText('Authenticated').length).toBeGreaterThan(0);
+    expect(screen.getByText('linear (http)')).toBeInTheDocument();
+    expect(screen.getByText('https://mcp.linear.app/mcp')).toBeInTheDocument();
     expect(screen.getByDisplayValue('/Users/hadoan/Documents/GitHub/ClawSharp')).toBeInTheDocument();
     expect(screen.getByText('Example warning')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /\$release-notes/i })).toBeInTheDocument();
+  });
+
+  it('shows an install dialog before enabling an MCP plugin', async () => {
+    const installPlugin = vi.fn().mockResolvedValue(undefined);
+
+    mockedUseAppStore.mockReturnValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/Users/hadoan/Documents/GitHub/ClawSharp',
+          activeThreadCount: 2,
+          lastUpdated: '2026-04-12T10:00:00Z',
+        },
+      ],
+      selectedProjectId: 'proj-1',
+      pluginCatalog: [
+        {
+          pluginId: 'linear@builtin',
+          name: 'Linear',
+          description: 'Manage issues and projects in Linear.',
+          version: '1.0.0',
+          enabled: false,
+          isBundled: true,
+          installPath: '/builtin/linear',
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [
+            {
+              name: 'linear',
+              type: 'http',
+              endpoint: 'https://mcp.linear.app/mcp',
+            },
+          ],
+        },
+      ],
+      pluginCatalogLoading: false,
+      pluginCatalogError: null,
+      skills: [],
+      skillsLoading: false,
+      skillsError: null,
+      loadPlugins: vi.fn(),
+      loadSkills: vi.fn(),
+      createSkill: vi.fn(),
+      refreshPlugins: vi.fn(),
+      installPlugin,
+      setPluginEnabled: vi.fn(),
+      savePluginOptions: vi.fn(),
+      deletePluginOptions: vi.fn(),
+      openExternalEditor: vi.fn(),
+    } as ReturnType<typeof useAppStore>);
+
+    render(<PluginsPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
+
+    expect(screen.getByRole('heading', { name: 'Install Linear' })).toBeInTheDocument();
+    expect(screen.getByText(/authenticate in browser/i)).toBeInTheDocument();
+    expect(installPlugin).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install Linear' }));
+
+    await waitFor(() => {
+      expect(installPlugin).toHaveBeenCalledWith('linear@builtin');
+    });
+  });
+
+  it('uses generic install dialog copy for other MCP plugins', () => {
+    mockedUseAppStore.mockReturnValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/Users/hadoan/Documents/GitHub/ClawSharp',
+          activeThreadCount: 2,
+          lastUpdated: '2026-04-12T10:00:00Z',
+        },
+      ],
+      selectedProjectId: 'proj-1',
+      pluginCatalog: [
+        {
+          pluginId: 'github@builtin',
+          name: 'GitHub',
+          description: 'Manage GitHub issues and PRs.',
+          version: '1.0.0',
+          enabled: false,
+          isBundled: true,
+          installPath: '/builtin/github',
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [
+            {
+              name: 'github',
+              type: 'http',
+              endpoint: 'https://api.githubcopilot.com/mcp/',
+            },
+          ],
+        },
+      ],
+      pluginCatalogLoading: false,
+      pluginCatalogError: null,
+      skills: [],
+      skillsLoading: false,
+      skillsError: null,
+      loadPlugins: vi.fn(),
+      loadSkills: vi.fn(),
+      createSkill: vi.fn(),
+      refreshPlugins: vi.fn(),
+      installPlugin: vi.fn(),
+      setPluginEnabled: vi.fn(),
+      savePluginOptions: vi.fn(),
+      deletePluginOptions: vi.fn(),
+      openExternalEditor: vi.fn(),
+    } as ReturnType<typeof useAppStore>);
+
+    render(<PluginsPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
+
+    expect(screen.getByRole('heading', { name: 'Install GitHub' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Install GitHub' })).toBeInTheDocument();
+    expect(screen.getAllByText('https://api.githubcopilot.com/mcp/').length).toBeGreaterThan(0);
+  });
+
+  it('enables non-MCP plugins without showing the install dialog', async () => {
+    const setPluginEnabled = vi.fn().mockResolvedValue(undefined);
+
+    mockedUseAppStore.mockReturnValue({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/Users/hadoan/Documents/GitHub/ClawSharp',
+          activeThreadCount: 2,
+          lastUpdated: '2026-04-12T10:00:00Z',
+        },
+      ],
+      selectedProjectId: 'proj-1',
+      pluginCatalog: [
+        {
+          pluginId: 'reviewer@builtin',
+          name: 'reviewer',
+          description: 'Review-focused helpers bundled into the app.',
+          version: '1.0.0',
+          enabled: false,
+          isBundled: true,
+          installPath: '/builtin/reviewer',
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [],
+        },
+      ],
+      pluginCatalogLoading: false,
+      pluginCatalogError: null,
+      skills: [],
+      skillsLoading: false,
+      skillsError: null,
+      loadPlugins: vi.fn(),
+      loadSkills: vi.fn(),
+      createSkill: vi.fn(),
+      refreshPlugins: vi.fn(),
+      installPlugin: vi.fn(),
+      setPluginEnabled,
+      savePluginOptions: vi.fn(),
+      deletePluginOptions: vi.fn(),
+      openExternalEditor: vi.fn(),
+    } as ReturnType<typeof useAppStore>);
+
+    render(<PluginsPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
+
+    await waitFor(() => {
+      expect(setPluginEnabled).toHaveBeenCalledWith('reviewer@builtin', true);
+    });
+    expect(screen.queryByRole('heading', { name: /Install/i })).not.toBeInTheDocument();
   });
 
   it('creates a skill from the dialog and opens it in the editor', async () => {
@@ -176,6 +396,7 @@ describe('PluginsPanel', () => {
           hookEvents: [],
           validationIssues: [],
           options: [],
+          mcpServers: [],
         },
       ],
       pluginCatalogLoading: false,
@@ -187,6 +408,7 @@ describe('PluginsPanel', () => {
       loadSkills: vi.fn(),
       createSkill,
       refreshPlugins: vi.fn(),
+      installPlugin: vi.fn(),
       setPluginEnabled: vi.fn(),
       savePluginOptions: vi.fn(),
       deletePluginOptions: vi.fn(),

@@ -188,6 +188,7 @@ public sealed class CoreDomainModelCoverageTests
             Skills: ["skills/reviewer"],
             OutputStyles: ["compact"],
             HookFiles: ["hooks/hooks.json"],
+            McpServers: [],
             Settings: new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["agent"] = "reviewer"

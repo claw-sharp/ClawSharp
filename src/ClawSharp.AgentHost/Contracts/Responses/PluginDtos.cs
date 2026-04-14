@@ -19,12 +19,18 @@ public sealed record PluginOptionDto(
     double? Min,
     double? Max);
 
+public sealed record PluginMcpServerDto(
+    string Name,
+    string Type,
+    string? Endpoint);
+
 public sealed record PluginSummaryDto(
     string PluginId,
     string Name,
     string? Description,
     string? Version,
     bool Enabled,
+    bool Authenticated,
     bool IsBundled,
     string InstallPath,
     string Scope,
@@ -38,4 +44,5 @@ public sealed record PluginSummaryDto(
     IReadOnlyList<string> HookFiles,
     IReadOnlyList<string> HookEvents,
     IReadOnlyList<PluginValidationIssueDto> ValidationIssues,
-    IReadOnlyList<PluginOptionDto> Options);
+    IReadOnlyList<PluginOptionDto> Options,
+    IReadOnlyList<PluginMcpServerDto> McpServers);

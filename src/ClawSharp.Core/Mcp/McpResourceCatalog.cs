@@ -13,6 +13,11 @@ public sealed class McpResourceCatalog
         _resourcesByServer[serverName] = new RegisteredMcpResourceSet(serverName, config, resources);
     }
 
+    public void Clear()
+    {
+        _resourcesByServer.Clear();
+    }
+
     public IReadOnlyList<McpServerResource> GetResources(string? serverName = null)
     {
         if (string.IsNullOrWhiteSpace(serverName))

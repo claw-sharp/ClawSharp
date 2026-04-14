@@ -196,7 +196,7 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             _hookRegistry,
             _hookExecutor);
         var iterationRequestBuilder = new QueryModelIterationRequestBuilder(
-            availableTools: childTools.All);
+            availableToolsProvider: () => childTools.All);
         var modelBackedIterationRunner = new ModelBackedIterationRunner(
             postSamplingHookRegistry,
             iterationRequestBuilder: iterationRequestBuilder,
@@ -442,6 +442,8 @@ public sealed class LocalAgentExecutionService : IAgentExecutionService
             runInBackground ? new NullPermissionPrompter() : context.PermissionPrompter,
             agentExecutionService: isForkPath ? this : new NullAgentExecutionService(),
             nativeWebSearchService: _nativeWebSearchService,
+            mcpLifecycle: context.McpLifecycle,
+            mcpToolRuntimeCoordinator: context.McpToolRuntimeCoordinator,
             allowedToolNames: ResolveAllowedToolNames(selectedAgent, isForkPath, context.AvailableTools),
             agentId: agentId);
     }

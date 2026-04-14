@@ -234,22 +234,67 @@ public static class ClawSharpApplicationFactory
                 var tools = LogSyncPhase(
                     workspaceRoot,
                     "tool-registry",
-                    () => new ToolRegistry(
+                    () =>
+                    {
+                        var mcpToolRuntimeCoordinator = new McpToolRuntimeCoordinator(
+                            mcpLifecycleManager,
+                            mcpToolRegistrationService);
+
+                        return new ToolRegistry(
+                            workspaceRoot,
+                            tasks,
+                            readFileState,
+                            currentToolPermissionContext,
+                            fileUpdateNotifier,
+                            agentDefinitions.ActiveAgents,
+                            appStateStore,
+                            permissionPrompter,
+                            agentExecutionService,
+                            nativeWebSearchService: nativeWebSearchService,
+                            worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(),
+                            mcpResources: mcpResourceCatalog,
+                            mcpLifecycle: mcpLifecycleManager,
+                            mcpToolRuntimeCoordinator: mcpToolRuntimeCoordinator,
+                            settingsStore: settingsStore,
+                            excludedToolNames: options?.ExcludedToolNames);
+                    });
+                var pluginMcpResolver = new PluginMcpServerResolver(mcpSecureStorage);
+                var (pluginMcpServers, pluginMcpErrors) = pluginMcpResolver.Resolve(currentState.Plugins, currentSettings);
+                var (configuredMcpServers, mcpConfigErrors) = mcpConfigService.GetAllConfigs(pluginMcpServers);
+
+                foreach (var error in pluginMcpErrors.Concat(mcpConfigErrors))
+                {
+                    ClawSharpTelemetry.LogDebug(
+                        $"[AppFactory:mcp] scope={error.Metadata.Scope} path={error.Path} message={error.Message}",
+                        error.Metadata.Severity == McpConfigErrorSeverity.Fatal ? DebugLogLevel.Warn : DebugLogLevel.Info);
+                }
+
+                if (configuredMcpServers.Count > 0)
+                {
+                    var connections = LogSyncPhase(
                         workspaceRoot,
-                        tasks,
-                        readFileState,
-                        currentToolPermissionContext,
-                        fileUpdateNotifier,
-                        agentDefinitions.ActiveAgents,
-                        appStateStore,
-                        permissionPrompter,
-                        agentExecutionService,
-                        nativeWebSearchService: nativeWebSearchService,
-                        worktreeService: new ClawSharp.Core.Worktree.NullWorktreeService(),
-                        mcpResources: mcpResourceCatalog,
-                        mcpLifecycle: mcpLifecycleManager,
-                        settingsStore: settingsStore,
-                        excludedToolNames: options?.ExcludedToolNames));
+                        "mcp-connect",
+                        () => mcpLifecycleManager
+                            .ConnectServersAsync(configuredMcpServers, cancellationToken: runtimeCancellationToken)
+                            .GetAwaiter()
+                            .GetResult());
+
+                    LogSyncPhase(
+                        workspaceRoot,
+                        "mcp-register",
+                        () =>
+                        {
+                            mcpToolRegistrationService
+                                .RegisterToolsAsync(tools, connections, runtimeCancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                            mcpCommandResourceRegistrationService
+                                .RegisterForConnectionsAsync(tools, connections, runtimeCancellationToken)
+                                .GetAwaiter()
+                                .GetResult();
+                            return true;
+                        });
+                }
                 var toolOrchestrator = new ToolOrchestrator(tools, eventSink);
                 var reactiveCompactHookRunner = new QueryReactiveCompactHookRunner(tools);
                 var reactiveCompactModelCallRunner = new QueryReactiveCompactModelCallRunner(modelCallExecutor);
@@ -264,7 +309,7 @@ public static class ClawSharpApplicationFactory
                     new ReactiveCompactPromptOverflowRecoveryRunner(reactiveCompactExecutor));
                 var stopHookRunner = new QueryStopHookRunner(tools);
                 var iterationRequestBuilder = new QueryModelIterationRequestBuilder(
-                    availableTools: tools.All);
+                    availableToolsProvider: () => tools.All);
                 var modelBackedIterationRunner = new ModelBackedIterationRunner(
                     postSamplingHookRegistry,
                     iterationRequestBuilder: iterationRequestBuilder,

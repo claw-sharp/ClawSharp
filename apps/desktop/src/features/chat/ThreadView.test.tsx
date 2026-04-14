@@ -22,6 +22,8 @@ const baseStoreState = {
   selectedProjectId: '',
   selectedThreadId: '',
   projects: [],
+  pluginCatalog: [],
+  pluginCatalogLoading: false,
   skills: [],
   skillsLoading: false,
   workspaceFiles: [],
@@ -88,6 +90,7 @@ const baseStoreState = {
   resolveApproval: vi.fn(),
   setActiveView: vi.fn(),
   loadOlderThreadMessages: vi.fn(),
+  loadPlugins: vi.fn(),
   loadSkills: vi.fn(),
   loadWorkspaceFiles: vi.fn(),
   openExternalEditor: vi.fn(),
@@ -175,7 +178,7 @@ describe('ThreadView', () => {
 
     render(<ThreadView />);
 
-    const input = screen.getByPlaceholderText('Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills.');
+    const input = screen.getByPlaceholderText('Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills and plugins.');
 
     await waitFor(() => {
       expect(input).toHaveFocus();
@@ -933,11 +936,38 @@ describe('ThreadView', () => {
 
   });
 
-  it('shows a skill picker when the user types a dollar sign', () => {
+  it('shows a capability picker when the user types a dollar sign', () => {
     mockedUseAppStore.mockReturnValue({
       ...baseStoreState,
       selectedProjectId: 'proj-1',
       selectedThreadId: 'thread-1',
+      pluginCatalog: [
+        {
+          pluginId: 'linear@builtin',
+          name: 'linear',
+          description: 'Manage Linear issues in ClawSharp.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: '/repo/.clawsharp/builtin/linear',
+          scope: 'builtin',
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [
+            {
+              name: 'linear',
+              type: 'http',
+              endpoint: 'https://mcp.linear.app/mcp',
+            },
+          ],
+        },
+      ],
       skills: [
         {
           name: 'review-changes',
@@ -996,9 +1026,93 @@ describe('ThreadView', () => {
     composer.setSelectionRange(1, 1);
     fireEvent.select(composer);
 
-    expect(screen.getByRole('listbox', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Capabilities' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\$linear/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /\$review-changes/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /\$browser-verify/i })).toBeInTheDocument();
+  });
+
+  it('inserts the selected plugin token instead of sending the prompt on Enter', () => {
+    const sendPrompt = vi.fn();
+    mockedUseAppStore.mockReturnValue({
+      ...baseStoreState,
+      sendPrompt,
+      selectedProjectId: 'proj-1',
+      selectedThreadId: 'thread-1',
+      pluginCatalog: [
+        {
+          pluginId: 'linear@builtin',
+          name: 'linear',
+          description: 'Manage Linear issues in ClawSharp.',
+          version: '1.0.0',
+          enabled: true,
+          isBundled: true,
+          installPath: '/repo/.clawsharp/builtin/linear',
+          scope: 'builtin',
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [
+            {
+              name: 'linear',
+              type: 'http',
+              endpoint: 'https://mcp.linear.app/mcp',
+            },
+          ],
+        },
+      ],
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'ClawSharp',
+          path: '/repo',
+          activeThreadCount: 1,
+          lastUpdated: '2026-04-10T10:00:00Z',
+        },
+      ],
+      threads: [
+        {
+          id: 'thread-1',
+          projectId: 'proj-1',
+          title: 'Plugin picker',
+          summary: 'Testing $ plugin autocomplete',
+          status: 'idle',
+          changedFilesCount: 0,
+          target: 'local',
+          lastUpdated: '2026-04-10T10:00:00Z',
+          provider: 'openai',
+          model: 'codex',
+          pinned: false,
+        },
+      ],
+      settings: {
+        ...baseStoreState.settings,
+        hasAnyConfiguredProviderCredential: true,
+      },
+      connection: {
+        isConnected: true,
+        isBootstrapping: false,
+        lastEventAt: null,
+        errorMessage: null,
+        statusLabel: 'Connected',
+      },
+    } as ReturnType<typeof useAppStore>);
+
+    render(<ThreadView />);
+
+    const composer = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '$li' } });
+    composer.setSelectionRange(3, 3);
+    fireEvent.select(composer);
+    fireEvent.keyDown(composer, { key: 'Enter' });
+
+    expect(sendPrompt).not.toHaveBeenCalled();
+    expect(composer.value).toBe('$linear ');
   });
 
   it('inserts the selected skill token instead of sending the prompt on Enter', () => {

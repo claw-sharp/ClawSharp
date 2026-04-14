@@ -12,15 +12,23 @@ public sealed record QueryModelCallAttemptResult(
     QueryIterationResult? IterationResult = null,
     string? OriginalModel = null,
     string? FallbackModel = null,
-    int? TurnOutputTokens = null)
+    int? TurnOutputTokens = null,
+    string? ResponseId = null,
+    IReadOnlyList<string>? ResponseOutputItems = null)
 {
-    public static QueryModelCallAttemptResult Completed(QueryIterationResult iterationResult, int? turnOutputTokens = null)
+    public static QueryModelCallAttemptResult Completed(
+        QueryIterationResult iterationResult,
+        int? turnOutputTokens = null,
+        string? responseId = null,
+        IReadOnlyList<string>? responseOutputItems = null)
     {
         ArgumentNullException.ThrowIfNull(iterationResult);
         return new QueryModelCallAttemptResult(
             QueryModelCallAttemptOutcome.Completed,
             iterationResult,
-            TurnOutputTokens: turnOutputTokens);
+            TurnOutputTokens: turnOutputTokens,
+            ResponseId: responseId,
+            ResponseOutputItems: responseOutputItems);
     }
 
     public static QueryModelCallAttemptResult FallbackRequested(string originalModel, string fallbackModel)

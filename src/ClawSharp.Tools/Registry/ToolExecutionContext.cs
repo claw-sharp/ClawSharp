@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
 using ClawSharp.Tasks;
+using ClawSharp.Tools.Mcp;
 
 namespace ClawSharp.Tools;
 
@@ -20,6 +21,7 @@ public sealed record ToolExecutionContext(
     ClawSharp.Core.Worktree.IWorktreeService WorktreeService,
     ClawSharp.Core.McpResourceCatalog McpResources,
     ClawSharp.Core.IMcpLifecycleManager? McpLifecycle,
+    IMcpToolRuntimeCoordinator? McpToolRuntimeCoordinator,
     ClawSharp.Core.ISettingsStore? SettingsStore = null,
     Action<ToolProgressUpdate>? OnProgress = null,
     Action<ChatMessage>? OnMessage = null,
@@ -64,6 +66,7 @@ public sealed record ToolExecutionContext(
             PermissionPrompter,
             new ClawSharp.Core.Worktree.NullWorktreeService(),
             new ClawSharp.Core.McpResourceCatalog(),
+            null,
             null,
             null,
             OnProgress,

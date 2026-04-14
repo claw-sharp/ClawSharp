@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using ClawSharp.Core;
 using ClawSharp.Infrastructure;
@@ -562,6 +563,53 @@ public class ParityMilestoneCoverageTests
             Assert.False(result.Success);
             Assert.Contains("too many to read at once", result.Output, StringComparison.Ordinal);
             Assert.Contains("pages parameter", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            ReadToolPdfPageExtractor.ResetForTesting();
+        }
+    }
+
+    [Fact]
+    public async Task Read_Falls_Back_To_Text_Hints_When_Pdf_Page_Rendering_Is_Unavailable()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-read-pdf-fallback-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "Hieu-Tran-Resume-Senior-Fullstack.v4.pdf");
+        await File.WriteAllBytesAsync(
+            filePath,
+            Encoding.ASCII.GetBytes(
+                "%PDF-1.7\n" +
+                "mailto:tr.kimhieu@gmail.com\n" +
+                "http://www.linkedin.com/in/trankimhieu\n" +
+                "/Count 4\n" +
+                "%%EOF"));
+
+        ReadToolPdfPageExtractor.SetProcessRunnerForTesting(
+            (_, _, _, _) => Task.FromResult(new ReadToolProcessResult(-1, string.Empty, string.Empty)));
+
+        try
+        {
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+            var settings = new ClawSharpSettings();
+
+            var result = await registry.ExecuteAsync(
+                "Read",
+                """{"file_path":"Hieu-Tran-Resume-Senior-Fullstack.v4.pdf","pages":"1-2"}""",
+                session,
+                settings);
+
+            Assert.True(result.Success);
+            Assert.Contains("page rendering is unavailable", result.Output, StringComparison.OrdinalIgnoreCase);
+            var data = Assert.IsType<JsonObject>(result.StructuredOutput);
+            Assert.Equal("text", data["type"]?.GetValue<string>());
+            var file = Assert.IsType<JsonObject>(data["file"]);
+            Assert.Equal("Hieu-Tran-Resume-Senior-Fullstack.v4.pdf", file["filePath"]?.GetValue<string>());
+            var content = file["content"]?.GetValue<string>() ?? string.Empty;
+            Assert.Contains("Requested pages: 1-2", content, StringComparison.Ordinal);
+            Assert.Contains("File name hint: Hieu Tran Resume Senior Fullstack v4", content, StringComparison.Ordinal);
+            Assert.Contains("tr.kimhieu@gmail.com", content, StringComparison.Ordinal);
         }
         finally
         {

@@ -212,6 +212,7 @@ public sealed class ExtensionBootstrapper
             skillDirectories,
             parsedManifest?.OutputStyles ?? [],
             parsedManifest?.HookFiles ?? [],
+            parsedManifest?.McpServers ?? [],
             parsedManifest?.Settings ?? ParsePluginSettings(definition.Settings),
             parsedManifest?.UserConfig);
         var hooks = MergeHooks(
@@ -247,10 +248,11 @@ public sealed class ExtensionBootstrapper
             var skills = ParseStringList(root, "skills", issues);
             var outputStyles = ParseStringList(root, "outputStyles", issues);
             var hookFiles = ParseHookFileList(root, issues);
+            var mcpServers = ParsePluginMcpServers(root, manifestPath, issues);
             var pluginSettings = ParsePluginSettings(root);
             var userConfig = ParseUserConfig(root, issues);
 
-            return new PluginManifest(name, description, version, commands, agents, skills, outputStyles, hookFiles, pluginSettings, userConfig);
+            return new PluginManifest(name, description, version, commands, agents, skills, outputStyles, hookFiles, mcpServers, pluginSettings, userConfig);
         }
         catch (JsonException ex)
         {
@@ -264,9 +266,46 @@ public sealed class ExtensionBootstrapper
                 [],
                 [],
                 [],
+                [],
                 null,
                 null);
         }
+    }
+
+    private static IReadOnlyList<PluginMcpServerDefinition> ParsePluginMcpServers(
+        JsonElement root,
+        string manifestPath,
+        List<PluginValidationIssue> issues)
+    {
+        if (!root.TryGetProperty("mcpServers", out var mcpServersElement))
+        {
+            return [];
+        }
+
+        using var wrappedDocument = JsonDocument.Parse($$"""{"mcpServers":{{mcpServersElement.GetRawText()}}}""");
+        var parser = new McpConfigService(Path.GetDirectoryName(manifestPath) ?? Environment.CurrentDirectory);
+        var (config, errors) = parser.ParseConfig(
+            wrappedDocument.RootElement.Clone(),
+            expandVars: false,
+            McpConfigScope.Dynamic,
+            manifestPath);
+
+        foreach (var error in errors)
+        {
+            issues.Add(new PluginValidationIssue(
+                string.IsNullOrWhiteSpace(error.Path) ? "mcpServers" : error.Path,
+                error.Message,
+                error.Metadata.Severity == McpConfigErrorSeverity.Warning));
+        }
+
+        if (config is null)
+        {
+            return [];
+        }
+
+        return config.McpServers
+            .Select(static pair => new PluginMcpServerDefinition(pair.Key, pair.Value))
+            .ToArray();
     }
 
     private static IReadOnlyDictionary<string, object?>? LoadPluginSettings(

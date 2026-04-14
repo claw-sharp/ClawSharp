@@ -140,6 +140,50 @@ public sealed class McpToolRegistrationServiceTests
     }
 
     [Fact]
+    public async Task RegisteredTool_Maps_McpError_Result_To_Failed_ToolExecutionResult()
+    {
+        var session = new RecordingMcpClientSession(
+            [
+                new McpToolDefinition(
+                    "save_project",
+                    "Creates a project",
+                    new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["additionalProperties"] = true
+                    })
+            ],
+            new McpToolCallResult(
+                """Variable "$input" got invalid value "" at "input.startDate"; Expected type "TimelessDate".""",
+                IsError: true));
+        var connector = new RecordingMcpClientConnector(session);
+        var lifecycleManager = new McpLifecycleManager(connector);
+        var service = new McpToolRegistrationService(lifecycleManager);
+        var registry = CreateToolRegistry();
+        var connection = CreateConnectedConnection(
+            "linear",
+            new McpHttpServerConfig("https://example.test", null, null, null),
+            session);
+
+        await service.RegisterToolsAsync(registry, [connection]);
+
+        var progress = new List<ToolProgressUpdate>();
+        var result = await registry.ExecuteAsync(
+            "mcp__linear__save_project",
+            "{\"name\":\"HR\"}",
+            new ConversationSession("session-1", Environment.CurrentDirectory),
+            new ClawSharpSettings(),
+            progress.Add);
+
+        Assert.False(result.Success);
+        Assert.Contains("input.startDate", result.Output, StringComparison.Ordinal);
+        Assert.Collection(
+            progress.Select(update => update.Data["status"]?.GetValue<string>()).Where(status => status is not null)!,
+            status => Assert.Equal("started", status),
+            status => Assert.Equal("failed", status));
+    }
+
+    [Fact]
     public async Task RegisteredTool_RetriesOnceAfterSessionExpiredError()
     {
         var failingSession = new ReconnectableMcpClientSession(

@@ -202,6 +202,34 @@ public sealed class McpConfigService
         return userServers.TryGetValue(name, out var userConfig) ? userConfig : null;
     }
 
+    public (IReadOnlyDictionary<string, ScopedMcpServerConfig> Servers, IReadOnlyList<McpConfigError> Errors) GetAllConfigs(
+        IReadOnlyDictionary<string, ScopedMcpServerConfig>? additionalServers = null)
+    {
+        var merged = new Dictionary<string, ScopedMcpServerConfig>(GetPathComparer());
+        var errors = new List<McpConfigError>();
+
+        if (additionalServers is not null)
+        {
+            foreach (var (name, config) in additionalServers)
+            {
+                merged[name] = config;
+            }
+        }
+
+        foreach (var scope in new[] { McpConfigScope.User, McpConfigScope.Project, McpConfigScope.Local, McpConfigScope.Enterprise })
+        {
+            var (servers, scopeErrors) = GetConfigsByScope(scope);
+            foreach (var (name, config) in servers)
+            {
+                merged[name] = config;
+            }
+
+            errors.AddRange(scopeErrors);
+        }
+
+        return (merged, errors);
+    }
+
     private (IReadOnlyDictionary<string, ScopedMcpServerConfig> Servers, IReadOnlyList<McpConfigError> Errors) GetProjectScopedConfigs()
     {
         var allServers = new Dictionary<string, ScopedMcpServerConfig>(GetPathComparer());
@@ -593,40 +621,7 @@ public sealed class McpConfigService
             return expanded;
         }
 
-        McpServerConfig expanded = config switch
-        {
-            McpStdioServerConfig stdioConfig => stdioConfig with
-            {
-                Command = ExpandString(stdioConfig.Command),
-                Args = stdioConfig.Args.Select(ExpandString).ToArray(),
-                Env = stdioConfig.Env?.ToDictionary(pair => pair.Key, pair => ExpandString(pair.Value), StringComparer.Ordinal)
-            },
-            McpSseServerConfig sseConfig => sseConfig with
-            {
-                Url = ExpandString(sseConfig.Url),
-                Headers = ExpandDictionaryValues(sseConfig.Headers, ExpandString)
-            },
-            McpHttpServerConfig httpConfig => httpConfig with
-            {
-                Url = ExpandString(httpConfig.Url),
-                Headers = ExpandDictionaryValues(httpConfig.Headers, ExpandString)
-            },
-            McpWebSocketServerConfig webSocketConfig => webSocketConfig with
-            {
-                Url = ExpandString(webSocketConfig.Url),
-                Headers = ExpandDictionaryValues(webSocketConfig.Headers, ExpandString)
-            },
-            _ => config
-        };
-
-        return (expanded, missingVars.ToArray());
-    }
-
-    private static IReadOnlyDictionary<string, string>? ExpandDictionaryValues(
-        IReadOnlyDictionary<string, string>? values,
-        Func<string, string> expander)
-    {
-        return values?.ToDictionary(pair => pair.Key, pair => expander(pair.Value), StringComparer.Ordinal);
+        return (McpServerConfigStringTransformer.Transform(config, ExpandString), missingVars.ToArray());
     }
 
     private static (string Expanded, IReadOnlyList<string> MissingVars) ExpandEnvVarsInString(string value)

@@ -13,4 +13,7 @@ public sealed record QueryLoopState(
     int? MaxOutputTokensOverride = null,
     Task<QueryToolUseSummaryMessage?>? PendingToolUseSummary = null,
     bool? StopHookActive = null,
-    QueryLoopTransition? Transition = null);
+    QueryLoopTransition? Transition = null,
+    string? PreviousResponseId = null,
+    int? PreviousResponseMessageCount = null,
+    IReadOnlyList<string>? PreviousResponseItems = null);

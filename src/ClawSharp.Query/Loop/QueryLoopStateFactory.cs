@@ -10,7 +10,10 @@ public static class QueryLoopStateFactory
         QueryToolUseContextState? toolUseContext = null,
         QueryTokenBudgetTracker? tokenBudgetTracker = null,
         int? maxOutputTokensOverride = null,
-        Task<QueryToolUseSummaryMessage?>? pendingToolUseSummary = null)
+        Task<QueryToolUseSummaryMessage?>? pendingToolUseSummary = null,
+        string? previousResponseId = null,
+        int? previousResponseMessageCount = null,
+        IReadOnlyList<string>? previousResponseItems = null)
     {
         return new QueryLoopState(
             messages,
@@ -23,6 +26,9 @@ public static class QueryLoopStateFactory
             MaxOutputTokensOverride: maxOutputTokensOverride,
             PendingToolUseSummary: pendingToolUseSummary,
             StopHookActive: null,
-            Transition: null);
+            Transition: null,
+            PreviousResponseId: previousResponseId,
+            PreviousResponseMessageCount: previousResponseMessageCount,
+            PreviousResponseItems: previousResponseItems);
     }
 }

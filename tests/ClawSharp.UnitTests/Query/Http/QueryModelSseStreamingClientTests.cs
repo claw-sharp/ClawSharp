@@ -207,6 +207,52 @@ public sealed class QueryModelSseStreamingClientTests
         Assert.Equal("message_stop", payloads[^1]["type"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task StreamAsync_Codex_ReplayItems_Include_Streamed_FunctionCall_When_Final_Output_Drops_It()
+    {
+        using var httpClient = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    string.Join(
+                        "\n",
+                        [
+                            "event: response.output_item.added",
+                            "data: {\"item\":{\"type\":\"function_call\",\"id\":\"fc_123\",\"call_id\":\"call_123\",\"name\":\"Glob\",\"arguments\":\"{\\\"path\\\":\\\"/tmp\\\"}\"}}",
+                            string.Empty,
+                            "event: response.output_item.done",
+                            "data: {\"item\":{\"type\":\"function_call\",\"id\":\"fc_123\",\"call_id\":\"call_123\",\"name\":\"Glob\",\"arguments\":\"{\\\"path\\\":\\\"/tmp\\\"}\"}}",
+                            string.Empty,
+                            "event: response.completed",
+                            "data: {\"response\":{\"usage\":{\"input_tokens\":4,\"output_tokens\":5},\"output\":[]}}",
+                            string.Empty
+                        ]),
+                    Encoding.UTF8,
+                    "text/event-stream")
+            }));
+        var client = new QueryModelSseStreamingClient(httpClient);
+
+        var payloads = new List<JsonNode>();
+        await foreach (var payload in client.StreamAsync(
+                           new QueryModelHttpClientConfig(
+                               ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                               ApiKey: "codex-token",
+                               TransportKind: ModelTransportKind.CodexResponses,
+                               ProviderKind: ApiProviderKind.Codex,
+                               AccountId: "account-1"),
+                           CreateStreamingRequest()))
+        {
+            payloads.Add(payload);
+        }
+
+        var finalDelta = Assert.Single(payloads.Where(payload => payload["type"]?.GetValue<string>() == "message_delta"));
+        var replayItems = finalDelta["response_output_items"]!.AsArray();
+        Assert.Single(replayItems);
+        Assert.Equal("function_call", replayItems[0]!["type"]?.GetValue<string>());
+        Assert.Equal("call_123", replayItems[0]!["call_id"]?.GetValue<string>());
+        Assert.Equal("fc_123", replayItems[0]!["id"]?.GetValue<string>());
+    }
+
     private static QueryModelHttpStreamingRequest CreateStreamingRequest()
     {
         return new QueryModelHttpStreamingRequest(

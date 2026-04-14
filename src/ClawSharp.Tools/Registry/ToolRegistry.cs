@@ -45,6 +45,7 @@ public sealed class ToolRegistry
         ClawSharp.Core.Worktree.IWorktreeService? worktreeService = null,
         ClawSharp.Core.McpResourceCatalog? mcpResources = null,
         ClawSharp.Core.IMcpLifecycleManager? mcpLifecycle = null,
+        IMcpToolRuntimeCoordinator? mcpToolRuntimeCoordinator = null,
         ClawSharp.Core.ISettingsStore? settingsStore = null,
         IReadOnlySet<string>? allowedToolNames = null,
         IReadOnlySet<string>? excludedToolNames = null,
@@ -69,6 +70,7 @@ public sealed class ToolRegistry
         WorktreeService = worktreeService ?? new ClawSharp.Core.Worktree.NullWorktreeService();
         McpResources = mcpResources ?? new ClawSharp.Core.McpResourceCatalog();
         McpLifecycle = mcpLifecycle;
+        McpToolRuntimeCoordinator = mcpToolRuntimeCoordinator;
         SettingsStore = settingsStore;
 
         RegisterBuiltIn(new ReadTool());
@@ -154,6 +156,8 @@ public sealed class ToolRegistry
     public ClawSharp.Core.McpResourceCatalog McpResources { get; }
 
     public ClawSharp.Core.IMcpLifecycleManager? McpLifecycle { get; }
+
+    public IMcpToolRuntimeCoordinator? McpToolRuntimeCoordinator { get; }
     public ClawSharp.Core.ISettingsStore? SettingsStore { get; }
 
     public IReadOnlyList<ToolDescriptor> All =>
@@ -171,6 +175,26 @@ public sealed class ToolRegistry
         RemoveExistingTool(tool.Descriptor.Name, _dynamicToolsByName, _dynamicToolsByLookupName);
         RemoveExistingTool(tool.Descriptor.Name, _builtInToolsByName, _builtInToolsByLookupName);
         RegisterInternal(tool, _dynamicToolsByName, _dynamicToolsByLookupName, _builtInToolsByLookupName, allowPrimaryNameCollisionWithOppositePartition: true);
+    }
+
+    public void UnregisterWhere(Func<string, bool> predicate, bool includeBuiltIn = false)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+
+        foreach (var toolName in _dynamicToolsByName.Keys.Where(predicate).ToArray())
+        {
+            RemoveExistingTool(toolName, _dynamicToolsByName, _dynamicToolsByLookupName);
+        }
+
+        if (!includeBuiltIn)
+        {
+            return;
+        }
+
+        foreach (var toolName in _builtInToolsByName.Keys.Where(predicate).ToArray())
+        {
+            RemoveExistingTool(toolName, _builtInToolsByName, _builtInToolsByLookupName);
+        }
     }
 
     private void RegisterBuiltIn(IClawSharpTool tool)
@@ -313,6 +337,7 @@ public sealed class ToolRegistry
             WorktreeService,
             McpResources,
             McpLifecycle,
+            McpToolRuntimeCoordinator,
             SettingsStore,
             onProgress,
             onMessage,

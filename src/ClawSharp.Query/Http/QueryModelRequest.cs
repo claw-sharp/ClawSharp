@@ -10,4 +10,6 @@ public sealed record QueryModelRequest(
     QueryRequestOutputConfig OutputConfig,
     IReadOnlyList<string> Betas,
     int? MaxTokens = null,
-    QueryThinkingConfig? Thinking = null);
+    QueryThinkingConfig? Thinking = null,
+    string? PreviousResponseId = null,
+    IReadOnlyList<string>? PreviousResponseItems = null);

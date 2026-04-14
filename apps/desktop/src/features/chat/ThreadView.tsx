@@ -9,13 +9,15 @@ import {
   CheckCircle2, Circle, Loader2, ChevronDown, RotateCcw, Archive, ShieldAlert, ExternalLink,
   TerminalSquare, Search, PencilLine, FlaskConical, Clock3, AlertTriangle, Gauge, Paperclip, ImagePlus, X, Copy, Check,
 } from 'lucide-react';
-import type { Message, Skill, ToolProgressEvent } from '@/types';
+import type { Message, Plugin, Skill, ToolProgressEvent } from '@/types';
 import { buildPromptWithAttachments, parsePromptAttachments, type PromptAttachment } from '@/features/chat/promptAttachments';
 
 export const ThreadView = () => {
   const {
-    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings, skills, skillsLoading, workspaceFiles, workspaceFilesLoading,
-    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings, loadOlderThreadMessages, loadSkills, loadWorkspaceFiles, openExternalEditor,
+    selectedProjectId, selectedThreadId, projects, threads, messages, threadHistory, inboxItems, run, connection, settings,
+    pluginCatalog, pluginCatalogLoading, skills, skillsLoading, workspaceFiles, workspaceFilesLoading,
+    createThread, openProjectPicker, sendPrompt, cancelRun, retryThread, archiveThread, resolveApproval, setActiveView, toggleSettings,
+    loadOlderThreadMessages, loadPlugins, loadSkills, loadWorkspaceFiles, openExternalEditor,
   } = useAppStore();
 
   const project = projects.find((item) => item.id === selectedProjectId);
@@ -56,9 +58,10 @@ export const ThreadView = () => {
       return;
     }
 
+    void loadPlugins(selectedProjectId);
     void loadSkills(selectedProjectId);
     void loadWorkspaceFiles(selectedProjectId);
-  }, [loadSkills, loadWorkspaceFiles, selectedProjectId]);
+  }, [loadPlugins, loadSkills, loadWorkspaceFiles, selectedProjectId]);
 
   if (connection.isBootstrapping) {
     return (
@@ -306,6 +309,8 @@ export const ThreadView = () => {
         threadMessages={threadMessages}
         isRunning={run.isRunning}
         isBrowserPreview={isBrowserPreview}
+        plugins={pluginCatalog}
+        pluginsLoading={pluginCatalogLoading}
         skills={skills}
         skillsLoading={skillsLoading}
         workspaceFiles={workspaceFiles}
@@ -1187,6 +1192,8 @@ const PromptComposer = ({
   threadMessages,
   isRunning,
   isBrowserPreview,
+  plugins,
+  pluginsLoading,
   skills,
   skillsLoading,
   workspaceFiles,
@@ -1199,6 +1206,8 @@ const PromptComposer = ({
   threadMessages: Message[];
   isRunning: boolean;
   isBrowserPreview: boolean;
+  plugins: Plugin[];
+  pluginsLoading: boolean;
   skills: Skill[];
   skillsLoading: boolean;
   workspaceFiles: string[];
@@ -1225,6 +1234,7 @@ const PromptComposer = ({
     openSettings: () => toggleSettings(),
   });
   const suggestions = getComposerSuggestions(activeQuery, {
+    plugins,
     skills,
     workspaceFiles,
     slashCommands,
@@ -1234,7 +1244,7 @@ const PromptComposer = ({
     activeQuery !== null &&
     dismissedSuggestionQuery !== suggestionQueryKey;
   const isSuggestionMenuLoading = activeQuery?.trigger === '$'
-    ? skillsLoading
+    ? (pluginsLoading || skillsLoading)
     : activeQuery?.trigger === '@'
       ? workspaceFilesLoading
       : false;
@@ -1242,7 +1252,7 @@ const PromptComposer = ({
     ? 'Files'
     : activeQuery?.trigger === '/'
       ? 'Commands'
-      : 'Skills';
+      : 'Capabilities';
 
   useEffect(() => {
     if (!isRunning && !isBrowserPreview) {
@@ -1382,7 +1392,7 @@ const PromptComposer = ({
             <div role="listbox" aria-label={menuTitle} className="max-h-72 overflow-y-auto py-1">
               {isSuggestionMenuLoading ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
-                  {activeQuery?.trigger === '@' ? 'Loading files…' : 'Loading skills…'}
+                  {activeQuery?.trigger === '@' ? 'Loading files…' : 'Loading capabilities…'}
                 </div>
               ) : suggestions.length > 0 ? (
                 suggestions.map((suggestion, index) => (
@@ -1464,7 +1474,7 @@ const PromptComposer = ({
                 ? 'Browser preview is mock-only. Start the Tauri desktop app to chat for real.'
                 : isRunning
                   ? 'ClawSharp is working…'
-                  : 'Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills.'
+                  : 'Ask ClawSharp to work on this repository. Use / for commands, @ for files, and $ for skills and plugins.'
             }
             rows={3}
             className="w-full resize-none bg-transparent text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none min-h-[72px] max-h-[220px]"
@@ -1588,6 +1598,13 @@ type ComposerSuggestion = {
   execute: () => void;
 };
 
+type PluginReference = {
+  pluginId: string;
+  name: string;
+  referenceName: string;
+  description: string;
+};
+
 function findActiveComposerQuery(value: string, selectionStart: number | null): ComposerQuery | null {
   if (selectionStart === null) {
     return null;
@@ -1668,6 +1685,7 @@ function createSlashCommands(actions: {
 function getComposerSuggestions(
   activeQuery: ComposerQuery | null,
   options: {
+    plugins: Plugin[];
     skills: Skill[];
     workspaceFiles: string[];
     slashCommands: SlashCommand[];
@@ -1679,21 +1697,41 @@ function getComposerSuggestions(
 
   const normalizedQuery = activeQuery.query.trim().toLowerCase();
   switch (activeQuery.trigger) {
-    case '$':
-      return [...options.skills]
+    case '$': {
+      const pluginSuggestions = buildPluginReferences(options.plugins)
+        .filter((plugin) =>
+          normalizedQuery.length === 0 ||
+          plugin.referenceName.includes(normalizedQuery) ||
+          plugin.name.toLowerCase().includes(normalizedQuery))
+        .sort((left, right) => compareSuggestionLabels(left.referenceName, right.referenceName, normalizedQuery))
+        .slice(0, 8)
+        .map((plugin) => ({
+          key: `plugin:${plugin.pluginId}`,
+          trigger: '$' as const,
+          label: `$${plugin.referenceName}`,
+          description: plugin.description,
+          badge: 'Plugin',
+          action: 'insert' as const,
+          insertValue: plugin.referenceName,
+          execute: () => undefined,
+        }));
+
+      const skillSuggestions = [...options.skills]
         .filter((skill) => normalizedQuery.length === 0 || skill.name.toLowerCase().includes(normalizedQuery))
         .sort((left, right) => compareSuggestionLabels(left.name, right.name, normalizedQuery))
-        .slice(0, 12)
+        .slice(0, Math.max(0, 12 - pluginSuggestions.length))
         .map((skill) => ({
           key: `skill:${skill.name}`,
           trigger: '$',
           label: `$${skill.name}`,
           description: skill.source,
-          badge: 'Enter',
+          badge: 'Skill',
           action: 'insert',
           insertValue: skill.name,
           execute: () => undefined,
         }));
+      return [...pluginSuggestions, ...skillSuggestions];
+    }
     case '@':
       return [...options.workspaceFiles]
         .filter((filePath) => normalizedQuery.length === 0 || filePath.toLowerCase().includes(normalizedQuery))
@@ -1745,6 +1783,46 @@ function compareSuggestionLabels(left: string, right: string, normalizedQuery: s
   return leftLabel.localeCompare(rightLabel);
 }
 
+function buildPluginReferences(plugins: Plugin[]): PluginReference[] {
+  const references = new Map<string, PluginReference>();
+
+  for (const plugin of plugins) {
+    if (!plugin.enabled) {
+      continue;
+    }
+
+    const referenceName = getPluginReferenceName(plugin);
+    if (!referenceName || references.has(referenceName)) {
+      continue;
+    }
+
+    const bundledSummary = plugin.mcpServers.length > 0
+      ? `${plugin.mcpServers.length} MCP server${plugin.mcpServers.length === 1 ? '' : 's'}`
+      : plugin.skills.length > 0
+        ? `${plugin.skills.length} bundled skill${plugin.skills.length === 1 ? '' : 's'}`
+        : plugin.scope;
+
+    references.set(referenceName, {
+      pluginId: plugin.pluginId,
+      name: plugin.name,
+      referenceName,
+      description: plugin.description || bundledSummary,
+    });
+  }
+
+  return [...references.values()];
+}
+
+function getPluginReferenceName(plugin: Plugin): string {
+  const pluginIdStem = plugin.pluginId.split('@', 1)[0]?.trim();
+  const preferred = pluginIdStem && pluginIdStem.length > 0 ? pluginIdStem : plugin.name;
+  return preferred
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function insertComposerSuggestion(value: string, query: ComposerQuery, insertValue: string): string {
   return `${value.slice(0, query.start)}${query.trigger}${insertValue} ${value.slice(query.end)}`;
 }
@@ -1767,8 +1845,8 @@ function getEmptySuggestionText(activeQuery: ComposerQuery | null): string {
     case '$':
     default:
       return normalizedQuery
-        ? `No skills match "$${normalizedQuery}".`
-        : 'No skills discovered for this project.';
+        ? `No skills or plugins match "$${normalizedQuery}".`
+        : 'No skills or plugins discovered for this project.';
   }
 }
 

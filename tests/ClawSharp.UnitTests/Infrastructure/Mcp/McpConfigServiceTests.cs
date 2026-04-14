@@ -161,6 +161,53 @@ public sealed class McpConfigServiceTests
         Assert.Equal(McpConfigScope.Enterprise, service.GetConfigByName("enterpriseOnly")!.Scope);
     }
 
+    [Fact]
+    public void GetAllConfigs_MergesAdditionalServers_Below_FileScopes()
+    {
+        var workspaceRoot = CreateTempDirectory();
+        var globalConfigPath = Path.Combine(workspaceRoot, ".clawsharp.json");
+
+        File.WriteAllText(
+            Path.Combine(workspaceRoot, ".mcp.json"),
+            """
+            {
+              "mcpServers": {
+                "projectOnly": { "command": "project-command" },
+                "shared": { "command": "project-shared" }
+              }
+            }
+            """,
+            Encoding.UTF8);
+
+        File.WriteAllText(
+            globalConfigPath,
+            """
+            {
+              "mcpServers": {
+                "userOnly": { "command": "user-command" },
+                "shared": { "command": "user-shared" }
+              }
+            }
+            """,
+            Encoding.UTF8);
+
+        var service = new McpConfigService(workspaceRoot, globalConfigPath);
+        var pluginServers = new Dictionary<string, ScopedMcpServerConfig>(StringComparer.Ordinal)
+        {
+            ["pluginOnly"] = new("pluginOnly", new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null), McpConfigScope.Dynamic, "linear@builtin"),
+            ["shared"] = new("shared", new McpHttpServerConfig("https://plugin.example.test/mcp", null, null, null), McpConfigScope.Dynamic, "linear@builtin")
+        };
+
+        var (servers, errors) = service.GetAllConfigs(pluginServers);
+
+        Assert.Empty(errors);
+        Assert.Equal(4, servers.Count);
+        Assert.Equal("https://mcp.linear.app/mcp", Assert.IsType<McpHttpServerConfig>(servers["pluginOnly"].Config).Url);
+        Assert.Equal("user-command", Assert.IsType<McpStdioServerConfig>(servers["userOnly"].Config).Command);
+        Assert.Equal("project-command", Assert.IsType<McpStdioServerConfig>(servers["projectOnly"].Config).Command);
+        Assert.Equal("project-shared", Assert.IsType<McpStdioServerConfig>(servers["shared"].Config).Command);
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "clawsharp-tests", Guid.NewGuid().ToString("N"));

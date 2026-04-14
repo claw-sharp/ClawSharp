@@ -6,6 +6,7 @@ using ClawSharp.AgentHost.Plugins;
 using ClawSharp.AgentHost.Projects;
 using ClawSharp.AgentHost.Services;
 using ClawSharp.Core;
+using ClawSharp.Infrastructure;
 
 namespace ClawSharp.UnitTests;
 
@@ -138,6 +139,50 @@ public sealed class PluginCatalogServiceTests
             Assert.Contains(response.Plugins, static plugin => plugin.PluginId == "verification@builtin");
             Assert.Contains(response.Plugins, static plugin => plugin.PluginId == "troubleshooter@builtin");
             Assert.Contains(response.Plugins, static plugin => plugin.PluginId == "settings@builtin");
+            var linear = Assert.Single(response.Plugins, static plugin => plugin.PluginId == "linear@builtin");
+            Assert.False(linear.Authenticated);
+            var linearServer = Assert.Single(linear.McpServers);
+            Assert.Equal("linear", linearServer.Name);
+            Assert.Equal("http", linearServer.Type);
+            Assert.Equal("https://mcp.linear.app/mcp", linearServer.Endpoint);
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ListPluginsAsync_Reports_Authenticated_Bundled_Mcp_Plugins()
+    {
+        var fixture = await PluginCatalogFixture.CreateAsync();
+
+        try
+        {
+            var authState = new McpAuthStateService(fixture.SecureStorage);
+            authState.SaveOAuthEntry(
+                "linear",
+                new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null),
+                new McpOAuthEntry(
+                    "linear",
+                    "https://mcp.linear.app/mcp",
+                    "access-token",
+                    DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()));
+
+            await fixture.Service.SetPluginEnabledAsync(new SetPluginEnabledRequest
+            {
+                ProjectId = fixture.ProjectId,
+                PluginId = "linear@builtin",
+                Enabled = true
+            });
+
+            var response = await fixture.Service.ListPluginsAsync(new ListPluginsRequest
+            {
+                ProjectId = fixture.ProjectId
+            });
+
+            var linear = Assert.Single(response.Plugins, static plugin => plugin.PluginId == "linear@builtin");
+            Assert.True(linear.Authenticated);
         }
         finally
         {
@@ -158,6 +203,7 @@ public sealed class PluginCatalogServiceTests
             RecentProjectStore store,
             WorkspaceApplicationRegistry applicationRegistry,
             PluginCatalogService service,
+            InMemorySecureStorage secureStorage,
             string? previousConfigDir)
         {
             Root = root;
@@ -168,6 +214,7 @@ public sealed class PluginCatalogServiceTests
             Store = store;
             ApplicationRegistry = applicationRegistry;
             Service = service;
+            SecureStorage = secureStorage;
             _previousConfigDir = previousConfigDir;
         }
 
@@ -179,6 +226,7 @@ public sealed class PluginCatalogServiceTests
         public RecentProjectStore Store { get; }
         public WorkspaceApplicationRegistry ApplicationRegistry { get; }
         public PluginCatalogService Service { get; }
+        public InMemorySecureStorage SecureStorage { get; }
 
         public static async Task<PluginCatalogFixture> CreateAsync()
         {
@@ -258,10 +306,11 @@ public sealed class PluginCatalogServiceTests
                 "main"));
 
             var applicationRegistry = new WorkspaceApplicationRegistry();
+            var secureStorage = new InMemorySecureStorage();
             var service = new PluginCatalogService(
                 applicationRegistry,
                 store,
-                new InMemorySecureStorage());
+                secureStorage);
 
             return new PluginCatalogFixture(
                 root,
@@ -272,6 +321,7 @@ public sealed class PluginCatalogServiceTests
                 store,
                 applicationRegistry,
                 service,
+                secureStorage,
                 previousConfigDir);
         }
 
@@ -298,7 +348,7 @@ public sealed class PluginCatalogServiceTests
         }
     }
 
-    private sealed class InMemorySecureStorage : IMcpSecureStorage
+    public sealed class InMemorySecureStorage : IMcpSecureStorage
     {
         private McpSecureStorageData? _data;
 

@@ -195,7 +195,13 @@ public sealed class ModelBackedIterationRunner : IQueryIterationRunner
 
         var completedState = terminalResult.State with
         {
-            PendingToolUseSummary = null
+            PendingToolUseSummary = null,
+            PreviousResponseId = completedAttempt.ResponseId ?? priorState.PreviousResponseId,
+            PreviousResponseMessageCount = !string.IsNullOrWhiteSpace(completedAttempt.ResponseId) ||
+                                           completedAttempt.ResponseOutputItems?.Count > 0
+                ? terminalResult.State.Messages.Count
+                : priorState.PreviousResponseMessageCount,
+            PreviousResponseItems = completedAttempt.ResponseOutputItems ?? priorState.PreviousResponseItems
         };
 
         TryDispatchPostSamplingHooks(request, priorState, completedState);

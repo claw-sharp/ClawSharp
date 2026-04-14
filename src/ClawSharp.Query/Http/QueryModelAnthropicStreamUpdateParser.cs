@@ -9,13 +9,17 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
 {
     private readonly Dictionary<int, PartialAssistantContentBlock> _contentBlocks = [];
     private readonly List<ChatMessage> _emittedMessages = [];
+    private readonly List<string> _responseOutputItems = [];
     private int? _outputTokens;
+    private string? _responseId;
 
     public void Reset()
     {
         _contentBlocks.Clear();
         _emittedMessages.Clear();
+        _responseOutputItems.Clear();
         _outputTokens = null;
+        _responseId = null;
     }
 
     public IReadOnlyList<QueryModelCallUpdate> Parse(JsonNode payload)
@@ -29,6 +33,8 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
             case "message_start":
             case "message_delta":
                 UpdateOutputTokens(payload);
+                UpdateResponseId(payload);
+                UpdateResponseOutputItems(payload);
                 break;
             case "content_block_start":
                 RegisterContentBlock(payload);
@@ -66,7 +72,9 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
                     new QueryTerminalIterationResult(
                         new QueryLoopTerminal(QueryTerminalReason.Completed),
                         finalState),
-                    _outputTokens)));
+                    _outputTokens,
+                    _responseId,
+                    _responseOutputItems.Count == 0 ? null : _responseOutputItems.ToArray())));
 
         Reset();
         return updates;
@@ -93,6 +101,7 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
             _contentBlocks[index] = PartialAssistantContentBlock.ForToolUse(
                 contentBlock["name"]?.GetValue<string>() ?? string.Empty,
                 contentBlock["id"]?.GetValue<string>() ?? string.Empty,
+                contentBlock["tool_call_item_id"]?.GetValue<string>(),
                 string.Empty);
             return;
         }
@@ -196,6 +205,38 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
         }
     }
 
+    private void UpdateResponseId(JsonNode payload)
+    {
+        if (string.IsNullOrWhiteSpace(_responseId))
+        {
+            _responseId = payload["response_id"]?.GetValue<string>();
+        }
+    }
+
+    private void UpdateResponseOutputItems(JsonNode payload)
+    {
+        if (_responseOutputItems.Count > 0)
+        {
+            return;
+        }
+
+        var items = payload["response_output_items"]?.AsArray();
+        if (items is null)
+        {
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            if (item is null)
+            {
+                continue;
+            }
+
+            _responseOutputItems.Add(item.ToJsonString());
+        }
+    }
+
     private static bool TryGetOutputTokens(JsonNode? usage, out int outputTokens)
     {
         outputTokens = 0;
@@ -217,16 +258,22 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
 
     private sealed class PartialAssistantContentBlock
     {
-        private PartialAssistantContentBlock(MessageContentKind kind, string? name = null, string? toolUseId = null)
+        private PartialAssistantContentBlock(
+            MessageContentKind kind,
+            string? name = null,
+            string? toolUseId = null,
+            string? toolCallItemId = null)
         {
             Kind = kind;
             Name = name;
             ToolUseId = toolUseId;
+            ToolCallItemId = toolCallItemId;
         }
 
         public MessageContentKind Kind { get; }
         public string? Name { get; }
         public string? ToolUseId { get; }
+        public string? ToolCallItemId { get; }
         public StringBuilder TextBuilder { get; } = new();
         public StringBuilder InputBuilder { get; } = new();
 
@@ -236,9 +283,13 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
             return block;
         }
 
-        public static PartialAssistantContentBlock ForToolUse(string name, string toolUseId, string input)
+        public static PartialAssistantContentBlock ForToolUse(
+            string name,
+            string toolUseId,
+            string? toolCallItemId,
+            string input)
         {
-            var block = new PartialAssistantContentBlock(MessageContentKind.ToolUse, name, toolUseId);
+            var block = new PartialAssistantContentBlock(MessageContentKind.ToolUse, name, toolUseId, toolCallItemId);
             block.InputBuilder.Append(input);
             return block;
         }
@@ -266,10 +317,7 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
                     MessageContentKind.ToolUse,
                     InputBuilder.ToString(),
                     Name,
-                    new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["toolUseId"] = ToolUseId ?? string.Empty
-                    }),
+                    BuildToolUseMetadata()),
                 MessageContentKind.WebSearchToolResult => new MessageContentBlock(
                     MessageContentKind.WebSearchToolResult,
                     InputBuilder.ToString(),
@@ -279,6 +327,20 @@ public sealed class QueryModelAnthropicStreamUpdateParser : IQueryModelStreamUpd
                     }),
                 _ => throw new InvalidOperationException($"Unsupported assistant content block kind '{Kind}'.")
             };
+        }
+
+        private Dictionary<string, string> BuildToolUseMetadata()
+        {
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["toolUseId"] = ToolUseId ?? string.Empty
+            };
+            if (!string.IsNullOrWhiteSpace(ToolCallItemId))
+            {
+                metadata["toolCallItemId"] = ToolCallItemId!;
+            }
+
+            return metadata;
         }
     }
 }

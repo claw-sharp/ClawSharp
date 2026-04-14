@@ -15,7 +15,7 @@ public sealed class McpAuthTool : IClawSharpTool
         _serverName = serverName;
         _config = config;
         _transport = config.Type ?? "stdio";
-        _location = (config.Config as dynamic)?.url ?? _transport;
+        _location = ResolveLocation(config.Config, _transport);
 
         var fullyQualifiedName = $"mcp__{NormalizeName(_serverName)}__authenticate";
         var description =
@@ -44,9 +44,14 @@ public sealed class McpAuthTool : IClawSharpTool
 
     public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, CancellationToken cancellationToken = default)
     {
-        if (context.McpLifecycle == null)
+        if (context.ToolRegistry == null)
         {
-            return new ToolExecutionResult(false, "MCP lifecycle manager is not available.");
+            return new ToolExecutionResult(false, "Tool registry is not available.");
+        }
+
+        if (context.McpToolRuntimeCoordinator == null)
+        {
+            return new ToolExecutionResult(false, "MCP tool runtime coordinator is not available.");
         }
 
         if (_config.Type == "claudeai-proxy")
@@ -59,10 +64,26 @@ public sealed class McpAuthTool : IClawSharpTool
             return new ToolExecutionResult(true, $"Server \"{_serverName}\" uses {_transport} transport which does not support OAuth from this tool. Ask the user to run /mcp and authenticate manually.");
         }
 
-        // Note: Full OAuth flow implementation in C# might require additional services not yet present.
-        // For now, we mimic the TS behavior but we might need to implement performMCPOAuthFlow.
-        
-        return new ToolExecutionResult(true, $"OAuth flow for {_serverName} started. (Wait for implementation of OAuth flow in C# infrastructure)");
+        context.ReportProgress(Descriptor.Name, new JsonObject
+        {
+            ["status"] = "starting_oauth",
+            ["server"] = _serverName
+        });
+
+        var result = await context.McpToolRuntimeCoordinator.AuthenticateAsync(
+            _serverName,
+            _config,
+            context.ToolRegistry,
+            Descriptor.Name,
+            cancellationToken).ConfigureAwait(false);
+
+        context.ReportProgress(Descriptor.Name, new JsonObject
+        {
+            ["status"] = result.Success ? "authenticated" : "authentication_failed",
+            ["server"] = _serverName
+        });
+
+        return new ToolExecutionResult(result.Success, result.Message);
     }
 
     private static string NormalizeName(string name)
@@ -73,5 +94,21 @@ public sealed class McpAuthTool : IClawSharpTool
             builder.Append(char.IsLetterOrDigit(character) || character is '_' or '-' ? character : '_');
         }
         return builder.ToString();
+    }
+
+    private static string ResolveLocation(McpServerConfig config, string fallbackTransport)
+    {
+        return config switch
+        {
+            McpHttpServerConfig http => http.Url,
+            McpSseServerConfig sse => sse.Url,
+            McpSseIdeServerConfig sseIde => sseIde.Url,
+            McpWebSocketServerConfig webSocket => webSocket.Url,
+            McpWebSocketIdeServerConfig webSocketIde => webSocketIde.Url,
+            McpClaudeAiProxyServerConfig claudeAiProxy => claudeAiProxy.Url,
+            McpSdkServerConfig sdk => sdk.Name,
+            McpStdioServerConfig stdio => stdio.Command,
+            _ => fallbackTransport
+        };
     }
 }

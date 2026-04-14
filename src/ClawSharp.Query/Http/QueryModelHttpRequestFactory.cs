@@ -419,6 +419,23 @@ public static class QueryModelHttpRequestFactory
 
     private static IEnumerable<JsonObject> ConvertToCodexInput(QueryModelRequest request)
     {
+        if (request.PreviousResponseItems?.Count > 0)
+        {
+            foreach (var rawItem in request.PreviousResponseItems)
+            {
+                if (string.IsNullOrWhiteSpace(rawItem))
+                {
+                    continue;
+                }
+
+                var parsed = JsonNode.Parse(rawItem)?.AsObject();
+                if (parsed is not null)
+                {
+                    yield return parsed;
+                }
+            }
+        }
+
         foreach (var message in request.Messages)
         {
             if (string.Equals(message.Role, "user", StringComparison.Ordinal))
@@ -494,10 +511,13 @@ public static class QueryModelHttpRequestFactory
                 foreach (var toolUse in message.Content.Where(block => string.Equals(block.Type, "tool_use", StringComparison.Ordinal)))
                 {
                     var ids = NormalizeCodexCallId(toolUse.ToolUseId);
+                    var itemId = string.IsNullOrWhiteSpace(toolUse.ToolCallItemId)
+                        ? ids.Id
+                        : toolUse.ToolCallItemId;
                     yield return new JsonObject
                     {
                         ["type"] = "function_call",
-                        ["id"] = ids.Id,
+                        ["id"] = itemId,
                         ["call_id"] = ids.CallId,
                         ["name"] = toolUse.Name ?? "tool",
                         ["arguments"] = toolUse.Input ?? "{}"

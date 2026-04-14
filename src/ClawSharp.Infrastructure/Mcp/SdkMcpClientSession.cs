@@ -203,7 +203,8 @@ internal sealed class SdkMcpClientSession : IMcpClientSession
         return new McpToolCallResult(
             FlattenToolResultContent(result.Content),
             meta,
-            structuredContent);
+            structuredContent,
+            result.IsError == true);
     }
 
     public void SetElicitationRequestHandler(Func<McpElicitationRequestContext, Task<McpElicitResult>> handler)

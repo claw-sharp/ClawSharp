@@ -327,6 +327,62 @@ public sealed class ExtensionBootstrapperTests
     }
 
     [Fact]
+    public async Task LoadAsync_Parses_Plugin_McpServers_From_Manifest()
+    {
+        var tempRoot = CreateTempDirectory();
+        var pluginsDirectoryPath = Path.Combine(tempRoot, "plugins");
+        var pluginInstallPath = Path.Combine(tempRoot, "cache", "linear");
+        Directory.CreateDirectory(pluginsDirectoryPath);
+        Directory.CreateDirectory(pluginInstallPath);
+        File.WriteAllText(
+            Path.Combine(pluginInstallPath, "plugin.json"),
+            """
+            {
+              "name": "linear",
+              "mcpServers": {
+                "linear": {
+                  "type": "http",
+                  "url": "https://mcp.linear.app/mcp"
+                }
+              }
+            }
+            """,
+            Encoding.UTF8);
+        File.WriteAllText(
+            Path.Combine(pluginsDirectoryPath, "installed_plugins.json"),
+            $$"""
+            {
+              "version": 2,
+              "plugins": {
+                "linear@acme": [
+                  {
+                    "scope": "user",
+                    "installPath": "{{pluginInstallPath.Replace("\\", "\\\\", StringComparison.Ordinal)}}"
+                  }
+                ]
+              }
+            }
+            """,
+            Encoding.UTF8);
+
+        var bootstrapper = new ExtensionBootstrapper(
+            managedFilePath: Path.Combine(tempRoot, "managed"),
+            userConfigHomeDir: Path.Combine(tempRoot, "user"),
+            pluginsDirectoryPath: pluginsDirectoryPath);
+
+        var result = await bootstrapper.LoadAsync(
+            Path.Combine(tempRoot, "repo"),
+            new StartupEnvironment(Path.Combine(tempRoot, "user"), BareMode: false, DisablePolicySkills: false),
+            new ClawSharpSettings());
+
+        var plugin = Assert.Single(result.Plugins);
+        var server = Assert.Single(plugin.Manifest!.McpServers);
+        Assert.Equal("linear", server.Name);
+        Assert.Equal("http", server.Config.Type);
+        Assert.Equal("https://mcp.linear.app/mcp", Assert.IsType<McpHttpServerConfig>(server.Config).Url);
+    }
+
+    [Fact]
     public async Task LoadAsync_Loads_BuiltIn_Plugins_Using_Builtin_Enablement_Semantics()
     {
         var tempRoot = CreateTempDirectory();

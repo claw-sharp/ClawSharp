@@ -220,6 +220,151 @@ public sealed class QueryModelHttpRequestFactoryTests
     }
 
     [Fact]
+    public async Task CreateStreamingRequest_Shapes_Codex_Request_With_Previous_Response_Items()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            CreateStreamingRequest().Request with
+            {
+                PreviousResponseItems =
+                [
+                    """{"type":"reasoning","id":"rs_123","summary":[]}""",
+                    """{"type":"function_call","id":"fc_123","call_id":"call_123","name":"mcp__linear__list_teams","arguments":"{}"}"""
+                ]
+            },
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex,
+                AccountId: "account-1"),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        Assert.Null(body["previous_response_id"]);
+        var input = body["input"]!.AsArray();
+        Assert.Equal("reasoning", input[0]!["type"]?.GetValue<string>());
+        Assert.Equal("function_call", input[1]!["type"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Replays_Codex_Function_Call_With_Preserved_Item_Id()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-tool-replay",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [
+                    new QueryRequestMessage(
+                        "user",
+                        [new QueryRequestContentBlock("text", Text: "Create a project")]),
+                    new QueryRequestMessage(
+                        "assistant",
+                        [
+                            new QueryRequestContentBlock(
+                                "tool_use",
+                                Name: "mcp__linear__save_project",
+                                ToolUseId: "call_4TOTDvJLfYXDCf5jJASwe0Cv",
+                                ToolCallItemId: "fc_preserved_item_123",
+                                Input: """{"name":"HR"}""")
+                        ]),
+                    new QueryRequestMessage(
+                        "user",
+                        [
+                            new QueryRequestContentBlock(
+                                "tool_result",
+                                Text: "Error: setTeams must contain at least one team",
+                                ToolUseId: "call_4TOTDvJLfYXDCf5jJASwe0Cv")
+                        ])
+                ],
+                [
+                    new QueryRequestTool(
+                        "mcp__linear__save_project",
+                        "Creates or updates a Linear project.",
+                        new JsonObject { ["type"] = "object" },
+                        Strict: true)
+                ],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var input = body["input"]!.AsArray();
+
+        Assert.Equal("message", input[0]!["type"]?.GetValue<string>());
+        Assert.Equal("function_call", input[1]!["type"]?.GetValue<string>());
+        Assert.Equal("fc_preserved_item_123", input[1]!["id"]?.GetValue<string>());
+        Assert.Equal("call_4TOTDvJLfYXDCf5jJASwe0Cv", input[1]!["call_id"]?.GetValue<string>());
+        Assert.Equal("function_call_output", input[2]!["type"]?.GetValue<string>());
+        Assert.Equal("call_4TOTDvJLfYXDCf5jJASwe0Cv", input[2]!["call_id"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CreateStreamingRequest_Replays_Codex_Function_Call_Output_When_Previous_Response_Items_Are_Present()
+    {
+        var request = new QueryModelHttpStreamingRequest(
+            new QueryModelRequest(
+                "session-http-codex-post-tool",
+                "gpt-5.4",
+                [new QuerySystemPromptBlock("system")],
+                [
+                    new QueryRequestMessage(
+                        "user",
+                        [
+                            new QueryRequestContentBlock(
+                                "tool_result",
+                                Text: "Found team TruckerPoints",
+                                ToolUseId: "call_ADNkZPvZgiaz4XFMAei8STuF")
+                        ])
+                ],
+                [
+                    new QueryRequestTool(
+                        "mcp__linear__list_teams",
+                        "Lists teams in Linear.",
+                        new JsonObject { ["type"] = "object" },
+                        Strict: true)
+                ],
+                new QueryRequestOutputConfig(),
+                [],
+                MaxTokens: 4096,
+                PreviousResponseItems:
+                [
+                    """{"type":"reasoning","id":"rs_123","summary":[]}""",
+                    """{"type":"function_call","id":"fc_08f6807deaae1fa00169de447f39208191b81f914bec7d3167","call_id":"call_ADNkZPvZgiaz4XFMAei8STuF","name":"mcp__linear__list_teams","arguments":"{}"}"""
+                ]),
+            "repl_main_thread");
+
+        var httpRequest = QueryModelHttpRequestFactory.CreateStreamingRequest(
+            new QueryModelHttpClientConfig(
+                ProviderRuntimeResolver.DefaultCodexBaseUrl,
+                ApiKey: "codex-token",
+                TransportKind: ModelTransportKind.CodexResponses,
+                ProviderKind: ApiProviderKind.Codex),
+            request);
+
+        var body = JsonNode.Parse(await httpRequest.Content!.ReadAsStringAsync())!.AsObject();
+        var input = body["input"]!.AsArray();
+
+        Assert.Equal("reasoning", input[0]!["type"]?.GetValue<string>());
+        Assert.Equal("function_call", input[1]!["type"]?.GetValue<string>());
+        Assert.Equal("function_call_output", input[2]!["type"]?.GetValue<string>());
+        Assert.Equal("call_ADNkZPvZgiaz4XFMAei8STuF", input[2]!["call_id"]?.GetValue<string>());
+        Assert.Equal("Found team TruckerPoints", input[2]!["output"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task CreateStreamingRequest_Shapes_Codex_User_Image_Content_As_InputImage_Parts()
     {
         var request = new QueryModelHttpStreamingRequest(

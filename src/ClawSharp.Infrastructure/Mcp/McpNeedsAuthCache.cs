@@ -72,6 +72,44 @@ public sealed class McpNeedsAuthCache
         return Task.CompletedTask;
     }
 
+    public async Task ClearEntryAsync(string serverId, CancellationToken cancellationToken = default)
+    {
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var cache = await GetCacheAsync(cancellationToken).ConfigureAwait(false);
+            if (!cache.Remove(serverId))
+            {
+                return;
+            }
+
+            var cachePath = GetCachePath();
+            if (cache.Count == 0)
+            {
+                if (File.Exists(cachePath))
+                {
+                    File.Delete(cachePath);
+                }
+
+                _cacheTask = null;
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(cachePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(cache, SerializerOptions), cancellationToken).ConfigureAwait(false);
+            _cacheTask = null;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
     private Task<Dictionary<string, McpNeedsAuthCacheEntry>> GetCacheAsync(CancellationToken cancellationToken)
     {
         _cacheTask ??= ReadCacheAsync(cancellationToken);

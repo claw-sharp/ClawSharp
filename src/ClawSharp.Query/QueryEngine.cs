@@ -2,6 +2,7 @@
 using ClawSharp.Core;
 using ClawSharp.Query.Attachments;
 using ClawSharp.Query.Files;
+using ClawSharp.Query.Plugins;
 using ClawSharp.Query.Skills;
 using ClawSharp.Tools;
 
@@ -21,6 +22,7 @@ public sealed class QueryEngine
     private readonly IClawSharpAppStateStore? _appStateStore;
     private readonly PromptAttachmentReferenceService _promptAttachmentReferenceService;
     private readonly PromptFileReferenceService _promptFileReferenceService;
+    private readonly PromptPluginReferenceService _promptPluginReferenceService;
     private readonly PromptSkillReferenceService _promptSkillReferenceService;
 
     public QueryEngine(
@@ -47,6 +49,7 @@ public sealed class QueryEngine
         _appStateStore = appStateStore;
         _promptAttachmentReferenceService = new PromptAttachmentReferenceService();
         _promptFileReferenceService = new PromptFileReferenceService();
+        _promptPluginReferenceService = new PromptPluginReferenceService();
         _promptSkillReferenceService = new PromptSkillReferenceService();
     }
 
@@ -217,6 +220,14 @@ public sealed class QueryEngine
 
         if (_appStateStore?.GetState() is { } appState)
         {
+            if (appState.Plugins.Count > 0)
+            {
+                request = await _promptPluginReferenceService.ExpandPromptPluginReferencesAsync(
+                    request,
+                    appState.Plugins,
+                    cancellationToken);
+            }
+
             if (appState.Skills.Count > 0)
             {
                 request = await _promptSkillReferenceService.ExpandPromptSkillReferencesAsync(

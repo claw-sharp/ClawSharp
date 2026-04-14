@@ -24,6 +24,8 @@ import type {
   DeletePluginOptionsRequest,
   GetDiffResponse,
   GetSettingsResponse,
+  InstallPluginRequest,
+  InstallPluginResponse,
   GetThreadResponse,
   HealthResponse,
   ListChangedFilesResponse,
@@ -296,6 +298,7 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
           hookEvents: [],
           validationIssues: [],
           options: [],
+          mcpServers: [],
         },
         {
           pluginId: 'verification@builtin',
@@ -317,6 +320,7 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
           hookEvents: [],
           validationIssues: [],
           options: [],
+          mcpServers: [],
         },
         {
           pluginId: 'troubleshooter@builtin',
@@ -338,6 +342,7 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
           hookEvents: [],
           validationIssues: [],
           options: [],
+          mcpServers: [],
         },
         {
           pluginId: 'settings@builtin',
@@ -374,6 +379,35 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
               max: null,
             },
           ],
+          mcpServers: [],
+        },
+        {
+          pluginId: 'linear@builtin',
+          name: 'linear',
+          description: 'Connect Linear issues, projects, and workflows through the official Linear MCP server.',
+          version: '1.0.0',
+          enabled: false,
+          isBundled: true,
+          installPath: `${workspacePath}/.clawsharp/builtin/linear`,
+          scope: 'builtin',
+          installedAt: '2026-04-01T09:00:00Z',
+          lastUpdated: '2026-04-05T14:30:00Z',
+          gitCommitSha: null,
+          commands: [],
+          agents: [],
+          skills: [],
+          outputStyles: [],
+          hookFiles: [],
+          hookEvents: [],
+          validationIssues: [],
+          options: [],
+          mcpServers: [
+            {
+              name: 'linear',
+              type: 'http',
+              endpoint: 'https://mcp.linear.app/mcp',
+            },
+          ],
         },
         {
           pluginId: 'playwright@anthropic-tools',
@@ -401,6 +435,7 @@ function createPluginCatalog(projects: AgentHostProject[]): Record<string, Agent
             },
           ],
           options: [],
+          mcpServers: [],
         },
       ];
 
@@ -1028,6 +1063,27 @@ export class BrowserAgentHostClient {
         : plugin);
 
     return await this.listPlugins(resolvedProjectId);
+  }
+
+  async installPlugin(request: InstallPluginRequest): Promise<InstallPluginResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    await this.setPluginEnabled({
+      projectId: resolvedProjectId,
+      pluginId: request.pluginId,
+      enabled: true,
+    });
+
+    return {
+      projectId: resolvedProjectId,
+      pluginId: request.pluginId,
+      enabled: true,
+      authenticated: true,
+      message: `Installed ${request.pluginId} in browser preview mode.`,
+    };
   }
 
   async savePluginOptions(request: SavePluginOptionsRequest): Promise<ListPluginsResponse> {

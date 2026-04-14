@@ -131,13 +131,52 @@ public sealed class McpSdkClientConnectorTests
         Assert.Equal("token-123", capturedHeaders!["X-Claude-Code-Ide-Authorization"]);
     }
 
+    [Fact]
+    public async Task ConnectAsync_RetriesAfterProtectedResourceMismatchWhenOAuthBootstrapSucceeds()
+    {
+        var storage = new InMemoryMcpSecureStorage();
+        var authState = new McpAuthStateService(storage);
+        var transportFactory = new McpSdkHttpTransportFactory(storage, authState);
+        var session = new RecordingMcpClientSession();
+        var bootstrapCalls = 0;
+        var connectAttempts = 0;
+        var connector = CreateConnector(
+            transportFactory,
+            null,
+            null,
+            (_, _) =>
+            {
+                connectAttempts++;
+                if (connectAttempts == 1)
+                {
+                    throw new InvalidOperationException("Resource URI in metadata (https://mcp.linear.app) does not match the expected URI (https://mcp.linear.app/mcp)");
+                }
+
+                return Task.FromResult<IMcpClientSession>(session);
+            },
+            oauthBootstrapper: (_, _) =>
+            {
+                bootstrapCalls++;
+                return Task.FromResult(true);
+            });
+        var server = CreateServer("linear", new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null));
+
+        var connection = await connector.ConnectAsync("linear", server);
+
+        var connected = Assert.IsType<ConnectedMcpServerConnection>(connection);
+        Assert.Same(session, connected.Client);
+        Assert.Equal(1, bootstrapCalls);
+        Assert.Equal(2, connectAttempts);
+    }
+
     private static SdkMcpClientConnector CreateConnector(
         McpSdkHttpTransportFactory transportFactory,
         McpNeedsAuthCache? cache,
         McpElicitationService? elicitationService,
         Func<IClientTransport, CancellationToken, Task<IMcpClientSession>> sessionFactory,
         Func<HttpClientTransportOptions, IClientTransport>? httpTransportBuilder = null,
-        Func<Uri, IReadOnlyDictionary<string, string>?, IClientTransport>? webSocketTransportBuilder = null)
+        Func<Uri, IReadOnlyDictionary<string, string>?, IClientTransport>? webSocketTransportBuilder = null,
+        Func<HttpClientTransportOptions, CancellationToken, Task<bool>>? oauthBootstrapper = null)
     {
         var constructor = typeof(SdkMcpClientConnector).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic,
@@ -148,7 +187,8 @@ public sealed class McpSdkClientConnectorTests
                 typeof(McpElicitationService),
                 typeof(Func<HttpClientTransportOptions, IClientTransport>),
                 typeof(Func<Uri, IReadOnlyDictionary<string, string>?, IClientTransport>),
-                typeof(Func<IClientTransport, CancellationToken, Task<IMcpClientSession>>)
+                typeof(Func<IClientTransport, CancellationToken, Task<IMcpClientSession>>),
+                typeof(Func<HttpClientTransportOptions, CancellationToken, Task<bool>>)
             ],
             modifiers: null);
         Assert.NotNull(constructor);
@@ -160,7 +200,8 @@ public sealed class McpSdkClientConnectorTests
                 elicitationService,
                 httpTransportBuilder ?? (Func<HttpClientTransportOptions, IClientTransport>)(options => new HttpClientTransport(options)),
                 webSocketTransportBuilder ?? (Func<Uri, IReadOnlyDictionary<string, string>?, IClientTransport>)((uri, headers) => new FakeClientTransport(uri.ToString())),
-                sessionFactory
+                sessionFactory,
+                oauthBootstrapper ?? (Func<HttpClientTransportOptions, CancellationToken, Task<bool>>)((_, _) => Task.FromResult(false))
             ]);
     }
 
