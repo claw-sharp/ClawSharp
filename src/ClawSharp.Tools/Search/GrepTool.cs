@@ -516,7 +516,10 @@ internal sealed class GrepTool : BaseTool
             return true;
         }
 
-        if (string.Equals(input.OutputMode, "content", StringComparison.Ordinal) && File.Exists(resolvedPath))
+        if (string.Equals(input.OutputMode, "content", StringComparison.Ordinal) &&
+            (File.Exists(resolvedPath) ||
+             !string.IsNullOrWhiteSpace(input.Glob) ||
+             !string.IsNullOrWhiteSpace(input.Type)))
         {
             effectivePattern = ".*";
             errorMessage = null;

@@ -106,6 +106,42 @@ public sealed class SearchToolTests
     }
 
     [Fact]
+    public async Task GlobTool_Defaults_To_Match_All_When_Path_Is_Provided_Without_A_Pattern()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-glob-default-pattern-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempDir, "src", "nested"));
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "src", "one.ts"), "alpha");
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "src", "nested", "two.ts"), "beta");
+
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+
+            var result = await registry.ExecuteAsync(
+                "Glob",
+                """{"path":"src"}""",
+                session,
+                new ClawSharpSettings());
+
+            Assert.True(result.Success, result.Output);
+            var data = Assert.IsType<JsonObject>(result.StructuredOutput);
+            var filenames = Assert.IsType<JsonArray>(data["filenames"]);
+            Assert.Contains("src/one.ts", filenames.Select(item => item!.GetValue<string>()));
+            Assert.Contains("src/nested/two.ts", filenames.Select(item => item!.GetValue<string>()));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task GlobTool_Accepts_Backslash_Patterns_Across_Platforms()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-glob-backslash-pattern-tests", Guid.NewGuid().ToString("N"));
@@ -263,6 +299,43 @@ public sealed class SearchToolTests
             Assert.True(result.Success, result.Output);
             Assert.Contains("ThreadView.tsx:1:first line", result.Output, StringComparison.Ordinal);
             Assert.Contains("ThreadView.tsx:2:second line", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task GrepTool_Defaults_To_Match_All_When_Content_Mode_Uses_Glob_Filter_Without_A_Pattern()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-grep-glob-fallback-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var grammarDir = Path.Combine(tempDir, "grammar");
+            Directory.CreateDirectory(grammarDir);
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "a.md"), "# Alpha\nfirst line\n");
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "b.md"), "# Beta\nsecond line\n");
+            await File.WriteAllTextAsync(Path.Combine(grammarDir, "notes.txt"), "ignore me\n");
+
+            var registry = new ToolRegistry(tempDir, new TaskRegistry());
+            var session = new DefaultSessionFactory(tempDir).Create();
+
+            var result = await registry.ExecuteAsync(
+                "Grep",
+                """{"path":"grammar","glob":"**/*.md","output_mode":"content","-n":true,"head_limit":20}""",
+                session,
+                new ClawSharpSettings());
+
+            Assert.True(result.Success, result.Output);
+            Assert.Contains("grammar/a.md:1:# Alpha", result.Output, StringComparison.Ordinal);
+            Assert.Contains("grammar/b.md:2:second line", result.Output, StringComparison.Ordinal);
+            Assert.DoesNotContain("notes.txt", result.Output, StringComparison.Ordinal);
         }
         finally
         {

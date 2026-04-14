@@ -190,6 +190,12 @@ internal sealed class GlobTool : BaseTool
 
         if (string.IsNullOrWhiteSpace(pattern))
         {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                input = new GlobInput("**/*", path);
+                return true;
+            }
+
             errorMessage = "Glob requires a non-empty pattern. Provide a concrete glob such as \"**/*\", \"*.cs\", or \"src/**/*.ts\".";
             return false;
         }
