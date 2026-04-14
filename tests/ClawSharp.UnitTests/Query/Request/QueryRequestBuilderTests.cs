@@ -452,6 +452,78 @@ public class QueryRequestBuilderTests
     }
 
     [Fact]
+    public async Task QueryEngine_Expands_Prompt_Plugin_References_Into_User_Context()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-plugin-context-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                tempDir,
+                StartupEnvironment.Capture(),
+                settings,
+                [],
+                [],
+                [
+                    new DiscoveredPlugin(
+                        "linear@builtin",
+                        "linear",
+                        Path.Combine(tempDir, ".clawsharp", "builtin", "linear"),
+                        true,
+                        true,
+                        new PluginManifest(
+                            "linear",
+                            "Manage Linear issues and projects through the official MCP server.",
+                            "1.0.0",
+                            [],
+                            [],
+                            [],
+                            [],
+                            [],
+                            [new PluginMcpServerDefinition("linear", new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null))]),
+                        [],
+                        new Dictionary<HookEvent, IReadOnlyList<HookMatcherDefinition>>()),
+                ],
+                [],
+                [],
+                []));
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry,
+            appStateStore: appStateStore);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "$linear create project \"HR\" description:\"Hiring for truckerpoints\"",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Equal("user", result.Request!.Messages[0].Role);
+        Assert.Contains("Plugin $linear", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Prefer this plugin's capabilities when they fit the task.", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("mcp__linear__", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Equal("create project \"HR\" description:\"Hiring for truckerpoints\"", result.Request.Messages[1].Content[0].Text);
+    }
+
+    [Fact]
     public async Task QueryEngine_Expands_Prompt_Skill_References_Into_User_Context()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-skill-context-tests", Guid.NewGuid().ToString("N"));
@@ -668,6 +740,180 @@ public class QueryRequestBuilderTests
     }
 
     [Fact]
+    public void BuildFromMessages_Does_Not_Override_Tool_Result_User_Message_With_Resolved_User_Input()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-tool-result-override-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            "$linear create project \"HR\" description:\"Hiring for truckerpoints\"") with
+        {
+            ResolvedUserInput = "create project \"HR\" description:\"Hiring for truckerpoints\""
+        };
+        var messages = new[]
+        {
+            ChatMessageFactory.CreateToolResult(
+                "call_123",
+                "mcp__linear__list_teams",
+                """{"teams":[{"name":"TruckerPoints"}]}""",
+                success: true)
+        };
+
+        var builder = new QueryRequestBuilder();
+        var modelRequest = builder.BuildFromMessages(
+            request,
+            messages,
+            new ClawSharpSettings(),
+            [],
+            new QueryRequestBuildOptions(SystemPrompt: ["system body"]));
+
+        Assert.Single(modelRequest.Messages);
+        Assert.Single(modelRequest.Messages[0].Content);
+        Assert.Equal("tool_result", modelRequest.Messages[0].Content[0].Type);
+        Assert.Equal("""{"teams":[{"name":"TruckerPoints"}]}""", modelRequest.Messages[0].Content[0].Text);
+        Assert.Equal("call_123", modelRequest.Messages[0].Content[0].ToolUseId);
+    }
+
+    [Fact]
+    public void QueryModelIterationRequestBuilder_Repairs_Missing_MultiTool_Result_From_Previous_Response_Items()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-multitool-repair-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(session, "Create a Linear issue");
+        var state = QueryLoopStateFactory.CreateInitial(
+            [
+                new ChatMessage(
+                    Guid.NewGuid().ToString("N"),
+                    MessageRole.User,
+                    [
+                        new MessageContentBlock(
+                            MessageContentKind.ToolResult,
+                            "Found project HR",
+                            "mcp__linear__list_projects",
+                            new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["toolUseId"] = "call_list"
+                            }),
+                        new MessageContentBlock(MessageContentKind.Text, "Continue.")
+                    ],
+                    DateTimeOffset.UtcNow)
+            ],
+            previousResponseItems:
+            [
+                """{"type":"function_call","id":"fc_list","call_id":"call_list","name":"mcp__linear__list_projects","arguments":"{}"}""",
+                """{"type":"function_call","id":"fc_save","call_id":"call_save","name":"mcp__linear__save_issue","arguments":"{\"title\":\"Candidate\"}"}"""
+            ]);
+
+        var builder = new QueryModelIterationRequestBuilder();
+        var streamingRequest = builder.Build(request, state, new ClawSharpSettings());
+
+        Assert.Single(streamingRequest.Request.Messages);
+        var repairedUserMessage = streamingRequest.Request.Messages[0];
+        Assert.Equal("user", repairedUserMessage.Role);
+        Assert.Equal("tool_result", repairedUserMessage.Content[0].Type);
+        Assert.Equal(QueryRequestToolResultPairingRepair.SyntheticToolResultPlaceholder, repairedUserMessage.Content[0].Text);
+        Assert.Equal("call_save", repairedUserMessage.Content[0].ToolUseId);
+        Assert.Equal("tool_result", repairedUserMessage.Content[1].Type);
+        Assert.Equal("call_list", repairedUserMessage.Content[1].ToolUseId);
+        Assert.Equal("text", repairedUserMessage.Content[2].Type);
+        Assert.Equal("Continue.", repairedUserMessage.Content[2].Text);
+    }
+
+    [Fact]
+    public void QueryModelIterationRequestBuilder_Preserves_Leading_Tool_Result_When_Previous_Response_Items_Match()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-leading-tool-result-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(session, "$linear create issue");
+        var state = QueryLoopStateFactory.CreateInitial(
+            [
+                ChatMessageFactory.CreateToolResult("call_list", "mcp__linear__list_projects", "Found project HR")
+            ],
+            previousResponseItems:
+            [
+                """{"type":"function_call","id":"fc_list","call_id":"call_list","name":"mcp__linear__list_projects","arguments":"{}"}"""
+            ]);
+
+        var builder = new QueryModelIterationRequestBuilder();
+        var streamingRequest = builder.Build(request, state, new ClawSharpSettings());
+
+        Assert.Single(streamingRequest.Request.Messages);
+        Assert.Single(streamingRequest.Request.Messages[0].Content);
+        Assert.Equal("tool_result", streamingRequest.Request.Messages[0].Content[0].Type);
+        Assert.Equal("Found project HR", streamingRequest.Request.Messages[0].Content[0].Text);
+        Assert.Equal("call_list", streamingRequest.Request.Messages[0].Content[0].ToolUseId);
+    }
+
+    [Fact]
+    public void QueryModelIterationRequestBuilder_Dedupes_Duplicate_Tool_Uses_And_Tool_Results()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-duplicate-tool-pair-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(session, "Search");
+        var state = QueryLoopStateFactory.CreateInitial(
+            [
+                new ChatMessage(
+                    Guid.NewGuid().ToString("N"),
+                    MessageRole.Assistant,
+                    [
+                        new MessageContentBlock(
+                            MessageContentKind.ToolUse,
+                            """{"path":"."}""",
+                            "Glob",
+                            new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["toolUseId"] = "call_dup"
+                            }),
+                        new MessageContentBlock(
+                            MessageContentKind.ToolUse,
+                            """{"path":"."}""",
+                            "Glob",
+                            new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["toolUseId"] = "call_dup"
+                            })
+                    ],
+                    DateTimeOffset.UtcNow),
+                new ChatMessage(
+                    Guid.NewGuid().ToString("N"),
+                    MessageRole.User,
+                    [
+                        new MessageContentBlock(
+                            MessageContentKind.ToolResult,
+                            "match one",
+                            "Glob",
+                            new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["toolUseId"] = "call_dup"
+                            }),
+                        new MessageContentBlock(
+                            MessageContentKind.ToolResult,
+                            "match two",
+                            "Glob",
+                            new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["toolUseId"] = "call_dup"
+                            })
+                    ],
+                    DateTimeOffset.UtcNow)
+            ]);
+
+        var builder = new QueryModelIterationRequestBuilder();
+        var streamingRequest = builder.Build(request, state, new ClawSharpSettings());
+
+        Assert.Equal(2, streamingRequest.Request.Messages.Count);
+        Assert.Single(streamingRequest.Request.Messages[0].Content);
+        Assert.Equal("tool_use", streamingRequest.Request.Messages[0].Content[0].Type);
+        Assert.Single(streamingRequest.Request.Messages[1].Content);
+        Assert.Equal("tool_result", streamingRequest.Request.Messages[1].Content[0].Type);
+        Assert.Equal("match one", streamingRequest.Request.Messages[1].Content[0].Text);
+    }
+
+    [Fact]
     public async Task QueryEngine_Extracts_Prompt_Attachment_Markers_And_Adds_File_Context()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-picked-file-tests", Guid.NewGuid().ToString("N"));
@@ -706,6 +952,57 @@ public class QueryRequestBuilderTests
         Assert.Contains("Attached file spec.md", result.Request!.Messages[0].Content[0].Text, StringComparison.Ordinal);
         Assert.Contains("# Spec", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
         Assert.Equal("Review the picked file.", result.Request.Messages[1].Content[0].Text);
+    }
+
+    [Fact]
+    public async Task QueryEngine_Extracts_Pdf_Prompt_Attachment_Markers_And_Adds_Read_Guidance()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "clawsharp-query-request-picked-pdf-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var attachedFilePath = Path.Combine(tempDir, "resume.pdf");
+        var pdfBytes = new byte[]
+        {
+            (byte)'%', (byte)'P', (byte)'D', (byte)'F', (byte)'-', (byte)'1', (byte)'.', (byte)'4', (byte)'\n',
+            0x00, 0x9C, 0xFF, 0x10,
+            (byte)'\n',
+            (byte)'%', (byte)'%', (byte)'E', (byte)'O', (byte)'F'
+        };
+        await File.WriteAllBytesAsync(attachedFilePath, pdfBytes);
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "note.txt"), "hello");
+
+        var taskRegistry = new TaskRegistry();
+        var settings = new ClawSharpSettings();
+        var eventSink = new InMemoryEventSink();
+        var toolRegistry = new ToolRegistry(tempDir, taskRegistry);
+        var orchestrator = new ToolOrchestrator(toolRegistry, eventSink);
+        var transcriptStore = new JsonlTranscriptStore();
+        var queryTurnRunner = new ExplicitToolTurnRunner(orchestrator);
+        var queue = new InMemoryQueuedCommandQueue();
+        var queuedTaskNotificationDrainer = new QueuedTaskNotificationDrainer(queue, transcriptStore);
+        var queryEngine = new QueryEngine(
+            settings,
+            eventSink,
+            transcriptStore,
+            queryTurnRunner,
+            queuedTaskNotificationDrainer,
+            toolRegistry: toolRegistry);
+        var session = new DefaultSessionFactory(tempDir).Create();
+        var request = QueryTurnRequest.Create(
+            session,
+            $"Extract the candidate name from the attached CV.\n\n<clawsharp-attachment>{{\"kind\":\"file\",\"path\":\"{attachedFilePath.Replace("\\", "\\\\")}\",\"name\":\"resume.pdf\"}}</clawsharp-attachment>",
+            [
+                new ToolCallRequest("tooluse-note", "Read", "note.txt")
+            ]);
+
+        var result = await queryEngine.RunTurnAsync(session, request);
+
+        Assert.NotNull(result.Request);
+        Assert.Contains("Attached file resume.pdf", result.Request!.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Type: PDF document", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains(attachedFilePath.Replace('\\', '/'), result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Use the Read tool with the exact absolute path above", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Contains("pages parameter", result.Request.Messages[0].Content[0].Text, StringComparison.Ordinal);
+        Assert.Equal("Extract the candidate name from the attached CV.", result.Request.Messages[1].Content[0].Text);
     }
 
     private sealed class FixedQueryModelTurnContextProvider : IQueryModelTurnContextProvider
