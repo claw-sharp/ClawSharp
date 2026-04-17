@@ -9,7 +9,6 @@ internal sealed class AgentTool : BaseTool
     private readonly IAgentExecutionService _agentExecutionService;
 
     public AgentTool(
-        IReadOnlyList<AgentDefinition> agentDefinitions,
         IAgentExecutionService agentExecutionService)
         : base(
             new ToolDescriptor(
@@ -22,11 +21,8 @@ internal sealed class AgentTool : BaseTool
                 OutputSchema: AgentToolSchemas.OutputSchema,
                 Strict: true))
     {
-        AgentDefinitions = agentDefinitions;
         _agentExecutionService = agentExecutionService;
     }
-
-    private IReadOnlyList<AgentDefinition> AgentDefinitions { get; }
 
     public override Task<ToolValidationResult> ValidateAsync(ToolExecutionContext context, CancellationToken cancellationToken = default)
     {
@@ -82,7 +78,7 @@ internal sealed class AgentTool : BaseTool
 
         var selectedAgentType = ResolveSelectedAgentType(request);
 
-        var selectedAgent = AgentDefinitions.FirstOrDefault(
+        var selectedAgent = context.AgentDefinitions.FirstOrDefault(
             agent => string.Equals(agent.AgentType, selectedAgentType, StringComparison.Ordinal));
         if (selectedAgent is null)
         {
@@ -116,7 +112,7 @@ internal sealed class AgentTool : BaseTool
         }
 
         var selectedAgentType = ResolveSelectedAgentType(request);
-        var selectedAgent = AgentDefinitions.FirstOrDefault(
+        var selectedAgent = context.AgentDefinitions.FirstOrDefault(
             agent => string.Equals(agent.AgentType, selectedAgentType, StringComparison.Ordinal));
         if (selectedAgent is null)
         {

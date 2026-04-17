@@ -6,6 +6,8 @@ import { mockProjects } from '@/mocks/projects';
 import { mockThreads } from '@/mocks/threads';
 import type {
   AgentHostApprovalRequest,
+  AgentHostAgent,
+  AgentHostAgentProposal,
   AgentHostDiagnostics,
   AgentHostDiff,
   AgentHostEventEnvelope,
@@ -18,6 +20,8 @@ import type {
   AgentHostThreadMessage,
   AgentHostThreadSummary,
   CancelRunResponse,
+  CreateAgentRequest,
+  CreateAgentResponse,
   CreateSkillRequest,
   CreateSkillResponse,
   CreateThreadResponse,
@@ -28,6 +32,7 @@ import type {
   InstallPluginResponse,
   GetThreadResponse,
   HealthResponse,
+  ListAgentsResponse,
   ListChangedFilesResponse,
   ListDiagnosticsResponse,
   ListPendingApprovalsResponse,
@@ -40,6 +45,8 @@ import type {
   OpenExternalEditorRequest,
   OpenExternalEditorResponse,
   OpenProjectResponse,
+  ProposeAgentRequest,
+  ProposeAgentResponse,
   RenameThreadResponse,
   ResolveApprovalResponse,
   SavePluginOptionsRequest,
@@ -472,6 +479,81 @@ function createSkillCatalog(projects: AgentHostProject[]): Record<string, AgentH
   );
 }
 
+function createAgentCatalog(projects: AgentHostProject[]): Record<string, AgentHostAgent[]> {
+  return Object.fromEntries(
+    projects.map((project) => {
+      const workspacePath = project.path;
+      const agents: AgentHostAgent[] = [
+        {
+          identifier: 'general-purpose',
+          whenToUse: 'Use this agent when a delegated task needs a capable generalist with access to the standard child-agent toolset.',
+          source: 'built-in',
+          baseDirectory: 'built-in',
+          filePath: null,
+          systemPrompt: 'You are a pragmatic general-purpose sub-agent. Work the task directly, stay within the delegated scope, and report crisp outcomes.',
+          tools: null,
+          disallowedTools: null,
+          skills: null,
+          color: null,
+          model: null,
+          permissionMode: null,
+          maxTurns: null,
+          filename: null,
+          background: false,
+          initialPrompt: null,
+          memory: null,
+          isolation: null,
+          omitClaudeMd: false,
+        },
+        {
+          identifier: 'plan',
+          whenToUse: 'Use this agent when the task primarily needs a concrete execution plan, sequencing, or dependency breakdown before implementation starts.',
+          source: 'built-in',
+          baseDirectory: 'built-in',
+          filePath: null,
+          systemPrompt: 'You are a planning-focused sub-agent. Produce a stepwise plan, call out dependencies, and keep scope explicit.',
+          tools: ['Read', 'Glob', 'Grep'],
+          disallowedTools: ['Write', 'Edit'],
+          skills: null,
+          color: 'blue',
+          model: null,
+          permissionMode: 'Plan',
+          maxTurns: 4,
+          filename: null,
+          background: false,
+          initialPrompt: null,
+          memory: null,
+          isolation: null,
+          omitClaudeMd: true,
+        },
+        {
+          identifier: 'release-notes-writer',
+          whenToUse: 'Use this agent when you need crisp changelog or release-note summaries from a recent batch of code changes.',
+          source: 'projectSettings',
+          baseDirectory: `${workspacePath}/.clawsharp/agents`,
+          filePath: `${workspacePath}/.clawsharp/agents/release-notes-writer.md`,
+          systemPrompt: 'You write concise release notes from recent code changes. Group related changes, avoid speculation, and keep product language clear.',
+          tools: ['Read', 'Glob', 'Grep'],
+          disallowedTools: ['Write', 'Edit'],
+          skills: ['review-changes'],
+          color: 'green',
+          model: null,
+          permissionMode: null,
+          maxTurns: 6,
+          filename: 'release-notes-writer',
+          background: false,
+          initialPrompt: null,
+          memory: null,
+          isolation: null,
+          omitClaudeMd: false,
+        },
+      ];
+
+      return [project.id, agents];
+    }),
+  );
+}
+
 function createWorkspaceFileCatalog(projects: AgentHostProject[]): Record<string, string[]> {
   return Object.fromEntries(
     projects.map((project) => [
@@ -511,6 +593,7 @@ export class BrowserAgentHostClient {
   ) as Record<string, AgentHostDiff>;
   private diagnosticsByThread = createDiagnostics(this.settings);
   private pluginsByProject = createPluginCatalog(this.projects);
+  private agentsByProject = createAgentCatalog(this.projects);
   private skillsByProject = createSkillCatalog(this.projects);
   private workspaceFilesByProject = createWorkspaceFileCatalog(this.projects);
   private approvals = createApprovals();
@@ -549,8 +632,11 @@ export class BrowserAgentHostClient {
         'getDiff',
         'listDiagnostics',
         'listPlugins',
+        'listAgents',
         'listSkills',
+        'createAgent',
         'createSkill',
+        'proposeAgent',
         'listWorkspaceFiles',
         'getSettings',
         'updateSettings',
@@ -580,6 +666,7 @@ export class BrowserAgentHostClient {
     this.projects = [project, ...this.projects.filter((entry) => entry.id !== project.id)];
     this.threadsByProject[project.id] = [];
     this.pluginsByProject[project.id] = createPluginCatalog([project])[project.id] ?? [];
+    this.agentsByProject[project.id] = createAgentCatalog([project])[project.id] ?? [];
     this.skillsByProject[project.id] = createSkillCatalog([project])[project.id] ?? [];
     this.workspaceFilesByProject[project.id] = createWorkspaceFileCatalog([project])[project.id] ?? [];
 
@@ -887,6 +974,20 @@ export class BrowserAgentHostClient {
     };
   }
 
+  async listAgents(projectId?: string | null): Promise<ListAgentsResponse> {
+    const resolvedProjectId = projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      agents: deepClone(this.agentsByProject[resolvedProjectId] ?? []),
+    };
+  }
+
   async listSkills(projectId?: string | null): Promise<ListSkillsResponse> {
     const resolvedProjectId = projectId ?? this.projects[0]?.id;
     if (!resolvedProjectId) {
@@ -898,6 +999,60 @@ export class BrowserAgentHostClient {
       projectId: resolvedProjectId,
       workspaceRoot: project.path,
       skills: deepClone(this.skillsByProject[resolvedProjectId] ?? []),
+    };
+  }
+
+  async createAgent(request: CreateAgentRequest): Promise<CreateAgentResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const identifier = request.identifier.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9]$/.test(identifier)) {
+      throw new Error('Agent identifier must start and end with a letter or number and may only contain letters, numbers, and hyphens.');
+    }
+
+    const existingAgents = this.agentsByProject[resolvedProjectId] ?? [];
+    if (existingAgents.some((agent) => agent.identifier.toLowerCase() === identifier.toLowerCase())) {
+      throw new Error(`An agent named '${identifier}' is already available in this project.`);
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    const agent: AgentHostAgent = {
+      identifier,
+      whenToUse: request.whenToUse.trim(),
+      source: 'projectSettings',
+      baseDirectory: `${project.path}/.clawsharp/agents`,
+      filePath: `${project.path}/.clawsharp/agents/${identifier}.md`,
+      systemPrompt: request.systemPrompt.trim(),
+      tools: request.tools ?? null,
+      disallowedTools: request.disallowedTools ?? null,
+      skills: request.skills ?? null,
+      color: request.color ?? null,
+      model: request.model ?? null,
+      permissionMode: request.permissionMode ?? null,
+      maxTurns: request.maxTurns ?? null,
+      filename: identifier,
+      background: request.background ?? false,
+      initialPrompt: request.initialPrompt ?? null,
+      memory: request.memory ?? null,
+      isolation: request.isolation ?? null,
+      omitClaudeMd: request.omitClaudeMd ?? false,
+    };
+
+    this.agentsByProject[resolvedProjectId] = [...existingAgents, agent]
+      .sort((left, right) => left.identifier.localeCompare(right.identifier));
+    this.workspaceFilesByProject[resolvedProjectId] = [
+      ...(this.workspaceFilesByProject[resolvedProjectId] ?? []),
+      `.clawsharp/agents/${identifier}.md`,
+    ].sort((left, right) => left.localeCompare(right));
+
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      agent: deepClone(agent),
+      agents: deepClone(this.agentsByProject[resolvedProjectId]),
     };
   }
 
@@ -937,6 +1092,57 @@ export class BrowserAgentHostClient {
       workspaceRoot: project.path,
       skill: deepClone(skill),
       skills: deepClone(this.skillsByProject[resolvedProjectId]),
+    };
+  }
+
+  async proposeAgent(request: ProposeAgentRequest): Promise<ProposeAgentResponse> {
+    const resolvedProjectId = request.projectId ?? this.projects[0]?.id;
+    if (!resolvedProjectId) {
+      throw new Error('No project is open in browser preview mode.');
+    }
+
+    const project = this.requireProject(resolvedProjectId);
+    const normalized = request.prompt.trim().toLowerCase();
+    const proposal: AgentHostAgentProposal = normalized.includes('release')
+      ? {
+          identifier: 'release-notes-writer',
+          whenToUse: 'Use this agent when you need concise release notes or changelog copy assembled from recent code changes or merged work.',
+          systemPrompt: 'You produce clear release notes from recent code changes. Read the relevant diffs, group related changes, prefer user-facing language, and flag uncertainty instead of inventing details.',
+          model: request.model ?? null,
+          tools: ['Read', 'Glob', 'Grep'],
+          disallowedTools: ['Write', 'Edit'],
+          skills: ['review-changes'],
+          color: 'green',
+          permissionMode: null,
+          maxTurns: 6,
+          background: false,
+          initialPrompt: null,
+          memory: null,
+          isolation: null,
+          omitClaudeMd: false,
+        }
+      : {
+          identifier: 'implementation-planner',
+          whenToUse: 'Use this agent when a task needs a crisp implementation plan, sequencing advice, or dependency breakdown before coding starts.',
+          systemPrompt: 'You are a planning sub-agent. Analyze the request, inspect the relevant files, propose a concrete sequence of steps, and call out risks or prerequisites before implementation begins.',
+          model: request.model ?? null,
+          tools: ['Read', 'Glob', 'Grep'],
+          disallowedTools: ['Write', 'Edit'],
+          skills: null,
+          color: 'blue',
+          permissionMode: 'Plan',
+          maxTurns: 4,
+          background: false,
+          initialPrompt: null,
+          memory: null,
+          isolation: null,
+          omitClaudeMd: true,
+        };
+
+    return {
+      projectId: resolvedProjectId,
+      workspaceRoot: project.path,
+      proposal: deepClone(proposal),
     };
   }
 

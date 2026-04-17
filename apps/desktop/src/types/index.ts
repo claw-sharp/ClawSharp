@@ -174,6 +174,31 @@ export interface Plugin {
   mcpServers: PluginMcpServer[];
 }
 
+export interface AgentDraft {
+  identifier: string;
+  whenToUse: string;
+  systemPrompt: string;
+  model?: string | null;
+  color?: string | null;
+  tools?: string[];
+  disallowedTools?: string[];
+  skills?: string[];
+  permissionMode?: string | null;
+  maxTurns?: number | null;
+  background?: boolean | null;
+  initialPrompt?: string | null;
+  memory?: string | null;
+  isolation?: string | null;
+  omitClaudeMd: boolean;
+}
+
+export interface Agent extends AgentDraft {
+  source: string;
+  baseDirectory: string;
+  filePath?: string | null;
+  filename?: string | null;
+}
+
 export interface Skill {
   name: string;
   source: string;
@@ -265,7 +290,7 @@ export interface UIState {
   commandPaletteOpen: boolean;
   selectedChangedFile: string | null;
   selectedInboxItem: string | null;
-  activeView: 'threads' | 'inbox' | 'automations' | 'plugins' | 'settings';
+  activeView: 'threads' | 'inbox' | 'automations' | 'plugins' | 'agents' | 'settings';
   navigationLoading: NavigationLoadingState | null;
 }
 

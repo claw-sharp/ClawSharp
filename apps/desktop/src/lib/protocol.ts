@@ -15,8 +15,11 @@ export interface AgentHostCommandMap {
   openExternalEditor: { request: OpenExternalEditorRequest; response: OpenExternalEditorResponse };
   listDiagnostics: { request: ListDiagnosticsRequest; response: ListDiagnosticsResponse };
   listPlugins: { request: ListPluginsRequest; response: ListPluginsResponse };
+  listAgents: { request: ListAgentsRequest; response: ListAgentsResponse };
   listSkills: { request: ListSkillsRequest; response: ListSkillsResponse };
+  createAgent: { request: CreateAgentRequest; response: CreateAgentResponse };
   createSkill: { request: CreateSkillRequest; response: CreateSkillResponse };
+  proposeAgent: { request: ProposeAgentRequest; response: ProposeAgentResponse };
   listWorkspaceFiles: { request: ListWorkspaceFilesRequest; response: ListWorkspaceFilesResponse };
   getSettings: { request: GetSettingsRequest; response: GetSettingsResponse };
   updateSettings: { request: UpdateSettingsRequest; response: UpdateSettingsResponse };
@@ -165,8 +168,31 @@ export interface ListPluginsRequest {
   projectId?: string | null;
 }
 
+export interface ListAgentsRequest {
+  projectId?: string | null;
+}
+
 export interface ListSkillsRequest {
   projectId?: string | null;
+}
+
+export interface CreateAgentRequest {
+  projectId?: string | null;
+  identifier: string;
+  whenToUse: string;
+  systemPrompt: string;
+  model?: string | null;
+  color?: string | null;
+  tools?: string[] | null;
+  disallowedTools?: string[] | null;
+  skills?: string[] | null;
+  permissionMode?: string | null;
+  maxTurns?: number | null;
+  background?: boolean | null;
+  initialPrompt?: string | null;
+  memory?: string | null;
+  isolation?: string | null;
+  omitClaudeMd?: boolean | null;
 }
 
 export interface CreateSkillRequest {
@@ -174,6 +200,12 @@ export interface CreateSkillRequest {
   name: string;
   description?: string | null;
   instructions: string;
+}
+
+export interface ProposeAgentRequest {
+  projectId?: string | null;
+  prompt: string;
+  model?: string | null;
 }
 
 export interface ListWorkspaceFilesRequest {
@@ -437,6 +469,52 @@ export interface ListPluginsResponse {
   plugins: AgentHostPlugin[];
 }
 
+export interface AgentHostAgent {
+  identifier: string;
+  whenToUse: string;
+  source: string;
+  baseDirectory: string;
+  filePath?: string | null;
+  systemPrompt: string;
+  tools?: string[] | null;
+  disallowedTools?: string[] | null;
+  skills?: string[] | null;
+  color?: string | null;
+  model?: string | null;
+  permissionMode?: string | null;
+  maxTurns?: number | null;
+  filename?: string | null;
+  background?: boolean | null;
+  initialPrompt?: string | null;
+  memory?: string | null;
+  isolation?: string | null;
+  omitClaudeMd: boolean;
+}
+
+export interface AgentHostAgentProposal {
+  identifier: string;
+  whenToUse: string;
+  systemPrompt: string;
+  model?: string | null;
+  tools?: string[] | null;
+  disallowedTools?: string[] | null;
+  skills?: string[] | null;
+  color?: string | null;
+  permissionMode?: string | null;
+  maxTurns?: number | null;
+  background?: boolean | null;
+  initialPrompt?: string | null;
+  memory?: string | null;
+  isolation?: string | null;
+  omitClaudeMd: boolean;
+}
+
+export interface ListAgentsResponse {
+  projectId: string;
+  workspaceRoot: string;
+  agents: AgentHostAgent[];
+}
+
 export interface AgentHostSkill {
   name: string;
   source: string;
@@ -455,6 +533,19 @@ export interface CreateSkillResponse {
   workspaceRoot: string;
   skill: AgentHostSkill;
   skills: AgentHostSkill[];
+}
+
+export interface CreateAgentResponse {
+  projectId: string;
+  workspaceRoot: string;
+  agent: AgentHostAgent;
+  agents: AgentHostAgent[];
+}
+
+export interface ProposeAgentResponse {
+  projectId: string;
+  workspaceRoot: string;
+  proposal: AgentHostAgentProposal;
 }
 
 export interface ListWorkspaceFilesResponse {

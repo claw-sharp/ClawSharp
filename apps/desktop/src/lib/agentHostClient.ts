@@ -6,10 +6,13 @@ import {
   subscribeAgentHostState,
 } from '@/lib/eventStream';
 import type {
+  AgentHostAgentProposal,
   AgentHostCommandMap,
   AgentHostEventEnvelope,
   AgentHostStateEvent,
   CancelRunResponse,
+  CreateAgentRequest,
+  CreateAgentResponse,
   CreateSkillRequest,
   CreateSkillResponse,
   DeletePluginOptionsRequest,
@@ -17,6 +20,7 @@ import type {
   GetSettingsResponse,
   InstallPluginRequest,
   InstallPluginResponse,
+  ListAgentsResponse,
   ListSkillsResponse,
   ListWorkspaceFilesResponse,
   ListPluginsResponse,
@@ -24,6 +28,8 @@ import type {
   ListDiagnosticsResponse,
   ListPendingApprovalsResponse,
   ListProvidersResponse,
+  ProposeAgentRequest,
+  ProposeAgentResponse,
   OpenExternalEditorRequest,
   OpenExternalEditorResponse,
   CreateThreadResponse,
@@ -127,12 +133,24 @@ class AgentHostClient {
     return await this.request('listPlugins', { projectId: projectId ?? null });
   }
 
+  async listAgents(projectId?: string | null): Promise<ListAgentsResponse> {
+    return await this.request('listAgents', { projectId: projectId ?? null });
+  }
+
   async listSkills(projectId?: string | null): Promise<ListSkillsResponse> {
     return await this.request('listSkills', { projectId: projectId ?? null });
   }
 
+  async createAgent(request: CreateAgentRequest): Promise<CreateAgentResponse> {
+    return await this.request('createAgent', request);
+  }
+
   async createSkill(request: CreateSkillRequest): Promise<CreateSkillResponse> {
     return await this.request('createSkill', request);
+  }
+
+  async proposeAgent(request: ProposeAgentRequest): Promise<ProposeAgentResponse> {
+    return await this.request('proposeAgent', request);
   }
 
   async listWorkspaceFiles(projectId?: string | null): Promise<ListWorkspaceFilesResponse> {

@@ -106,6 +106,16 @@ export const Sidebar = () => {
           <Plug className="h-3.5 w-3.5" />
           <span>Plugins</span>
         </button>
+        <button
+          onClick={() => setActiveView('agents')}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            ui.activeView === 'agents' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+          )}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          <span>Agents</span>
+        </button>
       </div>
 
       {/* Thread list */}

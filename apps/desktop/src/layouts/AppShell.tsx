@@ -8,6 +8,7 @@ import { ReviewPanel } from '@/features/review/ReviewPanel';
 import { BottomDrawer } from '@/features/logs/BottomDrawer';
 import { InboxPanel } from '@/features/inbox/InboxPanel';
 import { AutomationsPanel } from '@/features/automations/AutomationsPanel';
+import { AgentsPanel } from '@/features/agents/AgentsPanel';
 import { PluginsPanel } from '@/features/plugins/PluginsPanel';
 import { SettingsDialog } from '@/features/settings/SettingsDialog';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -38,6 +39,7 @@ export const AppShell = () => {
       case 'inbox': return <InboxPanel />;
       case 'automations': return <AutomationsPanel />;
       case 'plugins': return <PluginsPanel />;
+      case 'agents': return <AgentsPanel />;
       default: return <ThreadView />;
     }
   };

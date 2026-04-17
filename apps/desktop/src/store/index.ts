@@ -3,6 +3,8 @@ import { toast } from '@/components/ui/sonner';
 import { agentHostClient } from '@/lib/agentHostClient';
 import { logToDesktop } from '@/lib/desktopLogger';
 import type {
+  AgentHostAgent,
+  AgentHostAgentProposal,
   AgentHostChangedFile,
   AgentHostDiagnostics,
   AgentHostPlugin,
@@ -27,12 +29,16 @@ import type {
   RunToolProgressEvent as AgentHostRunToolProgressEvent,
   RunToolResultEvent,
   OpenExternalEditorRequest,
+  CreateAgentResponse,
   CreateSkillResponse,
+  ListAgentsResponse,
   ListPluginsResponse,
   ListSkillsResponse,
   ListWorkspaceFilesResponse,
 } from '@/lib/protocol';
 import type {
+  Agent,
+  AgentDraft,
   ChangedFile,
   ConnectionState,
   DiagnosticsRecord,
@@ -59,6 +65,10 @@ interface AppStore {
   pluginCatalogProjectId: string | null;
   pluginCatalogLoading: boolean;
   pluginCatalogError: string | null;
+  agents: Agent[];
+  agentsProjectId: string | null;
+  agentsLoading: boolean;
+  agentsError: string | null;
   skills: Skill[];
   skillsProjectId: string | null;
   skillsLoading: boolean;
@@ -85,7 +95,10 @@ interface AppStore {
   connection: ConnectionState;
   initialize: () => Promise<void>;
   loadPlugins: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  loadAgents: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   loadSkills: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
+  createAgent: (draft: AgentDraft) => Promise<Agent | null>;
+  proposeAgent: (prompt: string, model?: string | null) => Promise<AgentDraft | null>;
   createSkill: (name: string, description: string | null, instructions: string) => Promise<Skill | null>;
   loadWorkspaceFiles: (projectId?: string | null, options?: { force?: boolean }) => Promise<void>;
   refreshPlugins: () => Promise<void>;
@@ -236,6 +249,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   pluginCatalogProjectId: null,
   pluginCatalogLoading: false,
   pluginCatalogError: null,
+  agents: [],
+  agentsProjectId: null,
+  agentsLoading: false,
+  agentsError: null,
   skills: [],
   skillsProjectId: null,
   skillsLoading: false,
@@ -397,6 +414,46 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  loadAgents: async (projectId, options) => {
+    const resolvedProjectId = projectId ?? get().selectedProjectId;
+    if (!resolvedProjectId) {
+      set({
+        agents: [],
+        agentsProjectId: null,
+        agentsLoading: false,
+        agentsError: null,
+      });
+      return;
+    }
+
+    if (!options?.force &&
+        get().agentsProjectId === resolvedProjectId &&
+        get().agents.length > 0 &&
+        !get().agentsError) {
+      return;
+    }
+
+    set({
+      agentsLoading: true,
+      agentsError: null,
+    });
+
+    try {
+      const response = await agentHostClient.listAgents(resolvedProjectId);
+      set(applyAgentCatalogResponse(response));
+    } catch (error) {
+      set((state) => ({
+        agentsLoading: false,
+        agentsError: toErrorMessage(error, 'Failed to load agents.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to load agents.'),
+          statusLabel: 'Agent load failed',
+        },
+      }));
+    }
+  },
+
   loadSkills: async (projectId, options) => {
     const resolvedProjectId = projectId ?? get().selectedProjectId;
     if (!resolvedProjectId) {
@@ -474,6 +531,101 @@ export const useAppStore = create<AppStore>((set, get) => ({
           statusLabel: 'Workspace file load failed',
         },
       }));
+    }
+  },
+
+  createAgent: async (draft) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return null;
+    }
+
+    set({
+      agentsLoading: true,
+      agentsError: null,
+    });
+
+    try {
+      const response = await agentHostClient.createAgent({
+        projectId,
+        identifier: draft.identifier,
+        whenToUse: draft.whenToUse,
+        systemPrompt: draft.systemPrompt,
+        model: draft.model ?? null,
+        color: draft.color ?? null,
+        tools: draft.tools ?? null,
+        disallowedTools: draft.disallowedTools ?? null,
+        skills: draft.skills ?? null,
+        permissionMode: draft.permissionMode ?? null,
+        maxTurns: draft.maxTurns ?? null,
+        background: draft.background ?? false,
+        initialPrompt: draft.initialPrompt ?? null,
+        memory: draft.memory ?? null,
+        isolation: draft.isolation ?? null,
+        omitClaudeMd: draft.omitClaudeMd,
+      });
+      set((state) => ({
+        ...applyCreateAgentResponse(response)(state),
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: `Created @${response.agent.identifier}`,
+        },
+      }));
+      void get().loadWorkspaceFiles(projectId, { force: true });
+      return mapAgent(response.agent);
+    } catch (error) {
+      set((state) => ({
+        agentsLoading: false,
+        agentsError: toErrorMessage(error, 'Failed to create agent.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to create agent.'),
+          statusLabel: 'Agent creation failed',
+        },
+      }));
+      return null;
+    }
+  },
+
+  proposeAgent: async (prompt, model) => {
+    const projectId = get().selectedProjectId;
+    if (!projectId) {
+      return null;
+    }
+
+    set({
+      agentsLoading: true,
+      agentsError: null,
+    });
+
+    try {
+      const response = await agentHostClient.proposeAgent({
+        projectId,
+        prompt,
+        model: model ?? null,
+      });
+      set((state) => ({
+        agentsLoading: false,
+        agentsError: null,
+        connection: {
+          ...state.connection,
+          errorMessage: null,
+          statusLabel: `Drafted @${response.proposal.identifier}`,
+        },
+      }));
+      return mapAgentProposal(response.proposal);
+    } catch (error) {
+      set((state) => ({
+        agentsLoading: false,
+        agentsError: toErrorMessage(error, 'Failed to propose agent.'),
+        connection: {
+          ...state.connection,
+          errorMessage: toErrorMessage(error, 'Failed to propose agent.'),
+          statusLabel: 'Agent proposal failed',
+        },
+      }));
+      return null;
     }
   },
 
@@ -808,6 +960,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }));
 
       void get().loadPlugins(id);
+      void get().loadAgents(id);
       void get().loadSkills(id);
       void get().loadWorkspaceFiles(id);
 
@@ -1356,6 +1509,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     if (view === 'plugins') {
       void get().loadPlugins(get().selectedProjectId);
+      void get().loadAgents(get().selectedProjectId);
       void get().loadSkills(get().selectedProjectId);
     }
   },
@@ -1704,6 +1858,50 @@ function mapPluginValidationIssue(issue: AgentHostPluginValidationIssue): Plugin
   };
 }
 
+function mapAgent(agent: AgentHostAgent): Agent {
+  return {
+    identifier: agent.identifier,
+    whenToUse: agent.whenToUse,
+    source: agent.source,
+    baseDirectory: agent.baseDirectory,
+    filePath: agent.filePath ?? null,
+    systemPrompt: agent.systemPrompt,
+    tools: agent.tools ?? [],
+    disallowedTools: agent.disallowedTools ?? [],
+    skills: agent.skills ?? [],
+    color: agent.color ?? null,
+    model: agent.model ?? null,
+    permissionMode: agent.permissionMode ?? null,
+    maxTurns: agent.maxTurns ?? null,
+    filename: agent.filename ?? null,
+    background: agent.background ?? false,
+    initialPrompt: agent.initialPrompt ?? null,
+    memory: agent.memory ?? null,
+    isolation: agent.isolation ?? null,
+    omitClaudeMd: agent.omitClaudeMd,
+  };
+}
+
+function mapAgentProposal(agent: AgentHostAgentProposal): AgentDraft {
+  return {
+    identifier: agent.identifier,
+    whenToUse: agent.whenToUse,
+    systemPrompt: agent.systemPrompt,
+    model: agent.model ?? null,
+    color: agent.color ?? null,
+    tools: agent.tools ?? [],
+    disallowedTools: agent.disallowedTools ?? [],
+    skills: agent.skills ?? [],
+    permissionMode: agent.permissionMode ?? null,
+    maxTurns: agent.maxTurns ?? null,
+    background: agent.background ?? false,
+    initialPrompt: agent.initialPrompt ?? null,
+    memory: agent.memory ?? null,
+    isolation: agent.isolation ?? null,
+    omitClaudeMd: agent.omitClaudeMd,
+  };
+}
+
 function mapSkill(skill: AgentHostSkill): Skill {
   return {
     name: skill.name,
@@ -1727,6 +1925,20 @@ function applyPluginCatalogResponse(response: ListPluginsResponse) {
   });
 }
 
+function applyAgentCatalogResponse(response: ListAgentsResponse) {
+  return (state: AppStore) => ({
+    agents: response.agents.map(mapAgent),
+    agentsProjectId: response.projectId,
+    agentsLoading: false,
+    agentsError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Loaded ${response.agents.length} agent${response.agents.length === 1 ? '' : 's'}`,
+    },
+  });
+}
+
 function applySkillCatalogResponse(response: ListSkillsResponse) {
   return (state: AppStore) => ({
     skills: response.skills.map(mapSkill),
@@ -1737,6 +1949,20 @@ function applySkillCatalogResponse(response: ListSkillsResponse) {
       ...state.connection,
       errorMessage: null,
       statusLabel: `Loaded ${response.skills.length} skill${response.skills.length === 1 ? '' : 's'}`,
+    },
+  });
+}
+
+function applyCreateAgentResponse(response: CreateAgentResponse) {
+  return (state: AppStore) => ({
+    agents: response.agents.map(mapAgent),
+    agentsProjectId: response.projectId,
+    agentsLoading: false,
+    agentsError: null,
+    connection: {
+      ...state.connection,
+      errorMessage: null,
+      statusLabel: `Created @${response.agent.identifier}`,
     },
   });
 }

@@ -18,6 +18,7 @@ public sealed class ToolRegistry
 {
     private readonly ToolPermissionContext _toolPermissionContext;
     private readonly bool _useLivePermissionContext;
+    private readonly IReadOnlyList<AgentDefinition> _agentDefinitions;
     private readonly Dictionary<string, IClawSharpTool> _builtInToolsByName =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IClawSharpTool> _builtInToolsByLookupName =
@@ -57,7 +58,7 @@ public sealed class ToolRegistry
         ReadFileState = readFileState ?? FileStateCache.CreateWithSizeLimit(FileStateCache.DefaultMaxEntries);
         _toolPermissionContext = toolPermissionContext ?? ToolPermissionContexts.CreateEmpty();
         FileUpdateNotifier = fileUpdateNotifier ?? new NullFileUpdateNotifier();
-        AgentDefinitions = agentDefinitions ?? BuiltInAgentDefinitions.GetBuiltInAgents();
+        _agentDefinitions = agentDefinitions ?? BuiltInAgentDefinitions.GetBuiltInAgents();
         AppStateStore = appStateStore ?? new NullClawSharpAppStateStore(workspaceRoot);
         _useLivePermissionContext = appStateStore is not null && appStateStore is not NullClawSharpAppStateStore;
         PermissionPrompter = permissionPrompter ?? new NullPermissionPrompter();
@@ -80,7 +81,7 @@ public sealed class ToolRegistry
         RegisterBuiltIn(new GrepTool());
         RegisterBuiltIn(new BashTool());
         RegisterBuiltIn(new PowerShellTool());
-        RegisterBuiltIn(new AgentTool(AgentDefinitions, agentExecutionService ?? new NullAgentExecutionService()));
+        RegisterBuiltIn(new AgentTool(agentExecutionService ?? new NullAgentExecutionService()));
         RegisterBuiltIn(new SendMessageTool());
         RegisterBuiltIn(new SendUserMessageTool());
         RegisterBuiltIn(new AskUserQuestionTool());
@@ -143,7 +144,10 @@ public sealed class ToolRegistry
             ? AppStateStore.GetState().ToolPermissionContext
             : _toolPermissionContext;
 
-    public IReadOnlyList<AgentDefinition> AgentDefinitions { get; }
+    public IReadOnlyList<AgentDefinition> AgentDefinitions =>
+        _useLivePermissionContext
+            ? AppStateStore.GetState().AgentDefinitions
+            : _agentDefinitions;
 
     public IFileUpdateNotifier FileUpdateNotifier { get; }
 

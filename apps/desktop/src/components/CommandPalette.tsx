@@ -28,6 +28,7 @@ export const CommandPalette = () => {
     { id: 'inbox', label: 'Open Inbox', type: 'action' as const, icon: Inbox, action: () => setActiveView('inbox') },
     { id: 'automations', label: 'Open Automations', type: 'action' as const, icon: CalendarClock, action: () => setActiveView('automations') },
     { id: 'plugins', label: 'Open Plugins', type: 'action' as const, icon: Plug, action: () => setActiveView('plugins') },
+    { id: 'agents', label: 'Open Agents', type: 'action' as const, icon: Bot, action: () => setActiveView('agents') },
     { id: 'settings', label: 'Open Settings', type: 'action' as const, icon: Settings, action: () => toggleSettings() },
   ];
 

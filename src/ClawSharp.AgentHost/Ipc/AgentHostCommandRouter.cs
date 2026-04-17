@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ClawSharp.AgentHost.Approvals;
+using ClawSharp.AgentHost.Agents;
 using ClawSharp.AgentHost.Contracts;
 using ClawSharp.AgentHost.Diagnostics;
 using ClawSharp.AgentHost.Files;
@@ -23,6 +24,7 @@ public sealed class AgentHostCommandRouter
     private readonly WorkspaceReviewService _reviewService;
     private readonly DiagnosticsCatalogService _diagnosticsService;
     private readonly PluginCatalogService _pluginCatalog;
+    private readonly AgentCatalogService _agentCatalog;
     private readonly SkillCatalogService _skillCatalog;
     private readonly WorkspaceFileCatalogService _workspaceFileCatalog;
     private readonly ProviderCatalogService _providerCatalog;
@@ -36,6 +38,7 @@ public sealed class AgentHostCommandRouter
         WorkspaceReviewService reviewService,
         DiagnosticsCatalogService diagnosticsService,
         PluginCatalogService pluginCatalog,
+        AgentCatalogService agentCatalog,
         SkillCatalogService skillCatalog,
         WorkspaceFileCatalogService workspaceFileCatalog,
         ProviderCatalogService providerCatalog,
@@ -48,6 +51,7 @@ public sealed class AgentHostCommandRouter
         _reviewService = reviewService;
         _diagnosticsService = diagnosticsService;
         _pluginCatalog = pluginCatalog;
+        _agentCatalog = agentCatalog;
         _skillCatalog = skillCatalog;
         _workspaceFileCatalog = workspaceFileCatalog;
         _providerCatalog = providerCatalog;
@@ -75,8 +79,11 @@ public sealed class AgentHostCommandRouter
             "openExternalEditor" => await _externalEditorService.OpenAsync(DeserializePayload<OpenExternalEditorRequest>(request), cancellationToken),
             "listDiagnostics" => await _diagnosticsService.ListDiagnosticsAsync(DeserializePayload<ListDiagnosticsRequest>(request), cancellationToken),
             "listPlugins" => await _pluginCatalog.ListPluginsAsync(DeserializePayload<ListPluginsRequest>(request), cancellationToken),
+            "listAgents" => await _agentCatalog.ListAgentsAsync(DeserializePayload<ListAgentsRequest>(request), cancellationToken),
             "listSkills" => await _skillCatalog.ListSkillsAsync(DeserializePayload<ListSkillsRequest>(request), cancellationToken),
+            "createAgent" => await _agentCatalog.CreateAgentAsync(DeserializePayload<CreateAgentRequest>(request), cancellationToken),
             "createSkill" => await _skillCatalog.CreateSkillAsync(DeserializePayload<CreateSkillRequest>(request), cancellationToken),
+            "proposeAgent" => await _agentCatalog.ProposeAgentAsync(DeserializePayload<ProposeAgentRequest>(request), cancellationToken),
             "listWorkspaceFiles" => await _workspaceFileCatalog.ListAsync(DeserializePayload<ListWorkspaceFilesRequest>(request), cancellationToken),
             "getSettings" => await _providerCatalog.GetSettingsAsync(DeserializePayload<GetSettingsRequest>(request), cancellationToken),
             "updateSettings" => await _providerCatalog.UpdateSettingsAsync(DeserializePayload<UpdateSettingsRequest>(request), cancellationToken),

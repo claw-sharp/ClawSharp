@@ -1,5 +1,6 @@
 using ClawSharp.AgentHost;
 using ClawSharp.AgentHost.Approvals;
+using ClawSharp.AgentHost.Agents;
 using ClawSharp.AgentHost.Ipc;
 using ClawSharp.AgentHost.Diagnostics;
 using ClawSharp.AgentHost.Files;
@@ -38,6 +39,7 @@ try
     var reviewService = new WorkspaceReviewService(recentProjectStore);
     var diagnosticsService = new DiagnosticsCatalogService(applicationRegistry, recentProjectStore, runtimeState);
     var pluginCatalog = new PluginCatalogService(applicationRegistry, recentProjectStore);
+    var agentCatalog = new AgentCatalogService(applicationRegistry, recentProjectStore);
     var skillCatalog = new SkillCatalogService(applicationRegistry, recentProjectStore);
     var workspaceFileCatalog = new WorkspaceFileCatalogService(recentProjectStore);
     var providerCatalog = new ProviderCatalogService(applicationRegistry, recentProjectStore);
@@ -50,6 +52,7 @@ try
         reviewService,
         diagnosticsService,
         pluginCatalog,
+        agentCatalog,
         skillCatalog,
         workspaceFileCatalog,
         providerCatalog,
