@@ -54,11 +54,30 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
         McpServerConnectionStatistics? serverStatistics = null,
         CancellationToken cancellationToken = default)
     {
+        return ConnectToServerCoreAsync(name, server, serverStatistics, allowInteractiveAuth: true, cancellationToken);
+    }
+
+    public Task<McpServerConnection> ConnectToServerWithoutInteractiveAuthAsync(
+        string name,
+        ScopedMcpServerConfig server,
+        McpServerConnectionStatistics? serverStatistics = null,
+        CancellationToken cancellationToken = default)
+    {
+        return ConnectToServerCoreAsync(name, server, serverStatistics, allowInteractiveAuth: false, cancellationToken);
+    }
+
+    private Task<McpServerConnection> ConnectToServerCoreAsync(
+        string name,
+        ScopedMcpServerConfig server,
+        McpServerConnectionStatistics? serverStatistics,
+        bool allowInteractiveAuth,
+        CancellationToken cancellationToken)
+    {
         var cacheKey = GetServerCacheKey(name, server);
         var lazyTask = _connectionCache.GetOrAdd(
             cacheKey,
             _ => new Lazy<Task<McpServerConnection>>(
-                () => _connector.ConnectAsync(name, server, serverStatistics, cancellationToken),
+                () => _connector.ConnectAsync(name, server, serverStatistics, allowInteractiveAuth, cancellationToken),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
         return lazyTask.Value;
@@ -89,8 +108,27 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
         McpServerConnectionStatistics? serverStatistics = null,
         CancellationToken cancellationToken = default)
     {
+        return await ReconnectToServerCoreAsync(name, server, serverStatistics, allowInteractiveAuth: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<McpServerConnection> ReconnectToServerWithoutInteractiveAuthAsync(
+        string name,
+        ScopedMcpServerConfig server,
+        McpServerConnectionStatistics? serverStatistics = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await ReconnectToServerCoreAsync(name, server, serverStatistics, allowInteractiveAuth: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<McpServerConnection> ReconnectToServerCoreAsync(
+        string name,
+        ScopedMcpServerConfig server,
+        McpServerConnectionStatistics? serverStatistics,
+        bool allowInteractiveAuth,
+        CancellationToken cancellationToken)
+    {
         await ClearServerCacheAsync(name, server, cancellationToken).ConfigureAwait(false);
-        return await ConnectToServerAsync(name, server, serverStatistics, cancellationToken).ConfigureAwait(false);
+        return await ConnectToServerCoreAsync(name, server, serverStatistics, allowInteractiveAuth, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<McpServerConnection>> ConnectServersAsync(
@@ -98,6 +136,35 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
         Func<string, bool>? isDisabled = null,
         Action<McpServerConnection>? onConnectionAttempt = null,
         CancellationToken cancellationToken = default)
+    {
+        return await ConnectServersCoreAsync(
+            servers,
+            isDisabled,
+            onConnectionAttempt,
+            allowInteractiveAuth: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<McpServerConnection>> ConnectServersWithoutInteractiveAuthAsync(
+        IReadOnlyDictionary<string, ScopedMcpServerConfig> servers,
+        Func<string, bool>? isDisabled = null,
+        Action<McpServerConnection>? onConnectionAttempt = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await ConnectServersCoreAsync(
+            servers,
+            isDisabled,
+            onConnectionAttempt,
+            allowInteractiveAuth: false,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<McpServerConnection>> ConnectServersCoreAsync(
+        IReadOnlyDictionary<string, ScopedMcpServerConfig> servers,
+        Func<string, bool>? isDisabled,
+        Action<McpServerConnection>? onConnectionAttempt,
+        bool allowInteractiveAuth,
+        CancellationToken cancellationToken)
     {
         var results = new ConcurrentBag<McpServerConnection>();
         var activeServers = new List<KeyValuePair<string, ScopedMcpServerConfig>>();
@@ -119,8 +186,8 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
         var remoteServers = activeServers.Where(entry => !IsLocalMcpServer(entry.Value)).ToArray();
 
         await Task.WhenAll(
-            ProcessBatchedAsync(localServers, GetMcpServerConnectionBatchSize(), statistics, results, onConnectionAttempt, cancellationToken),
-            ProcessBatchedAsync(remoteServers, GetRemoteMcpServerConnectionBatchSize(), statistics, results, onConnectionAttempt, cancellationToken)).ConfigureAwait(false);
+            ProcessBatchedAsync(localServers, GetMcpServerConnectionBatchSize(), statistics, results, onConnectionAttempt, allowInteractiveAuth, cancellationToken),
+            ProcessBatchedAsync(remoteServers, GetRemoteMcpServerConnectionBatchSize(), statistics, results, onConnectionAttempt, allowInteractiveAuth, cancellationToken)).ConfigureAwait(false);
 
         return results
             .OrderBy(connection => connection.Name, GetNameComparer())
@@ -133,6 +200,7 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
         McpServerConnectionStatistics statistics,
         ConcurrentBag<McpServerConnection> results,
         Action<McpServerConnection>? onConnectionAttempt,
+        bool allowInteractiveAuth,
         CancellationToken cancellationToken)
     {
         using var throttler = new SemaphoreSlim(concurrency);
@@ -149,7 +217,7 @@ public sealed class McpLifecycleManager : IMcpLifecycleManager
                     return;
                 }
 
-                var connection = await ConnectToServerAsync(server.Key, server.Value, statistics, cancellationToken).ConfigureAwait(false);
+                var connection = await ConnectToServerCoreAsync(server.Key, server.Value, statistics, allowInteractiveAuth, cancellationToken).ConfigureAwait(false);
                 results.Add(connection);
                 onConnectionAttempt?.Invoke(connection);
             }

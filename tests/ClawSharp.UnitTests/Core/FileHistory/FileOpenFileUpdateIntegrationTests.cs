@@ -140,6 +140,7 @@ public sealed class FileOpenFileUpdateIntegrationTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<McpServerConnection>(

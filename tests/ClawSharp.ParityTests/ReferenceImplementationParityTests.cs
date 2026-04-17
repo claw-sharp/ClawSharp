@@ -163,6 +163,7 @@ public sealed class ReferenceImplementationParityTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<McpServerConnection>(

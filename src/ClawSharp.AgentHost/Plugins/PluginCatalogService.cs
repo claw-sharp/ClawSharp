@@ -126,7 +126,7 @@ public sealed class PluginCatalogService
         var connections = new List<McpServerConnection>();
         foreach (var server in pluginMcpServers)
         {
-            var connection = await app.McpLifecycleManager.ReconnectToServerAsync(
+            var connection = await app.McpLifecycleManager.ReconnectToServerWithoutInteractiveAuthAsync(
                 server.Key,
                 server.Value,
                 cancellationToken: cancellationToken);
@@ -172,7 +172,7 @@ public sealed class PluginCatalogService
             request.PluginId,
             Enabled: true,
             Authenticated: false,
-            Message: $"Installed {plugin.Name}, but authentication did not complete.");
+            Message: $"Installed {plugin.Name}. Authenticate when access is needed.");
     }
 
     public async Task<ListPluginsResponse> SavePluginOptionsAsync(
@@ -616,7 +616,9 @@ public sealed class PluginCatalogService
             return;
         }
 
-        var connections = await app.McpLifecycleManager.ConnectServersAsync(configuredMcpServers, cancellationToken: cancellationToken);
+        var connections = await app.McpLifecycleManager.ConnectServersWithoutInteractiveAuthAsync(
+            configuredMcpServers,
+            cancellationToken: cancellationToken);
         await app.McpToolRegistrationService.RegisterToolsAsync(runtime.Tools, connections, cancellationToken);
         await app.McpCommandResourceRegistrationService.RegisterForConnectionsAsync(runtime.Tools, connections, cancellationToken);
     }

@@ -146,7 +146,7 @@ public sealed class ToolRegistry
 
     public IReadOnlyList<AgentDefinition> AgentDefinitions =>
         _useLivePermissionContext
-            ? AppStateStore.GetState().AgentDefinitions
+            ? ResolveAgentDefinitionsFromLiveState()
             : _agentDefinitions;
 
     public IFileUpdateNotifier FileUpdateNotifier { get; }
@@ -163,6 +163,12 @@ public sealed class ToolRegistry
 
     public IMcpToolRuntimeCoordinator? McpToolRuntimeCoordinator { get; }
     public ClawSharp.Core.ISettingsStore? SettingsStore { get; }
+
+    private IReadOnlyList<AgentDefinition> ResolveAgentDefinitionsFromLiveState()
+    {
+        var liveAgentDefinitions = AppStateStore.GetState().AgentDefinitions;
+        return liveAgentDefinitions.Count > 0 ? liveAgentDefinitions : _agentDefinitions;
+    }
 
     public IReadOnlyList<ToolDescriptor> All =>
         BuildPublishedToolPool()

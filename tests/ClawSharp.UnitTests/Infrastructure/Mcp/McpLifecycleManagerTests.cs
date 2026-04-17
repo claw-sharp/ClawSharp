@@ -223,6 +223,7 @@ public sealed class McpLifecycleManagerTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _connectCalls);
@@ -253,6 +254,7 @@ public sealed class McpLifecycleManagerTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             var isLocal = McpLifecycleManager.IsLocalMcpServer(server);

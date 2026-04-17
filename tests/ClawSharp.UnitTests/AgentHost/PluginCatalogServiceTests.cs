@@ -159,8 +159,8 @@ public sealed class PluginCatalogServiceTests
 
         try
         {
-            var authState = new McpAuthStateService(fixture.SecureStorage);
-            authState.SaveOAuthEntry(
+            var app = await fixture.ApplicationRegistry.GetOrCreateAsync(fixture.WorkspaceRoot);
+            app.McpAuthStateService.SaveOAuthEntry(
                 "linear",
                 new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null),
                 new McpOAuthEntry(

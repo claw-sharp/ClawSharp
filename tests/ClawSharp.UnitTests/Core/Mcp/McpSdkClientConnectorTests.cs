@@ -169,6 +169,34 @@ public sealed class McpSdkClientConnectorTests
         Assert.Equal(2, connectAttempts);
     }
 
+    [Fact]
+    public async Task ConnectAsync_ReturnsNeedsAuthWithoutBootstrappingOAuthWhenInteractiveAuthIsDisabled()
+    {
+        using var environment = new ClaudeConfigDirectoryScope();
+        var storage = new InMemoryMcpSecureStorage();
+        var authState = new McpAuthStateService(storage);
+        var transportFactory = new McpSdkHttpTransportFactory(storage, authState);
+        var cache = new McpNeedsAuthCache(() => new DateTimeOffset(2026, 4, 2, 12, 0, 0, TimeSpan.Zero));
+        var bootstrapCalls = 0;
+        var connector = CreateConnector(
+            transportFactory,
+            cache,
+            null,
+            (_, _) => throw new InvalidOperationException("Resource URI in metadata (https://mcp.linear.app) does not match the expected URI (https://mcp.linear.app/mcp)"),
+            oauthBootstrapper: (_, _) =>
+            {
+                bootstrapCalls++;
+                return Task.FromResult(true);
+            });
+        var server = CreateServer("linear", new McpHttpServerConfig("https://mcp.linear.app/mcp", null, null, null));
+
+        var connection = await connector.ConnectAsync("linear", server, allowInteractiveAuth: false);
+
+        Assert.IsType<NeedsAuthMcpServerConnection>(connection);
+        Assert.Equal(0, bootstrapCalls);
+        Assert.True(await cache.IsCachedAsync("linear"));
+    }
+
     private static SdkMcpClientConnector CreateConnector(
         McpSdkHttpTransportFactory transportFactory,
         McpNeedsAuthCache? cache,

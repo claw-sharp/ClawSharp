@@ -144,6 +144,7 @@ public sealed class McpBehaviorIntegrationTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             ConnectCalls++;

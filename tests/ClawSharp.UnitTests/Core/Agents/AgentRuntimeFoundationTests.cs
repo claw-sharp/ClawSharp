@@ -121,11 +121,28 @@ public sealed class AgentRuntimeFoundationTests
             ClawSharpTelemetry.ResetForTesting();
             Environment.SetEnvironmentVariable("CLAWSHARP_CONFIG_DIR", originalConfigDir);
             Environment.SetEnvironmentVariable("DEBUG", originalDebug);
-            if (Directory.Exists(tempRoot))
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
+            DeleteDirectoryWithRetry(tempRoot);
         }
+    }
+
+    [Fact]
+    public void ToolRegistry_Falls_Back_To_BuiltIn_Agents_When_Live_State_Is_Empty()
+    {
+        var workspaceRoot = Environment.CurrentDirectory;
+        var appStateStore = new ClawSharpAppStateStore(
+            ClawSharpAppState.CreateDefault(
+                workspaceRoot,
+                StartupEnvironment.Capture(),
+                new ClawSharpSettings(),
+                [],
+                [],
+                [],
+                [],
+                [],
+                []));
+        var registry = new ToolRegistry(workspaceRoot, new TaskRegistry(workspaceRoot), appStateStore: appStateStore);
+
+        Assert.Contains(registry.AgentDefinitions, static agent => agent.AgentType == "Explore");
     }
 
     [Fact]
@@ -245,5 +262,33 @@ public sealed class AgentRuntimeFoundationTests
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    private static void DeleteDirectoryWithRetry(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        IOException? lastError = null;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (IOException exception)
+            {
+                lastError = exception;
+                Thread.Sleep(100);
+            }
+        }
+
+        if (lastError is not null)
+        {
+            throw lastError;
+        }
     }
 }

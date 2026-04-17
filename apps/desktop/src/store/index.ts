@@ -727,11 +727,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }));
       void get().loadSkills(projectId, { force: true });
 
-      if (installResponse.authenticated) {
-        toast.success(installResponse.message);
-      } else {
-        toast.error(installResponse.message);
-      }
+      toast.success(installResponse.message);
     } catch (error) {
       const message = toErrorMessage(error, 'Failed to install plugin.');
       set((state) => ({

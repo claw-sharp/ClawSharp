@@ -54,6 +54,7 @@ public sealed class SdkMcpClientConnector : IMcpClientConnector
         string name,
         ScopedMcpServerConfig server,
         McpServerConnectionStatistics? serverStatistics = null,
+        bool allowInteractiveAuth = true,
         CancellationToken cancellationToken = default)
     {
         if (server.Type is not "http" and not "sse" and not "sse-ide" and not "ws-ide")
@@ -90,6 +91,16 @@ public sealed class SdkMcpClientConnector : IMcpClientConnector
         }
         catch (Exception exception) when (httpOptions is not null && IsProtectedResourceMismatch(exception))
         {
+            if (!allowInteractiveAuth)
+            {
+                if (_needsAuthCache is not null && (server.Type is "http" or "sse"))
+                {
+                    await _needsAuthCache.SetEntryAsync(name, cancellationToken).ConfigureAwait(false);
+                }
+
+                return new NeedsAuthMcpServerConnection(name, server);
+            }
+
             var bootstrapped = await _oauthBootstrapper(httpOptions, cancellationToken).ConfigureAwait(false);
             if (!bootstrapped)
             {

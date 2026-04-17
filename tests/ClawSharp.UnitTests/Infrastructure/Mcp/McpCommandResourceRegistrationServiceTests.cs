@@ -297,6 +297,7 @@ public sealed class McpCommandResourceRegistrationServiceTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             var capabilities = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -328,6 +329,7 @@ public sealed class McpCommandResourceRegistrationServiceTests
             string name,
             ScopedMcpServerConfig server,
             McpServerConnectionStatistics? serverStatistics = null,
+            bool allowInteractiveAuth = true,
             CancellationToken cancellationToken = default)
         {
             var nextIndex = Math.Min(Interlocked.Increment(ref _index), _sessions.Length - 1);

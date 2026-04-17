@@ -6,5 +6,6 @@ public interface IMcpClientConnector
         string name,
         ScopedMcpServerConfig server,
         McpServerConnectionStatistics? serverStatistics = null,
+        bool allowInteractiveAuth = true,
         CancellationToken cancellationToken = default);
 }
