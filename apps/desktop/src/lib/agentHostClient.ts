@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { BrowserAgentHostClient } from '@/lib/browserAgentHostClient';
+import { RemoteApiClient } from '@/lib/remoteApiClient';
+import type { RuntimeClient } from '@/lib/runtimeClient';
 import {
   subscribeAgentHostEvents,
   subscribeAgentHostState,
@@ -56,7 +58,7 @@ function isTauriRuntime(): boolean {
   return '__TAURI_INTERNALS__' in window;
 }
 
-class AgentHostClient {
+class AgentHostClient implements RuntimeClient {
   async connect(): Promise<HealthResponse> {
     return await this.request('health', {});
   }
@@ -282,5 +284,9 @@ function normalizeDialogSelection(selection: string | string[] | null): string[]
 }
 
 export const agentHostClient = isTauriRuntime()
-  ? new AgentHostClient()
-  : new BrowserAgentHostClient();
+  ? (import.meta.env.VITE_DESKTOP_RUNTIME_MODE === 'remote'
+      ? new RemoteApiClient()
+      : new AgentHostClient())
+  : (import.meta.env.VITE_DESKTOP_RUNTIME_MODE === 'remote'
+      ? new RemoteApiClient()
+      : new BrowserAgentHostClient());
