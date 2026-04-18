@@ -105,15 +105,15 @@ Create a Tauri Mobile app that consumes the same API and shared contract surface
 ### Planning
 
 - [x] Write the migration plan document in-repo.
-- [ ] Keep this checklist current as implementation lands.
+- [x] Keep this checklist current as implementation lands.
 
 ### Shared Backend Shape
 
-- [ ] Add `src/ClawSharp.Contracts`.
-- [ ] Add `src/ClawSharp.Application`.
-- [ ] Define shared project/thread/run/settings/review contract groups.
+- [x] Add `src/ClawSharp.Contracts`.
+- [x] Add `src/ClawSharp.Application`.
+- [x] Define shared project/thread/run/settings/review contract groups.
 - [ ] Move desktop-only integrations behind interfaces.
-- [ ] Add the new projects to `ClawSharp.sln`.
+- [x] Add the new projects to `ClawSharp.sln`.
 
 ### API Host
 
