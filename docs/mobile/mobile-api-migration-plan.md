@@ -112,7 +112,7 @@ Create a Tauri Mobile app that consumes the same API and shared contract surface
 - [x] Add `src/ClawSharp.Contracts`.
 - [x] Add `src/ClawSharp.Application`.
 - [x] Define shared project/thread/run/settings/review contract groups.
-- [ ] Move desktop-only integrations behind interfaces.
+- [x] Move desktop-only integrations behind interfaces.
 - [x] Add the new projects to `ClawSharp.sln`.
 
 ### API Host
@@ -121,32 +121,32 @@ Create a Tauri Mobile app that consumes the same API and shared contract surface
 - [x] Add a minimal ASP.NET Core host bootstrap.
 - [x] Add health and capability discovery endpoints.
 - [x] Add project/thread query endpoints.
-- [ ] Add run start/cancel/retry/archive endpoints.
-- [ ] Add run event streaming over WebSocket or SSE.
-- [ ] Add settings and approvals endpoints.
+- [x] Add run start/cancel/retry/archive endpoints.
+- [x] Add run event streaming over WebSocket or SSE.
+- [x] Add settings and approvals endpoints.
 
 ### Desktop Remote Mode
 
-- [ ] Introduce a transport-agnostic desktop client abstraction.
-- [ ] Keep the current local `AgentHost` path working.
-- [ ] Add a remote API-backed desktop client.
-- [ ] Add a runtime mode switch for desktop local vs remote.
+- [x] Introduce a transport-agnostic desktop client abstraction.
+- [x] Keep the current local `AgentHost` path working.
+- [x] Add a remote API-backed desktop client.
+- [x] Add a runtime mode switch for desktop local vs remote.
 
 ### Mobile
 
-- [ ] Add `apps/mobile`.
-- [ ] Add a mobile-first navigation shell.
-- [ ] Add authentication flow.
-- [ ] Add project/thread browsing.
-- [ ] Add transcript streaming.
-- [ ] Add approvals and diff review.
+- [x] Add `apps/mobile`.
+- [x] Add a mobile-first navigation shell.
+- [x] Add authentication flow.
+- [x] Add project/thread browsing.
+- [x] Add transcript streaming.
+- [x] Add approvals and diff review.
 
 ### Validation
 
-- [ ] Add contract tests for shared request/response/event models.
-- [ ] Add API integration tests.
-- [ ] Add desktop remote-mode smoke coverage.
-- [ ] Add mobile smoke coverage.
+- [x] Add contract tests for shared request/response/event models.
+- [x] Add API integration tests.
+- [x] Add desktop remote-mode smoke coverage.
+- [x] Add mobile smoke coverage.
 
 ## Implementation Sequence
 

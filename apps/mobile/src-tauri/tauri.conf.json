@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ClawSharp Mobile",
+  "version": "0.0.1",
+  "identifier": "com.clawsharp.mobile",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1430",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "ClawSharp Mobile",
+        "width": 430,
+        "height": 932,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}
