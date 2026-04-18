@@ -117,10 +117,10 @@ Create a Tauri Mobile app that consumes the same API and shared contract surface
 
 ### API Host
 
-- [ ] Add `services/api/ClawSharp.Api`.
-- [ ] Add a minimal ASP.NET Core host bootstrap.
-- [ ] Add health and capability discovery endpoints.
-- [ ] Add project/thread query endpoints.
+- [x] Add `services/api/ClawSharp.Api`.
+- [x] Add a minimal ASP.NET Core host bootstrap.
+- [x] Add health and capability discovery endpoints.
+- [x] Add project/thread query endpoints.
 - [ ] Add run start/cancel/retry/archive endpoints.
 - [ ] Add run event streaming over WebSocket or SSE.
 - [ ] Add settings and approvals endpoints.
