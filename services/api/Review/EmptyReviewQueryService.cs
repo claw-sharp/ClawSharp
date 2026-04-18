@@ -13,4 +13,14 @@ public sealed class EmptyReviewQueryService : IReviewQueryService
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<ChangedFileSummary>>([]);
     }
+
+    public Task<FileDiff?> GetDiffAsync(
+        string projectId,
+        string filePath,
+        string? threadId = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<FileDiff?>(null);
+    }
 }

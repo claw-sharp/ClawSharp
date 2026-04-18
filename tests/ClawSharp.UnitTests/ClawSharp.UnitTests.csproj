@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ClawSharp.AgentHost\ClawSharp.AgentHost.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Bridge\ClawSharp.Bridge.csproj" />
+    <ProjectReference Include="..\..\src\ClawSharp.Contracts\ClawSharp.Contracts.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Core\ClawSharp.Core.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Infrastructure\ClawSharp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\ClawSharp.Query\ClawSharp.Query.csproj" />

@@ -43,7 +43,7 @@ try
     var skillCatalog = new SkillCatalogService(applicationRegistry, recentProjectStore);
     var workspaceFileCatalog = new WorkspaceFileCatalogService(recentProjectStore);
     var providerCatalog = new ProviderCatalogService(applicationRegistry, recentProjectStore);
-    var externalEditorService = new ExternalEditorService(recentProjectStore);
+    IExternalEditorService externalEditorService = new ExternalEditorService(recentProjectStore);
     var approvalCatalog = new ApprovalCatalogService();
     var commandRouter = new AgentHostCommandRouter(
         projectCatalog,

@@ -8,4 +8,10 @@ public interface IReviewQueryService
         string projectId,
         string? threadId = null,
         CancellationToken cancellationToken = default);
+
+    Task<FileDiff?> GetDiffAsync(
+        string projectId,
+        string filePath,
+        string? threadId = null,
+        CancellationToken cancellationToken = default);
 }

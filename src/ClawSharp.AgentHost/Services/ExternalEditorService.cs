@@ -5,7 +5,7 @@ using ClawSharp.AgentHost.Projects;
 
 namespace ClawSharp.AgentHost.Services;
 
-public sealed class ExternalEditorService
+public sealed class ExternalEditorService : IExternalEditorService
 {
     private readonly RecentProjectStore _recentProjectStore;
     private readonly Func<string, IReadOnlyList<string>, CancellationToken, Task<ExternalEditorLaunchDto>> _launchAsync;

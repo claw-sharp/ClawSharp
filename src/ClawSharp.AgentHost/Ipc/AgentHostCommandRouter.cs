@@ -28,7 +28,7 @@ public sealed class AgentHostCommandRouter
     private readonly SkillCatalogService _skillCatalog;
     private readonly WorkspaceFileCatalogService _workspaceFileCatalog;
     private readonly ProviderCatalogService _providerCatalog;
-    private readonly ExternalEditorService _externalEditorService;
+    private readonly IExternalEditorService _externalEditorService;
     private readonly ApprovalCatalogService _approvalCatalog;
 
     public AgentHostCommandRouter(
@@ -42,7 +42,7 @@ public sealed class AgentHostCommandRouter
         SkillCatalogService skillCatalog,
         WorkspaceFileCatalogService workspaceFileCatalog,
         ProviderCatalogService providerCatalog,
-        ExternalEditorService externalEditorService,
+        IExternalEditorService externalEditorService,
         ApprovalCatalogService approvalCatalog)
     {
         _projectCatalog = projectCatalog;
